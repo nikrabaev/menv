@@ -42,3 +42,36 @@ export function parseDotenv(text: string): DotenvEntry[] {
   }
   return entries;
 }
+
+export interface SerializeEntry extends DotenvEntry {
+  group?: string | null;
+}
+
+export interface SerializeOpts {
+  valuesFree?: boolean; // emit KEY= with no value (for .env.example)
+  groupHeaders?: boolean; // emit "# ─── group ───" banners
+}
+
+function needsQuote(v: string): boolean {
+  return /[\s"'#=]/.test(v) || v.includes("\n");
+}
+
+function quote(v: string): string {
+  if (!needsQuote(v)) return v;
+  return '"' + v.replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
+}
+
+export function serializeDotenv(entries: SerializeEntry[], opts: SerializeOpts = {}): string {
+  const lines: string[] = [];
+  let lastGroup: string | null | undefined = undefined;
+  for (const e of entries) {
+    if (opts.groupHeaders && e.group !== lastGroup) {
+      if (e.group) lines.push(`# ─── ${e.group} ───`);
+      lastGroup = e.group;
+    }
+    if (e.description) lines.push(`# ${e.description}`);
+    const value = opts.valuesFree ? "" : quote(e.value);
+    lines.push(`${e.key}=${value}`);
+  }
+  return lines.join("\n") + (lines.length ? "\n" : "");
+}
