@@ -1,0 +1,10 @@
+node_modules/
+.menv/values/
+.menv/backups/
+.superpowers/
+# generated env files (menv owns these)
+.env
+.env.*
+!.env.example
+dist/
+menv
