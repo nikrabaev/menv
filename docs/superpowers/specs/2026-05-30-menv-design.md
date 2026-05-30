@@ -162,7 +162,8 @@ since menv overwrites files it owns.
 ## TUI (Ink, three-pane)
 
 **Regions:** Top bar (repo · env switcher · dirty indicator) · Left scopes tree
-(`★ Global`, `Apps`, `Services`, `Groups`) · Middle variable list (badges: `🔒`
+(`All`, `Root`, then dimmed `APPS` / `SERVICES` / `GROUPS` section headers with
+their members) · Middle variable list (badges: `🔒`
 secret, `●` unsaved; `/` filter) · Right inspector (tier, group, secret, wired
 consumers, **values per environment** with "— not set" gaps shown).
 
