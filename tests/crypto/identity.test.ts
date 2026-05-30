@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { loadOrCreateIdentity, type KeyBackend } from "../../src/crypto/identity.ts";
+import {
+  classifyFindExitCode,
+  loadOrCreateIdentity,
+  type KeyBackend,
+} from "../../src/crypto/identity.ts";
 
 function memBackend(): KeyBackend {
   let stored: string | null = null;
@@ -8,6 +12,20 @@ function memBackend(): KeyBackend {
     async set(v) { stored = v; },
   };
 }
+
+test("classifyFindExitCode maps exit 0 to found", () => {
+  expect(classifyFindExitCode(0)).toBe("found");
+});
+
+test("classifyFindExitCode maps exit 44 to not-found", () => {
+  expect(classifyFindExitCode(44)).toBe("not-found");
+});
+
+test("classifyFindExitCode maps any other non-zero exit to error", () => {
+  expect(classifyFindExitCode(1)).toBe("error");
+  expect(classifyFindExitCode(36)).toBe("error");
+  expect(classifyFindExitCode(255)).toBe("error");
+});
 
 test("creates an identity on first call and returns it thereafter", async () => {
   const backend = memBackend();
