@@ -1,6 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { RepoModel } from "../../core/types.ts";
+import { listWindow } from "./listWindow.ts";
 
 export interface Scope {
   id: string;
@@ -17,13 +18,17 @@ export function buildScopes(model: RepoModel): Scope[] {
   return scopes;
 }
 
-export function ScopeTree({ scopes, cursor }: { scopes: Scope[]; cursor: number }) {
+export function ScopeTree({ scopes, cursor, active = true, height }: { scopes: Scope[]; cursor: number; active?: boolean; height?: number }) {
+  const maxItems = height ? Math.max(0, height - 5) : scopes.length;
+  const windowed = listWindow(scopes, cursor, maxItems);
   return (
-    <Box flexDirection="column" width={20} borderStyle="round" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" width={20} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text color="gray">SCOPES</Text>
-      {scopes.map((s, i) => (
-        <Text key={`${s.id}:${i}`} inverse={i === cursor}>{s.label}</Text>
+      {windowed.offset > 0 && <Text color="gray">  ...</Text>}
+      {windowed.items.map((s, i) => (
+        <Text key={`${s.id}:${windowed.offset + i}`} inverse={active && windowed.offset + i === cursor}>{s.label}</Text>
       ))}
+      {windowed.offset + windowed.items.length < scopes.length && <Text color="gray">  ...</Text>}
     </Box>
   );
 }

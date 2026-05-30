@@ -31,6 +31,27 @@ test("renders three panes with data", () => {
   expect(lastFrame()).toContain("acme");
 });
 
+test("limits rendered rows to the viewport", () => {
+  const manyVars: RepoModel = {
+    ...model,
+    variables: Array.from({ length: 30 }, (_, i) => ({
+      id: `v${i}`,
+      name: `VAR_${i}`,
+      tier: "global",
+      description: "",
+      group: null,
+      secret: false,
+      consumers: ["app:api"],
+    })),
+    values: {},
+  };
+  const store = createStore(manyVars);
+  const { lastFrame } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={10} viewportColumns={80} />);
+
+  expect(lastFrame()).toContain("VAR_0");
+  expect(lastFrame()).not.toContain("VAR_29");
+});
+
 test("fullscreen helpers use alternate screen and restore it", () => {
   let out = "";
   const stdout = {

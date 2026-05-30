@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Text, useApp, useInput, render } from "ink";
+import { Box, Text, useApp, useInput, useStdout, render } from "ink";
 import type { RepoModel } from "../core/types.ts";
 import type { Store } from "../store/store.ts";
 import { useModel, useDirty } from "./useStore.ts";
@@ -42,10 +42,18 @@ function varsForScope(model: RepoModel, scopeId: string) {
   return model.variables.filter((v) => v.consumers.includes(scopeId));
 }
 
-export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () => string }) {
+export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
+  store: Store;
+  onSaveStamp: () => string;
+  viewportRows?: number;
+  viewportColumns?: number;
+}) {
   const model = useModel(store);
   const dirty = useDirty(store);
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const rows = viewportRows ?? stdout.rows ?? 24;
+  const columns = viewportColumns ?? stdout.columns ?? 100;
 
   const scopes = buildScopes(model);
   const [pane, setPane] = useState<Pane>("vars");
@@ -55,6 +63,8 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
   const [mode, setMode] = useState<Mode>("browse");
   const [status, setStatus] = useState("");
   const [filter, setFilter] = useState("");
+  const bottomHeight = mode === "browse" ? 1 : 3;
+  const paneHeight = Math.max(3, rows - 3 - bottomHeight);
 
   const scope = scopes[scopeCursor];
   const variables = scope ? varsForScope(model, scope.id) : model.variables;
@@ -138,12 +148,12 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
   });
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={columns} height={rows}>
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
-      <Box>
-        <ScopeTree scopes={scopes} cursor={pane === "scopes" ? scopeCursor : -1} />
-        <VariableList variables={filtered} cursor={pane === "vars" ? varCursor : -1} />
-        <Inspector model={model} variable={current} env={env} />
+      <Box height={paneHeight}>
+        <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} />
+        <Inspector model={model} variable={current} env={env} height={paneHeight} />
       </Box>
       {mode === "edit" && current ? (
         <EditValueModal
