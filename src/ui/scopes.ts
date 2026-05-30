@@ -1,0 +1,59 @@
+import type { RepoModel, Variable } from "../core/types.ts";
+
+export type ScopeKind = "all" | "root" | "app" | "service" | "group" | "header";
+
+export interface Scope {
+  id: string;
+  label: string;
+  kind: ScopeKind;
+}
+
+export function isSelectable(scope: Scope): boolean {
+  return scope.kind !== "header";
+}
+
+export function buildScopes(model: RepoModel): Scope[] {
+  const scopes: Scope[] = [
+    { id: "all", label: "All", kind: "all" },
+    { id: "root", label: "Root", kind: "root" },
+  ];
+
+  const apps = model.consumers.filter((c) => c.kind === "app");
+  if (apps.length) {
+    scopes.push({ id: "header:apps", label: "APPS", kind: "header" });
+    for (const c of apps) scopes.push({ id: c.id, label: c.name, kind: "app" });
+  }
+
+  const services = model.consumers.filter((c) => c.kind === "service");
+  if (services.length) {
+    scopes.push({ id: "header:services", label: "SERVICES", kind: "header" });
+    for (const c of services) scopes.push({ id: c.id, label: c.name, kind: "service" });
+  }
+
+  const groups = [...new Set(model.variables.map((v) => v.group).filter(Boolean))] as string[];
+  if (groups.length) {
+    scopes.push({ id: "header:groups", label: "GROUPS", kind: "header" });
+    for (const g of groups) scopes.push({ id: `group:${g}`, label: g, kind: "group" });
+  }
+
+  return scopes;
+}
+
+export function varsForScope(model: RepoModel, scopeId: string): Variable[] {
+  if (scopeId === "all") return model.variables;
+  if (scopeId === "root") return model.variables.filter((v) => v.tier === "global");
+  if (scopeId.startsWith("group:")) {
+    const g = scopeId.slice("group:".length);
+    return model.variables.filter((v) => v.group === g);
+  }
+  return model.variables.filter((v) => v.consumers.includes(scopeId));
+}
+
+// Returns the next selectable index in direction `dir`, skipping header rows.
+// Clamps: if there is no selectable row that way, returns `from` unchanged.
+export function stepScope(scopes: Scope[], from: number, dir: 1 | -1): number {
+  let i = from + dir;
+  while (i >= 0 && i < scopes.length && scopes[i].kind === "header") i += dir;
+  if (i < 0 || i >= scopes.length) return from;
+  return i;
+}
