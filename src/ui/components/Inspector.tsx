@@ -22,7 +22,7 @@ export function Inspector({ model, variable, env, height }: { model: RepoModel; 
       {variable.description ? <Text color="gray">{variable.description}</Text> : null}
       <Text>tier  <Text color="cyan">{variable.tier}</Text></Text>
       <Text>group <Text color="magenta">{variable.group ?? "-"}</Text></Text>
-      <Text>secret {variable.secret ? "yes [secret]" : "no"}</Text>
+      <Text>secret {variable.secret ? "yes" : "no"}</Text>
       <Text>used  <Text color="green">{variable.consumers.join(", ") || "-"}</Text></Text>
       <Text color="gray">-- values by env --</Text>
       {model.environments.map((e) => (

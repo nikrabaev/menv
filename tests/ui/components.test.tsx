@@ -5,6 +5,7 @@ import { TopBar } from "../../src/ui/components/TopBar.tsx";
 import { VariableList } from "../../src/ui/components/VariableList.tsx";
 import { Inspector } from "../../src/ui/components/Inspector.tsx";
 import { WireModal } from "../../src/ui/components/WireModal.tsx";
+import { MoreIndicator } from "../../src/ui/components/MoreIndicator.tsx";
 import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
 
 const v: Variable = { id: "v1", name: "DATABASE_URL", tier: "global", description: "db", group: "DB", secret: true, consumers: ["app:api"] };
@@ -25,6 +26,16 @@ test("VariableList renders names and a secret marker", () => {
   expect(lastFrame()).toContain("DATABASE_URL");
 });
 
+test("VariableList header announces the active filter query", () => {
+  const { lastFrame } = render(<VariableList variables={[v]} cursor={0} filter="data" />);
+  expect(lastFrame()).toContain("filter: data");
+});
+
+test("VariableList header omits filter when none is applied", () => {
+  const { lastFrame } = render(<VariableList variables={[v]} cursor={0} />);
+  expect(lastFrame()).not.toContain("filter:");
+});
+
 test("VariableList shows scope wiring in All mode", () => {
   const consumers: Consumer[] = [
     { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
@@ -34,6 +45,38 @@ test("VariableList shows scope wiring in All mode", () => {
   const { lastFrame } = render(<VariableList variables={[wiredVar]} cursor={0} consumers={consumers} showScopes />);
   expect(lastFrame()).toContain("app:api");
   expect(lastFrame()).toContain("app:inbox");
+});
+
+test("VariableList aligns secret/scope columns across rows of differing name length", () => {
+  const consumers: Consumer[] = [
+    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
+  ];
+  const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
+  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, consumers: ["app:api"] };
+  const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} consumers={consumers} showScopes />);
+  const lines = (lastFrame() ?? "").split("\n").filter((l) => l.includes("*"));
+  expect(lines.length).toBe(2);
+  // The secret marker starts at the same column on both rows.
+  const cols = lines.map((l) => l.indexOf("*"));
+  expect(cols[0]).toBe(cols[1]);
+  // ...and so does the scopes column.
+  const scopeCols = lines.map((l) => l.indexOf("app:api"));
+  expect(scopeCols[0]).toBe(scopeCols[1]);
+});
+
+test("VariableList pads rows to the full pane width so the highlight spans the row", async () => {
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }];
+  const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
+  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: false, consumers: ["app:api"] };
+  const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} height={10} consumers={consumers} showScopes />);
+  // Width is measured after layout, so let the effect-driven re-render flush.
+  await new Promise((r) => setTimeout(r, 20));
+  const rows = (lastFrame() ?? "").split("\n").filter((l) => l.includes("app:api"));
+  expect(rows.length).toBe(2);
+  // Both rows fill the full pane: rendered width is identical regardless of content...
+  expect(rows[0]!.length).toBe(rows[1]!.length);
+  // ...and the short-name row carries trailing fill before the right border.
+  expect(rows.find((l) => l.includes(" X "))).toMatch(/ {2,}│$/);
 });
 
 test("VariableList truncates wiring hint beyond 3 consumers", () => {
@@ -54,11 +97,21 @@ test("Inspector masks secret values", () => {
   expect(lastFrame()).not.toContain("pg://x");
 });
 
+test("MoreIndicator shows the hidden count with a direction arrow", () => {
+  expect(render(<MoreIndicator direction="up" count={8} />).lastFrame()).toContain("↑ 8 more");
+  expect(render(<MoreIndicator direction="down" count={7} />).lastFrame()).toContain("↓ 7 more");
+});
+
+test("MoreIndicator renders nothing when nothing is hidden", () => {
+  expect(render(<MoreIndicator direction="up" count={0} />).lastFrame()).toBe("");
+});
+
 test("WireModal windows its list to fit height without overflowing", () => {
   const consumers: Consumer[] = Array.from({ length: 20 }, (_, i) => ({
     kind: "app", id: `app:${i}`, name: `app-${i}`, path: `apps/${i}`, envFiles: {},
   }));
-  // height 8 → border(2) + header(1) + 2 ellipsis(2) leaves 3 item rows
+  // height 8 → border(2) + header(1) leaves 4 content rows. Cursor is at the top,
+  // so there's no top marker: 4 item rows + the bottom marker.
   const { lastFrame } = render(
     <WireModal varName="DATABASE_URL" consumers={consumers} wired={[]} onToggle={() => {}} onClose={() => {}} height={8} />,
   );
@@ -67,7 +120,7 @@ test("WireModal windows its list to fit height without overflowing", () => {
   expect(frame.split("\n").length).toBeLessThanOrEqual(8);
   expect(frame).toContain("Wire");
   expect(frame).toContain("DATABASE_URL");
-  // Tail items are hidden behind an ellipsis rather than overflowing.
-  expect(frame).toContain("...");
+  // Tail items are hidden behind an overflow marker that counts them (4 shown, 16 below).
+  expect(frame).toContain("↓ 16 more");
   expect(frame).not.toContain("app-19");
 });

@@ -3,6 +3,7 @@ import { Box, Text, useApp, useInput, useStdout, render } from "ink";
 import type { RepoModel } from "../core/types.ts";
 import type { Store } from "../store/store.ts";
 import { useModel, useDirty } from "./useStore.ts";
+import { useTerminalSize } from "./useTerminalSize.ts";
 import { TopBar } from "./components/TopBar.tsx";
 import { ScopeTree } from "./components/ScopeTree.tsx";
 import { buildScopes, varsForScope, stepScope } from "./scopes.ts";
@@ -34,6 +35,8 @@ export function exitFullscreen(stdout: NodeJS.WriteStream = process.stdout): voi
   if (isInteractiveStdout(stdout)) stdout.write(EXIT_FULLSCREEN);
 }
 
+const SEPARATOR = " · "
+
 export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
   store: Store;
   onSaveStamp: () => string;
@@ -44,8 +47,9 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
   const dirty = useDirty(store);
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const rows = viewportRows ?? stdout.rows ?? 24;
-  const columns = viewportColumns ?? stdout.columns ?? 100;
+  const term = useTerminalSize(stdout);
+  const rows = viewportRows ?? term.rows ?? 24;
+  const columns = viewportColumns ?? term.columns ?? 100;
 
   const scopes = buildScopes(model);
   const [pane, setPane] = useState<Pane>("vars");
@@ -182,7 +186,7 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} />
         <Inspector model={model} variable={current} env={env} height={paneHeight} />
       </Box>
       {mode === "edit" && current ? (
@@ -208,8 +212,20 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
           onCancel={() => setMode("browse")}
         />
       ) : (
-        <Box paddingX={1}>
-          <Text color="gray">up/down move / tab pane / enter edit / / filter / n new / w wire / x delete / e env / d secret / s save / q quit  </Text>
+        <Box paddingX={1} justifyContent="space-between">
+          <Text color="gray">
+            <Text bold={true} backgroundColor={"blackBright"}> up </Text>/<Text bold={true} backgroundColor={"blackBright"}> down </Text> move{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> tab </Text> pane{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> enter </Text> edit{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> / </Text> filter{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> n </Text> new{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> w </Text> wire{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> x </Text> delete{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> e </Text> env{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> d </Text> secret{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> s </Text> save{SEPARATOR}
+            <Text bold={true} backgroundColor={"blackBright"}> q </Text> quit
+          </Text>
           <Text color="green">{status}</Text>
         </Box>
       )}

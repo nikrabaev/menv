@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Consumer } from "../../core/types.ts";
 import { listWindow } from "./listWindow.ts";
+import { MoreIndicator } from "./MoreIndicator.tsx";
 
 export function WireModal({ varName, consumers, wired, onToggle, onClose, height }: {
   varName: string;
@@ -26,7 +27,7 @@ export function WireModal({ varName, consumers, wired, onToggle, onClose, height
   return (
     <Box flexDirection="column" height={height} borderStyle="round" borderColor="blue" paddingX={1}>
       <Text>Wire <Text bold>{varName}</Text> to consumers <Text color="gray">(enter toggle / esc close)</Text></Text>
-      {windowed.offset > 0 && <Text color="gray">  ...</Text>}
+      <MoreIndicator direction="up" count={windowed.offset} />
       {windowed.items.map((c, i) => {
         const idx = windowed.offset + i;
         return (
@@ -35,7 +36,7 @@ export function WireModal({ varName, consumers, wired, onToggle, onClose, height
           </Text>
         );
       })}
-      {windowed.offset + windowed.items.length < consumers.length && <Text color="gray">  ...</Text>}
+      <MoreIndicator direction="down" count={consumers.length - (windowed.offset + windowed.items.length)} />
     </Box>
   );
 }
