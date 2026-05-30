@@ -22,7 +22,7 @@ export function WireModal({ consumers, wired, onToggle, onClose }: {
     <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
       <Text>Wire to consumers (enter toggle / esc close):</Text>
       {consumers.map((c, i) => (
-        <Text key={c.id} inverse={i === cursor}>
+        <Text key={`${c.id}:${i}`} inverse={i === cursor}>
           [{wired.includes(c.id) ? "x" : " "}] {c.kind === "service" ? "svc " : ""}{c.name}
         </Text>
       ))}

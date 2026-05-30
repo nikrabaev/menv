@@ -22,7 +22,7 @@ export function ScopeTree({ scopes, cursor }: { scopes: Scope[]; cursor: number 
     <Box flexDirection="column" width={20} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text color="gray">SCOPES</Text>
       {scopes.map((s, i) => (
-        <Text key={s.id} inverse={i === cursor}>{s.label}</Text>
+        <Text key={`${s.id}:${i}`} inverse={i === cursor}>{s.label}</Text>
       ))}
     </Box>
   );

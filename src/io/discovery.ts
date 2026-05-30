@@ -70,7 +70,7 @@ export async function scanRepo(root: string): Promise<{
     for (const s of parseComposeServices(text, rel)) {
       services.push({
         kind: "service",
-        id: `svc:${s.name}`,
+        id: `svc:${s.composeFile}:${s.name}`,
         name: s.name,
         composeFile: rel,
         inject: s.envFiles.length ? "env_file" : "environment",
