@@ -14,6 +14,7 @@ export interface Variable {
   group: string | null;
   secret: boolean;
   consumers: ConsumerId[]; // wiring; for local, includes owner app
+  example?: string; // optional placeholder emitted into .env.example; one per variable, not per-env
 }
 
 export interface Environment {

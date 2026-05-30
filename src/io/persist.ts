@@ -19,6 +19,7 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
     variables: m.variables.map((v) => ({
       id: v.id, name: v.name, tier: v.tier, owner_app: v.ownerApp ?? "",
       description: v.description, group: v.group ?? "", secret: v.secret, consumers: v.consumers,
+      example: v.example ?? "",
     })),
   });
 
@@ -50,7 +51,7 @@ export function tomlToModelParts(config: string, manifest: string): {
   const variables: Variable[] = ((man.variables ?? []) as any[]).map((v) => ({
     id: v.id, name: v.name, tier: v.tier, ownerApp: v.owner_app || undefined,
     description: v.description ?? "", group: v.group || null, secret: !!v.secret,
-    consumers: v.consumers ?? [],
+    consumers: v.consumers ?? [], example: v.example || undefined,
   }));
 
   return { environments, recipients: (c.recipients ?? []) as string[], consumers: [...apps, ...services], variables };

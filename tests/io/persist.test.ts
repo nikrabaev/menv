@@ -30,3 +30,21 @@ describe("persist", () => {
     expect(parts.consumers).toEqual(model.consumers);
   });
 });
+
+test("round-trips the optional example value", () => {
+  const m: RepoModel = {
+    root: "/r",
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "var:REDIS_URL", name: "REDIS_URL", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
+      { id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
+    ],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }],
+    values: {},
+    recipients: [],
+  };
+  const { config, manifest } = modelToToml(m);
+  const parts = tomlToModelParts(config, manifest);
+  expect(parts.variables[0].example).toBe("redis://localhost:6379");
+  expect(parts.variables[1].example).toBeUndefined();
+});
