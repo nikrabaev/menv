@@ -6,6 +6,22 @@ import { join } from "node:path";
 import { writeGeneratedFiles } from "../../src/io/generate.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
+test("does not write .env.example for an app with no real env file", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "packages", "lib"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [],
+    consumers: [{ kind: "app", id: "app:lib", name: "lib", path: "packages/lib", envFiles: {} }],
+    values: {},
+    recipients: [],
+  };
+  const written = await writeGeneratedFiles(model, "ts1");
+  expect(written).toEqual([]);
+  expect(existsSync(join(root, "packages", "lib", ".env.example"))).toBe(false);
+});
+
 test("writes .env + .env.example and backs up overwritten files", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await mkdir(join(root, "apps", "api"), { recursive: true });

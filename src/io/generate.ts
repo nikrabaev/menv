@@ -4,25 +4,31 @@ import type { RepoModel } from "../core/types.ts";
 import { varsForConsumer, valueOf } from "../core/model.ts";
 import { serializeDotenv, type SerializeEntry } from "./dotenv.ts";
 
-function entries(model: RepoModel, consumerId: string, env: string | null): SerializeEntry[] {
-  const vars = [...varsForConsumer(model, consumerId)].sort((a, b) => {
+function sortedVars(model: RepoModel, consumerId: string) {
+  return [...varsForConsumer(model, consumerId)].sort((a, b) => {
     const g = (a.group ?? "~").localeCompare(b.group ?? "~");
     return g !== 0 ? g : a.name.localeCompare(b.name);
   });
-  return vars.map((v) => ({
-    key: v.name,
-    value: env ? valueOf(model, v.id, env) : "",
-    description: v.description,
-    group: v.group,
-  }));
 }
 
 export function renderAppEnv(model: RepoModel, consumerId: string, env: string): string {
-  return serializeDotenv(entries(model, consumerId, env), { groupHeaders: true });
+  const entries: SerializeEntry[] = sortedVars(model, consumerId).map((v) => ({
+    key: v.name,
+    value: valueOf(model, v.id, env),
+    description: v.description,
+    group: v.group,
+  }));
+  return serializeDotenv(entries, { groupHeaders: true });
 }
 
 export function renderAppExample(model: RepoModel, consumerId: string): string {
-  return serializeDotenv(entries(model, consumerId, null), { groupHeaders: true, valuesFree: true });
+  const entries: SerializeEntry[] = sortedVars(model, consumerId).map((v) => ({
+    key: v.name,
+    value: v.example ?? "",
+    description: v.description,
+    group: v.group,
+  }));
+  return serializeDotenv(entries, { groupHeaders: true });
 }
 
 async function backupIfExists(root: string, rel: string, stamp: string): Promise<void> {
@@ -53,8 +59,10 @@ export async function writeGeneratedFiles(model: RepoModel, stamp: string): Prom
       const rel = join(c.path, filename);
       written.push(await writeFile(model.root, rel, renderAppEnv(model, c.id, env.id), stamp));
     }
-    const exampleRel = join(c.path, ".env.example");
-    written.push(await writeFile(model.root, exampleRel, renderAppExample(model, c.id), stamp));
+    if (Object.keys(c.envFiles).length > 0) {
+      const exampleRel = join(c.path, ".env.example");
+      written.push(await writeFile(model.root, exampleRel, renderAppExample(model, c.id), stamp));
+    }
   }
   return written;
 }

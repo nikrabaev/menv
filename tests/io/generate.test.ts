@@ -27,3 +27,20 @@ test("renderAppExample omits values", () => {
   expect(out).toContain("DATABASE_URL=");
   expect(out).not.toContain("pg://x");
 });
+
+test("renderAppExample emits example values, empty when unset", () => {
+  const m: RepoModel = {
+    root: "/r",
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "var:REDIS_URL", name: "REDIS_URL", tier: "local", ownerApp: "app:api", description: "cache", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
+      { id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
+    ],
+    consumers: [],
+    values: {},
+    recipients: [],
+  };
+  const out = renderAppExample(m, "app:api");
+  expect(out).toContain("REDIS_URL=redis://localhost:6379");
+  expect(out).toContain("PORT=");
+});
