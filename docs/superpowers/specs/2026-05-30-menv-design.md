@@ -92,12 +92,12 @@ repo/
 ├─ .menv/
 │  ├─ manifest.toml           # committed: variable defs, tiers, groups, descriptions, wiring
 │  ├─ values/
-│  │  ├─ dev.env.age          # encrypted values, one file per environment (ALL values)
+│  │  ├─ dev.env.age          # encrypted values per environment (JSON keyed by variable id)
 │  │  ├─ staging.env.age
 │  │  └─ prod.env.age
 │  └─ backups/                # gitignored: pre-save snapshots (safety net)
 ├─ apps/web/.env              # GENERATED, gitignored
-├─ apps/web/.env.example      # GENERATED, committed (names + descriptions, no values)
+├─ apps/web/.env.example      # GENERATED for apps with a real .env; committed; example values
 └─ docker-compose.yml         # menv edits env_file / environment for wired services
 ```
 
