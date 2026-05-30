@@ -9,11 +9,11 @@ export interface SaveSummary {
   files: string[];
 }
 
-function envValuesByName(model: RepoModel, env: string): Record<string, string> {
+function envValuesById(model: RepoModel, env: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const v of model.variables) {
     const val = model.values[v.id]?.[env];
-    if (val !== undefined) out[v.name] = val;
+    if (val !== undefined) out[v.id] = val;
   }
   return out;
 }
@@ -25,7 +25,7 @@ export async function saveModel(model: RepoModel, stamp: string): Promise<SaveSu
   files.push("menv.toml", ".menv/manifest.toml");
 
   for (const env of model.environments) {
-    await saveEnvValues(model.root, env.id, envValuesByName(model, env.id), model.recipients);
+    await saveEnvValues(model.root, env.id, envValuesById(model, env.id), model.recipients);
     files.push(`.menv/values/${env.id}.env.age`);
   }
 

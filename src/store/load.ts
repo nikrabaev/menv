@@ -5,13 +5,12 @@ import type { RepoModel, Values } from "../core/types.ts";
 
 export async function loadRepo(root: string, identity: string): Promise<RepoModel> {
   const parts = await readModelFiles(root);
-  const byName = new Map(parts.variables.map((v) => [v.name, v.id]));
+  const ids = new Set(parts.variables.map((v) => v.id));
   const values: Values = {};
   for (const env of parts.environments) {
-    const named = await loadEnvValues(root, env.id, identity);
-    for (const [name, val] of Object.entries(named)) {
-      const id = byName.get(name);
-      if (!id) continue;
+    const byId = await loadEnvValues(root, env.id, identity);
+    for (const [id, val] of Object.entries(byId)) {
+      if (!ids.has(id)) continue;
       (values[id] ??= {})[env.id] = val;
     }
   }

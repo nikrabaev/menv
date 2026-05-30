@@ -7,6 +7,7 @@ import { saveModel } from "../../src/store/save.ts";
 import { readModelFiles } from "../../src/io/persist.ts";
 import { loadEnvValues } from "../../src/crypto/vault.ts";
 import { generateKeypair } from "../../src/crypto/age.ts";
+import { loadRepo } from "../../src/store/load.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
 test("save writes config, manifest, encrypted vault, and .env files", async () => {
@@ -27,6 +28,33 @@ test("save writes config, manifest, encrypted vault, and .env files", async () =
   const parts = await readModelFiles(root);
   expect(parts.variables[0].name).toBe("PORT");
   const vals = await loadEnvValues(root, "dev", identity);
-  expect(vals.PORT).toBe("3000");
+  expect(vals["v1"]).toBe("3000");
   expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("PORT=3000");
+});
+
+test("save+load keep two same-named per-app locals with different values", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  await mkdir(join(root, "apps", "web"), { recursive: true });
+  const { identity, recipient } = await generateKeypair();
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "var:app:api:NODE_ENV", name: "NODE_ENV", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "var:app:web:NODE_ENV", name: "NODE_ENV", tier: "local", ownerApp: "app:web", description: "", group: null, secret: false, consumers: ["app:web"] },
+    ],
+    consumers: [
+      { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env" } },
+      { kind: "app", id: "app:web", name: "web", path: "apps/web", envFiles: { dev: ".env" } },
+    ],
+    values: { "var:app:api:NODE_ENV": { dev: "development" }, "var:app:web:NODE_ENV": { dev: "production" } },
+    recipients: [recipient],
+  };
+  await saveModel(model, "s1");
+  const loaded = await loadRepo(root, identity);
+  expect(loaded.values["var:app:api:NODE_ENV"].dev).toBe("development");
+  expect(loaded.values["var:app:web:NODE_ENV"].dev).toBe("production");
+  expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("NODE_ENV=development");
+  expect(await Bun.file(join(root, "apps", "web", ".env")).text()).toContain("NODE_ENV=production");
 });
