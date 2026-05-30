@@ -186,7 +186,7 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} model={model} env={env} />
         <Inspector model={model} variable={current} env={env} height={paneHeight} />
       </Box>
       {mode === "edit" && current ? (

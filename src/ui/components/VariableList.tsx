@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, measureElement, type DOMElement } from "ink";
-import type { Consumer, Variable } from "../../core/types.ts";
+import type { Consumer, RepoModel, Variable } from "../../core/types.ts";
+import { valueOf } from "../../core/model.ts";
 import { listWindow } from "./listWindow.ts";
 import { MoreIndicator } from "./MoreIndicator.tsx";
 
 const MAX_SCOPE_SHOWN = 3;
-// A single-cell glyph stands in for the old "[secret]" tag. It must be width-1 in
-// every terminal: emoji (e.g. 🔒) render two cells in some terminals and one in
-// others, which `string-width` can't predict, so `padEnd` would misalign the
-// scopes column. A plain ASCII marker is unambiguous everywhere.
-const SECRET_ICON = "*";
+// Secret values are never shown; the value column renders this (in yellow) instead.
+const SECRET_MASK = "***";
 const GUTTER = " ";
+// Value-column width used before the pane width is known (first render). Once the
+// pane is measured the column is sized to the room actually left on the line.
+const VALUE_FALLBACK_WIDTH = 40;
 
 function wireHint(consumerIds: string[], allConsumers: Consumer[]): string | null {
   if (consumerIds.length === 0) return null;
@@ -23,7 +24,15 @@ function wireHint(consumerIds: string[], allConsumers: Consumer[]): string | nul
   return `${names.slice(0, MAX_SCOPE_SHOWN).join(", ")} and ${rest} more`;
 }
 
-export function VariableList({ variables, cursor, active = true, height, scopeLabel, consumers, showScopes, filter }: {
+// Truncates to `width` cells, marking the cut with a single-cell ellipsis.
+function truncate(text: string, width: number): string {
+  if (width <= 0) return "";
+  if (text.length <= width) return text;
+  if (width === 1) return "…";
+  return text.slice(0, width - 1) + "…";
+}
+
+export function VariableList({ variables, cursor, active = true, height, scopeLabel, consumers, showScopes, filter, model, env }: {
   variables: Variable[];
   cursor: number;
   active?: boolean;
@@ -32,18 +41,33 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
   consumers?: Consumer[];
   showScopes?: boolean;
   filter?: string;
+  model?: RepoModel;
+  env?: string;
 }) {
   const maxItems = height ? Math.max(0, height - 5) : variables.length;
   const windowed = listWindow(variables, cursor, maxItems);
-  // Column 1 width: widest name in the current list, so the secret/scopes
-  // columns line up. Stable across the window since it's computed over all rows.
+
+  const valueFor = (v: Variable) => (model && env ? valueOf(model, v.id, env) : "");
+  const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(v.consumers, consumers) : null);
+  // The scopes column reads, for a global variable, "global" followed by any
+  // wiring; for a local one, just the wiring. Plain text, used for width/fill.
+  const scopeTextFor = (v: Variable): string => {
+    if (!showScopes) return "";
+    const hint = hintFor(v);
+    return [v.tier === "global" ? "global" : "", hint ?? ""].filter(Boolean).join(" ");
+  };
+
+  // Fixed columns, computed over the whole list so they stay put as the window
+  // scrolls: the widest name, and the widest scope cell (so the value column can
+  // leave room for it and the scopes line up).
   const nameWidth = variables.length ? Math.max(...variables.map((v) => v.name.length)) : 0;
+  const scopesWidth = variables.length ? Math.max(0, ...variables.map((v) => scopeTextFor(v).length)) : 0;
 
   // The pane flexes to fill the columns left over by the scope tree and inspector,
-  // so its width isn't known until after layout. Measure it and pad every row to
-  // that inner width so a selected row's inverse highlight spans the whole row,
-  // not just the cells that hold text. Until the first measurement lands
-  // (rowWidth = 0) rows simply aren't padded, which is harmless.
+  // so its width isn't known until after layout. Measure it to size the value
+  // column and to pad each row to the full width (so a selected row's highlight
+  // spans the whole row). Until the first measurement lands (rowWidth = 0) the
+  // value column falls back to a cap and rows aren't padded, which is harmless.
   const boxRef = useRef<DOMElement>(null);
   const [rowWidth, setRowWidth] = useState(0);
   useEffect(() => {
@@ -54,6 +78,16 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
     if (inner !== rowWidth) setRowWidth(inner);
   });
 
+  // Value column width: the natural width of the values (a masked secret counts as
+  // "***"), capped at whatever the line can hold after the name and scope columns
+  // and their gutters — so a value too long for the line is truncated, not wrapped.
+  const gutters = 3 + (scopesWidth > 0 ? 1 : 0); // lead + after-name + after-value (+ after-scopes)
+  const valueRoom = rowWidth > 0 ? Math.max(0, rowWidth - nameWidth - scopesWidth - gutters) : VALUE_FALLBACK_WIDTH;
+  const naturalValueWidth = variables.length
+    ? Math.max(0, ...variables.map((v) => (v.secret ? SECRET_MASK.length : valueFor(v).length)))
+    : 0;
+  const valueWidth = Math.min(valueRoom, naturalValueWidth);
+
   return (
     <Box ref={boxRef} flexDirection="column" flexGrow={1} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text color="gray">VARIABLES{scopeLabel ? <Text color="cyan"> · {scopeLabel}</Text> : null}{filter ? <Text color="yellow"> · filter: {filter}</Text> : null}</Text>
@@ -61,22 +95,24 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
       <MoreIndicator direction="up" count={windowed.offset} />
       {windowed.items.map((v, i) => {
         const idx = windowed.offset + i;
-        const hint = showScopes && consumers ? wireHint(v.consumers, consumers) : null;
-        // Pad the name so the secret/scopes columns line up across rows.
-        const name = hint || v.secret ? v.name.padEnd(nameWidth) : v.name;
-        const secretText = v.secret ? SECRET_ICON : "";
-        const secret = hint ? secretText.padEnd(SECRET_ICON.length) : secretText;
-        const nameSeg = GUTTER + name + GUTTER;
-        const secretSeg = secret || "";
-        const hintSeg = hint ? GUTTER + hint + GUTTER : "";
+        const isGlobal = showScopes && v.tier === "global";
+        const hint = hintFor(v);
+        const nameSeg = GUTTER + v.name.padEnd(nameWidth) + GUTTER;
+        const valueCell = valueWidth > 0 ? truncate(v.secret ? SECRET_MASK : valueFor(v), valueWidth).padEnd(valueWidth) : "";
+        const scopeLen = scopeTextFor(v).length;
+        const contentLen = nameSeg.length + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
         // Trailing fill so a selected row's highlight reaches the pane's right edge.
-        const fill = Math.max(0, rowWidth - (nameSeg.length + secretSeg.length + hintSeg.length));
+        const fill = Math.max(0, rowWidth - contentLen);
         const isCurrent = active && idx === cursor;
         return (
-          <Text key={`${v.id}:${idx}`} backgroundColor={isCurrent ? 'gray' : ''}>
-            {secretSeg ? <Text color="yellow">{secretSeg}</Text> : null}
+          <Text key={`${v.id}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {nameSeg}
-            {hintSeg ? <Text color="blackBright">{hintSeg}</Text> : null}
+            {valueWidth > 0 ? <Text color={v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
+            {valueWidth > 0 ? GUTTER : null}
+            {isGlobal ? <Text italic color="cyan">global</Text> : null}
+            {isGlobal && hint ? " " : null}
+            {hint ? <Text color="blackBright">{hint}</Text> : null}
+            {scopeLen > 0 ? GUTTER : null}
             {fill > 0 ? " ".repeat(fill) : null}
           </Text>
         );

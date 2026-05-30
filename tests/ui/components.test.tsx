@@ -21,9 +21,33 @@ test("TopBar shows repo, env, and dirty indicator", () => {
   expect(lastFrame()).toContain("3");
 });
 
-test("VariableList renders names and a secret marker", () => {
-  const { lastFrame } = render(<VariableList variables={[v]} cursor={0} />);
+test("VariableList renders the name and masks a secret's value", () => {
+  const { lastFrame } = render(<VariableList variables={[v]} cursor={0} model={model} env="dev" />);
   expect(lastFrame()).toContain("DATABASE_URL");
+  expect(lastFrame()).toContain("***");
+  expect(lastFrame()).not.toContain("pg://x");
+});
+
+test("VariableList shows a plain value and masks a secret in the value column", () => {
+  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, consumers: [] };
+  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };
+  const m: RepoModel = { ...model, variables: [secret, plain], values: { s: { dev: "supersecret" }, p: { dev: "3000" } } };
+  const { lastFrame } = render(<VariableList variables={[secret, plain]} cursor={0} model={m} env="dev" />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("3000"); // plain value shown
+  expect(frame).toContain("***"); // secret masked
+  expect(frame).not.toContain("supersecret"); // real secret value never rendered
+});
+
+test("VariableList truncates a value too long for the line", async () => {
+  const longVal = "x".repeat(200);
+  const plain: Variable = { ...v, id: "p", name: "URL", secret: false, consumers: [] };
+  const m: RepoModel = { ...model, variables: [plain], values: { p: { dev: longVal } } };
+  const { lastFrame } = render(<VariableList variables={[plain]} cursor={0} height={10} model={m} env="dev" />);
+  await new Promise((r) => setTimeout(r, 20));
+  const frame = lastFrame() ?? "";
+  expect(frame).not.toContain(longVal); // never rendered in full
+  expect(frame).toContain("…"); // cut with an ellipsis
 });
 
 test("VariableList header announces the active filter query", () => {
@@ -47,18 +71,18 @@ test("VariableList shows scope wiring in All mode", () => {
   expect(lastFrame()).toContain("app:inbox");
 });
 
-test("VariableList aligns secret/scope columns across rows of differing name length", () => {
+test("VariableList aligns value/scope columns across rows of differing name length", () => {
   const consumers: Consumer[] = [
     { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
   ];
   const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
   const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, consumers: ["app:api"] };
   const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} consumers={consumers} showScopes />);
-  const lines = (lastFrame() ?? "").split("\n").filter((l) => l.includes("*"));
+  const lines = (lastFrame() ?? "").split("\n").filter((l) => l.includes("***"));
   expect(lines.length).toBe(2);
-  // The secret marker starts at the same column on both rows.
-  const cols = lines.map((l) => l.indexOf("*"));
-  expect(cols[0]).toBe(cols[1]);
+  // The masked value starts at the same column on both rows...
+  const valueCols = lines.map((l) => l.indexOf("***"));
+  expect(valueCols[0]).toBe(valueCols[1]);
   // ...and so does the scopes column.
   const scopeCols = lines.map((l) => l.indexOf("app:api"));
   expect(scopeCols[0]).toBe(scopeCols[1]);
@@ -77,6 +101,17 @@ test("VariableList pads rows to the full pane width so the highlight spans the r
   expect(rows[0]!.length).toBe(rows[1]!.length);
   // ...and the short-name row carries trailing fill before the right border.
   expect(rows.find((l) => l.includes(" X "))).toMatch(/ {2,}│$/);
+});
+
+test("VariableList labels global variables in the scopes column", () => {
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }];
+  const globalVar: Variable = { ...v, id: "g", name: "NODE_ENV", tier: "global", secret: false, consumers: [] };
+  const localVar: Variable = { ...v, id: "l", name: "IMAP_HOST", tier: "local", ownerApp: "app:api", secret: false, consumers: ["app:api"] };
+  const { lastFrame } = render(<VariableList variables={[globalVar, localVar]} cursor={0} consumers={consumers} showScopes />);
+  const lines = (lastFrame() ?? "").split("\n");
+  // The global variable's scopes cell starts with "global"; the local one does not.
+  expect(lines.find((l) => l.includes("NODE_ENV"))).toContain("global");
+  expect(lines.find((l) => l.includes("IMAP_HOST"))).not.toContain("global");
 });
 
 test("VariableList truncates wiring hint beyond 3 consumers", () => {
