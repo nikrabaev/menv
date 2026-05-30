@@ -22,7 +22,7 @@ export function ScopeTree({ scopes, cursor, active = true, height }: { scopes: S
   const maxItems = height ? Math.max(0, height - 5) : scopes.length;
   const windowed = listWindow(scopes, cursor, maxItems);
   return (
-    <Box flexDirection="column" width={20} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" width={40} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text color="gray">SCOPES</Text>
       {windowed.offset > 0 && <Text color="gray">  ...</Text>}
       {windowed.items.map((s, i) => (
