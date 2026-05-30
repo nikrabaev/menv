@@ -18,3 +18,11 @@ test("returns empty object when the env file is absent", async () => {
   const { identity } = await generateKeypair();
   expect(await loadEnvValues(root, "prod", identity)).toEqual({});
 });
+
+test("round-trips id-style keys containing colons", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  const { identity, recipient } = await generateKeypair();
+  await saveEnvValues(root, "dev", { "var:app:api:NODE_ENV": "development", "var:app:web:NODE_ENV": "production" }, [recipient]);
+  const got = await loadEnvValues(root, "dev", identity);
+  expect(got).toEqual({ "var:app:api:NODE_ENV": "development", "var:app:web:NODE_ENV": "production" });
+});
