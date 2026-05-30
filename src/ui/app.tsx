@@ -8,13 +8,15 @@ import { ScopeTree, buildScopes } from "./components/ScopeTree.tsx";
 import { VariableList } from "./components/VariableList.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { EditValueModal } from "./components/EditValueModal.tsx";
+import { NewVariableModal } from "./components/NewVariableModal.tsx";
+import { WireModal } from "./components/WireModal.tsx";
 import { saveModel } from "../store/save.ts";
 import { createStore } from "../store/store.ts";
 import { loadRepo } from "../store/load.ts";
 import { loadOrCreateIdentity } from "../crypto/identity.ts";
 
 type Pane = "scopes" | "vars";
-type Mode = "browse" | "edit";
+type Mode = "browse" | "edit" | "new" | "wire" | "filter";
 
 function varsForScope(model: RepoModel, scopeId: string) {
   if (scopeId === "global") return model.variables.filter((v) => v.tier === "global");
@@ -37,13 +39,33 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
   const [env, setEnv] = useState(model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev");
   const [mode, setMode] = useState<Mode>("browse");
   const [status, setStatus] = useState("");
+  const [filter, setFilter] = useState("");
 
   const scope = scopes[scopeCursor];
   const variables = scope ? varsForScope(model, scope.id) : model.variables;
-  const current = variables[varCursor] ?? null;
+  const filtered = filter
+    ? variables.filter((v) => v.name.toLowerCase().includes(filter.toLowerCase()))
+    : variables;
+  const current = filtered[varCursor] ?? null;
 
   useInput((input, key) => {
-    if (mode === "edit") return;
+    if (mode === "filter") {
+      if (key.escape || key.return) {
+        setMode("browse");
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setFilter((cur) => cur.slice(0, -1));
+        setVarCursor(0);
+        return;
+      }
+      if (input) {
+        setFilter((cur) => cur + input);
+        setVarCursor(0);
+      }
+      return;
+    }
+    if (mode !== "browse") return;
     if (input === "q") {
       exit();
       return;
@@ -59,7 +81,7 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
     }
     if (key.downArrow) {
       if (pane === "scopes") setScopeCursor((c) => Math.min(scopes.length - 1, c + 1));
-      else setVarCursor((c) => Math.min(variables.length - 1, c + 1));
+      else setVarCursor((c) => Math.min(filtered.length - 1, c + 1));
       return;
     }
     if (input === "e") {
@@ -75,6 +97,23 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
       setMode("edit");
       return;
     }
+    if (input === "/") {
+      setMode("filter");
+      return;
+    }
+    if (input === "n") {
+      setMode("new");
+      return;
+    }
+    if (input === "w" && current) {
+      setMode("wire");
+      return;
+    }
+    if (input === "x" && current) {
+      store.deleteVariable(current.id);
+      setVarCursor((c) => Math.max(0, Math.min(c, filtered.length - 2)));
+      return;
+    }
     if (input === "s") {
       void saveModel(store.getModel(), onSaveStamp()).then((sum) => {
         store.markClean();
@@ -88,7 +127,7 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box>
         <ScopeTree scopes={scopes} cursor={pane === "scopes" ? scopeCursor : -1} />
-        <VariableList variables={variables} cursor={pane === "vars" ? varCursor : -1} />
+        <VariableList variables={filtered} cursor={pane === "vars" ? varCursor : -1} />
         <Inspector model={model} variable={current} env={env} />
       </Box>
       {mode === "edit" && current ? (
@@ -99,9 +138,30 @@ export function MenvApp({ store, onSaveStamp }: { store: Store; onSaveStamp: () 
           onSubmit={(v) => { store.setValue(current.id, env, v); setMode("browse"); }}
           onCancel={() => setMode("browse")}
         />
+      ) : mode === "filter" ? (
+        <Box borderStyle="round" borderColor="cyan" paddingX={1}>
+          <Text>/ {filter}</Text>
+        </Box>
+      ) : mode === "new" ? (
+        <NewVariableModal
+          onSubmit={(name) => {
+            const tier = scope?.kind === "app" ? "local" : "global";
+            const ownerApp = tier === "local" ? scope!.id : undefined;
+            store.addVariable({ id: `var:${name}`, name, tier, ownerApp, description: "", group: null, secret: false, consumers: ownerApp ? [ownerApp] : [] });
+            setMode("browse");
+          }}
+          onCancel={() => setMode("browse")}
+        />
+      ) : mode === "wire" && current ? (
+        <WireModal
+          consumers={model.consumers}
+          wired={current.consumers}
+          onToggle={(id) => store.wire(current.id, id, !current.consumers.includes(id))}
+          onClose={() => setMode("browse")}
+        />
       ) : (
         <Box paddingX={1}>
-          <Text color="gray">up/down move / tab pane / enter edit / e env / d secret / s save / q quit  </Text>
+          <Text color="gray">up/down move / tab pane / enter edit / / filter / n new / w wire / x delete / e env / d secret / s save / q quit  </Text>
           <Text color="green">{status}</Text>
         </Box>
       )}
