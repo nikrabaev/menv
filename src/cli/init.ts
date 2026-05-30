@@ -25,18 +25,9 @@ export interface InitOpts {
 }
 
 export async function runInit(root: string, opts: InitOpts = {}): Promise<void> {
-  const { model, valuesByEnv } = await scanRepo(root);
+  const { model } = await scanRepo(root);
   const kp = await loadOrCreateIdentity(opts.backend ?? keychainBackend);
   model.recipients = [kp.recipient];
-
-  const byName = new Map(model.variables.map((v) => [v.name, v.id]));
-  for (const [env, named] of Object.entries(valuesByEnv)) {
-    for (const [name, val] of Object.entries(named)) {
-      const id = byName.get(name);
-      if (id) (model.values[id] ??= {})[env] = val;
-    }
-  }
-
   await saveModel(model, opts.stamp ?? `init-${model.environments[0]?.id ?? "dev"}`);
   await ensureGitignore(root);
 }
