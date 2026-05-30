@@ -18,6 +18,21 @@ import { loadOrCreateIdentity } from "../crypto/identity.ts";
 type Pane = "scopes" | "vars";
 type Mode = "browse" | "edit" | "new" | "wire" | "filter";
 
+export const ENTER_FULLSCREEN = "\x1b[?1049h\x1b[2J\x1b[H";
+export const EXIT_FULLSCREEN = "\x1b[?1049l";
+
+function isInteractiveStdout(stdout: NodeJS.WriteStream): boolean {
+  return stdout.isTTY === true;
+}
+
+export function enterFullscreen(stdout: NodeJS.WriteStream = process.stdout): void {
+  if (isInteractiveStdout(stdout)) stdout.write(ENTER_FULLSCREEN);
+}
+
+export function exitFullscreen(stdout: NodeJS.WriteStream = process.stdout): void {
+  if (isInteractiveStdout(stdout)) stdout.write(EXIT_FULLSCREEN);
+}
+
 function varsForScope(model: RepoModel, scopeId: string) {
   if (scopeId === "global") return model.variables.filter((v) => v.tier === "global");
   if (scopeId.startsWith("group:")) {
@@ -174,6 +189,14 @@ export async function launchTui(root: string): Promise<void> {
   const model = await loadRepo(root, kp.identity);
   const store = createStore(model);
   const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
-  const { waitUntilExit } = render(<MenvApp store={store} onSaveStamp={stamp} />);
-  await waitUntilExit();
+  let instance: ReturnType<typeof render> | undefined;
+  enterFullscreen();
+  try {
+    instance = render(<MenvApp store={store} onSaveStamp={stamp} />);
+    await instance.waitUntilExit();
+  } finally {
+    instance?.unmount();
+    instance?.cleanup();
+    exitFullscreen();
+  }
 }

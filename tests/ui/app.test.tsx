@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import React from "react";
 import { render } from "ink-testing-library";
-import { MenvApp } from "../../src/ui/app.tsx";
+import {
+  ENTER_FULLSCREEN,
+  EXIT_FULLSCREEN,
+  MenvApp,
+  enterFullscreen,
+  exitFullscreen,
+} from "../../src/ui/app.tsx";
 import { createStore } from "../../src/store/store.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
@@ -23,4 +29,36 @@ test("renders three panes with data", () => {
   expect(lastFrame()).toContain("VARIABLES");
   expect(lastFrame()).toContain("DATABASE_URL");
   expect(lastFrame()).toContain("acme");
+});
+
+test("fullscreen helpers use alternate screen and restore it", () => {
+  let out = "";
+  const stdout = {
+    isTTY: true,
+    write(chunk: string) {
+      out += chunk;
+      return true;
+    },
+  } as unknown as NodeJS.WriteStream;
+
+  enterFullscreen(stdout);
+  exitFullscreen(stdout);
+
+  expect(out).toBe(ENTER_FULLSCREEN + EXIT_FULLSCREEN);
+});
+
+test("fullscreen helpers do nothing for non-interactive output", () => {
+  let out = "";
+  const stdout = {
+    isTTY: false,
+    write(chunk: string) {
+      out += chunk;
+      return true;
+    },
+  } as unknown as NodeJS.WriteStream;
+
+  enterFullscreen(stdout);
+  exitFullscreen(stdout);
+
+  expect(out).toBe("");
 });
