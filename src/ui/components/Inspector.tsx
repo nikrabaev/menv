@@ -11,13 +11,13 @@ function display(v: Variable, raw: string): string {
 export function Inspector({ model, variable, env, height }: { model: RepoModel; variable: Variable | null; env: string; height?: number }) {
   if (!variable) {
     return (
-      <Box flexDirection="column" width={32} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
+      <Box flexDirection="column" width={60} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
         <Text color="gray">select a variable</Text>
       </Box>
     );
   }
   return (
-    <Box flexDirection="column" width={32} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" width={60} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text bold>{variable.name}</Text>
       {variable.description ? <Text color="gray">{variable.description}</Text> : null}
       <Text>tier  <Text color="cyan">{variable.tier}</Text></Text>

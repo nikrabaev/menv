@@ -30,7 +30,8 @@ describe("buildScopes", () => {
 
   test("emits section headers followed by their members", () => {
     const labels = buildScopes(model()).map((x) => x.label);
-    expect(labels).toEqual(["All", "Root", "APPS", "api", "web", "SERVICES", "postgres", "GROUPS", "DB"]);
+    // postgres has no wired variables, so SERVICES section is suppressed
+    expect(labels).toEqual(["All", "Root", "APPS", "api", "web", "GROUPS", "DB"]);
     expect(buildScopes(model()).find((x) => x.label === "APPS")!.kind).toBe("header");
   });
 
@@ -40,6 +41,16 @@ describe("buildScopes", () => {
     const labels = buildScopes(m).map((x) => x.label);
     expect(labels).toContain("APPS");
     expect(labels).not.toContain("SERVICES");
+  });
+
+  test("omits apps/services that have no wired variables", () => {
+    const m = model();
+    // wire a variable to postgres so it appears, verify it does
+    m.variables[0]!.consumers = [...m.variables[0]!.consumers, "svc:pg"];
+    expect(buildScopes(m).map((x) => x.label)).toContain("postgres");
+    // remove the wire — postgres should disappear again
+    m.variables[0]!.consumers = m.variables[0]!.consumers.filter((c) => c !== "svc:pg");
+    expect(buildScopes(m).map((x) => x.label)).not.toContain("postgres");
   });
 });
 

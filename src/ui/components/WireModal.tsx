@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Consumer } from "../../core/types.ts";
+import { listWindow } from "./listWindow.ts";
 
-export function WireModal({ consumers, wired, onToggle, onClose }: {
+export function WireModal({ varName, consumers, wired, onToggle, onClose, height }: {
+  varName: string;
   consumers: Consumer[];
   wired: string[];
   onToggle: (id: string) => void;
   onClose: () => void;
+  height?: number;
 }) {
   const [cursor, setCursor] = useState(0);
   useInput((_input, key) => {
@@ -18,14 +21,21 @@ export function WireModal({ consumers, wired, onToggle, onClose }: {
     if (key.downArrow) setCursor((c) => Math.min(consumers.length - 1, c + 1));
     if (key.return && consumers[cursor]) onToggle(consumers[cursor].id);
   });
+  const maxItems = height ? Math.max(0, height - 5) : consumers.length;
+  const windowed = listWindow(consumers, cursor, maxItems);
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
-      <Text>Wire to consumers (enter toggle / esc close):</Text>
-      {consumers.map((c, i) => (
-        <Text key={`${c.id}:${i}`} inverse={i === cursor}>
-          [{wired.includes(c.id) ? "x" : " "}] {c.kind === "service" ? "svc " : ""}{c.name}
-        </Text>
-      ))}
+    <Box flexDirection="column" height={height} borderStyle="round" borderColor="blue" paddingX={1}>
+      <Text>Wire <Text bold>{varName}</Text> to consumers <Text color="gray">(enter toggle / esc close)</Text></Text>
+      {windowed.offset > 0 && <Text color="gray">  ...</Text>}
+      {windowed.items.map((c, i) => {
+        const idx = windowed.offset + i;
+        return (
+          <Text key={`${c.id}:${idx}`} inverse={idx === cursor}>
+            [{wired.includes(c.id) ? "x" : " "}] {c.kind === "service" ? "svc " : ""}{c.name}
+          </Text>
+        );
+      })}
+      {windowed.offset + windowed.items.length < consumers.length && <Text color="gray">  ...</Text>}
     </Box>
   );
 }

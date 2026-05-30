@@ -19,8 +19,9 @@ export function ScopeTree({ scopes, cursor, active = true, height }: { scopes: S
             </Text>
           );
         }
+        const selected = idx === cursor;
         return (
-          <Text key={`${s.id}:${idx}`} inverse={active && idx === cursor}>
+          <Text key={`${s.id}:${idx}`} inverse={active && selected} color={!active && selected ? "cyan" : undefined}>
             {"  " + s.label}
           </Text>
         );

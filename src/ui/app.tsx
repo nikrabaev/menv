@@ -55,7 +55,19 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
   const [mode, setMode] = useState<Mode>("browse");
   const [status, setStatus] = useState("");
   const [filter, setFilter] = useState("");
-  const bottomHeight = mode === "browse" ? 1 : 3;
+  // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
+  // must equal the bottom region's *actual* rendered height. The wire modal lists every
+  // consumer, so cap its box at what the terminal can hold — leaving the top bar (3) and
+  // a minimal pane area (3) — and let it window its own list to fit (header + 2 border +
+  // 2 ellipsis = 5 chrome rows, the rest are items).
+  // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
+  // must equal the bottom region's actual rendered height. (Wire mode is the exception:
+  // it hides the panes and covers the full area below the top bar — see render below.)
+  const bottomHeight =
+    mode === "browse" ? 1 // status line
+    : mode === "filter" ? 3 // border(2) + input(1)
+    : mode === "edit" || mode === "new" ? 5 // border(2) + title + field + hint
+    : 1;
   const paneHeight = Math.max(3, rows - 3 - bottomHeight);
 
   const scope = scopes[scopeCursor];
@@ -149,12 +161,28 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
     }
   });
 
+  if (mode === "wire" && current) {
+    return (
+      <Box flexDirection="column" width={columns} height={rows}>
+        <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
+        <WireModal
+          varName={current.name}
+          consumers={model.consumers}
+          wired={current.consumers}
+          onToggle={(id) => store.wire(current.id, id, !current.consumers.includes(id))}
+          onClose={() => setMode("browse")}
+          height={Math.max(3, rows - 3)}
+        />
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" width={columns} height={rows}>
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} />
         <Inspector model={model} variable={current} env={env} height={paneHeight} />
       </Box>
       {mode === "edit" && current ? (
@@ -178,13 +206,6 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
             setMode("browse");
           }}
           onCancel={() => setMode("browse")}
-        />
-      ) : mode === "wire" && current ? (
-        <WireModal
-          consumers={model.consumers}
-          wired={current.consumers}
-          onToggle={(id) => store.wire(current.id, id, !current.consumers.includes(id))}
-          onClose={() => setMode("browse")}
         />
       ) : (
         <Box paddingX={1}>

@@ -18,13 +18,15 @@ export function buildScopes(model: RepoModel): Scope[] {
     { id: "root", label: "Root", kind: "root" },
   ];
 
-  const apps = model.consumers.filter((c) => c.kind === "app");
+  const hasVars = (id: string) => model.variables.some((v) => v.consumers.includes(id));
+
+  const apps = model.consumers.filter((c) => c.kind === "app" && hasVars(c.id));
   if (apps.length) {
     scopes.push({ id: "header:apps", label: "APPS", kind: "header" });
     for (const c of apps) scopes.push({ id: c.id, label: c.name, kind: "app" });
   }
 
-  const services = model.consumers.filter((c) => c.kind === "service");
+  const services = model.consumers.filter((c) => c.kind === "service" && hasVars(c.id));
   if (services.length) {
     scopes.push({ id: "header:services", label: "SERVICES", kind: "header" });
     for (const c of services) scopes.push({ id: c.id, label: c.name, kind: "service" });
