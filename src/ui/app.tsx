@@ -4,7 +4,8 @@ import type { RepoModel } from "../core/types.ts";
 import type { Store } from "../store/store.ts";
 import { useModel, useDirty } from "./useStore.ts";
 import { TopBar } from "./components/TopBar.tsx";
-import { ScopeTree, buildScopes } from "./components/ScopeTree.tsx";
+import { ScopeTree } from "./components/ScopeTree.tsx";
+import { buildScopes, varsForScope, stepScope } from "./scopes.ts";
 import { VariableList } from "./components/VariableList.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { EditValueModal } from "./components/EditValueModal.tsx";
@@ -31,15 +32,6 @@ export function enterFullscreen(stdout: NodeJS.WriteStream = process.stdout): vo
 
 export function exitFullscreen(stdout: NodeJS.WriteStream = process.stdout): void {
   if (isInteractiveStdout(stdout)) stdout.write(EXIT_FULLSCREEN);
-}
-
-function varsForScope(model: RepoModel, scopeId: string) {
-  if (scopeId === "global") return model.variables.filter((v) => v.tier === "global");
-  if (scopeId.startsWith("group:")) {
-    const g = scopeId.slice("group:".length);
-    return model.variables.filter((v) => v.group === g);
-  }
-  return model.variables.filter((v) => v.consumers.includes(scopeId));
 }
 
 export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
@@ -100,13 +92,23 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       return;
     }
     if (key.upArrow) {
-      if (pane === "scopes") setScopeCursor((c) => Math.max(0, c - 1));
-      else setVarCursor((c) => Math.max(0, c - 1));
+      if (pane === "scopes") {
+        const next = stepScope(scopes, scopeCursor, -1);
+        setScopeCursor(next);
+        if (next !== scopeCursor) setVarCursor(0);
+      } else {
+        setVarCursor((c) => Math.max(0, c - 1));
+      }
       return;
     }
     if (key.downArrow) {
-      if (pane === "scopes") setScopeCursor((c) => Math.min(scopes.length - 1, c + 1));
-      else setVarCursor((c) => Math.min(filtered.length - 1, c + 1));
+      if (pane === "scopes") {
+        const next = stepScope(scopes, scopeCursor, 1);
+        setScopeCursor(next);
+        if (next !== scopeCursor) setVarCursor(0);
+      } else {
+        setVarCursor((c) => Math.min(filtered.length - 1, c + 1));
+      }
       return;
     }
     if (input === "e") {

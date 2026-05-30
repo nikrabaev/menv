@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { buildScopes, varsForScope, stepScope } from "../../src/ui/scopes.ts";
+import { buildScopes, varsForScope, stepScope, isSelectable } from "../../src/ui/scopes.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
 function model(): RepoModel {
@@ -74,5 +74,22 @@ describe("stepScope", () => {
   });
   test("clamps at the start", () => {
     expect(stepScope(buildScopes(model()), 0, -1)).toBe(0);
+  });
+  test("skips consecutive header rows", () => {
+    const scopes = [
+      { id: "all", label: "All", kind: "all" as const },
+      { id: "h1", label: "H1", kind: "header" as const },
+      { id: "h2", label: "H2", kind: "header" as const },
+      { id: "app:api", label: "api", kind: "app" as const },
+    ];
+    expect(stepScope(scopes, 0, 1)).toBe(3);
+  });
+});
+
+describe("isSelectable", () => {
+  test("headers are not selectable, everything else is", () => {
+    expect(isSelectable({ id: "header:apps", label: "APPS", kind: "header" })).toBe(false);
+    expect(isSelectable({ id: "all", label: "All", kind: "all" })).toBe(true);
+    expect(isSelectable({ id: "app:api", label: "api", kind: "app" })).toBe(true);
   });
 });

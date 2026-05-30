@@ -39,6 +39,9 @@ export function buildScopes(model: RepoModel): Scope[] {
   return scopes;
 }
 
+// Precondition: `scopeId` identifies a SELECTABLE scope (all/root/group/consumer).
+// Header ids (e.g. "header:apps") should never reach this function — navigation
+// skips header rows — and would fall through to the consumer branch returning [].
 export function varsForScope(model: RepoModel, scopeId: string): Variable[] {
   if (scopeId === "all") return model.variables;
   if (scopeId === "root") return model.variables.filter((v) => v.tier === "global");
@@ -53,7 +56,7 @@ export function varsForScope(model: RepoModel, scopeId: string): Variable[] {
 // Clamps: if there is no selectable row that way, returns `from` unchanged.
 export function stepScope(scopes: Scope[], from: number, dir: 1 | -1): number {
   let i = from + dir;
-  while (i >= 0 && i < scopes.length && scopes[i].kind === "header") i += dir;
+  while (i >= 0 && i < scopes.length && !isSelectable(scopes[i])) i += dir;
   if (i < 0 || i >= scopes.length) return from;
   return i;
 }

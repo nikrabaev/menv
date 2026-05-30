@@ -29,6 +29,9 @@ test("renders three panes with data", () => {
   expect(lastFrame()).toContain("VARIABLES");
   expect(lastFrame()).toContain("DATABASE_URL");
   expect(lastFrame()).toContain("acme");
+  expect(lastFrame()).toContain("All");
+  expect(lastFrame()).toContain("Root");
+  expect(lastFrame()).toContain("APPS");
 });
 
 test("limits rendered rows to the viewport", () => {
