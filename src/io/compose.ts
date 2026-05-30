@@ -1,4 +1,4 @@
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, parseDocument, YAMLSeq } from "yaml";
 
 export interface ComposeService {
   name: string;
@@ -27,4 +27,20 @@ export function parseComposeServices(text: string, composeFile: string): Compose
     out.push({ name, composeFile, envFiles, environmentKeys });
   }
   return out;
+}
+
+export function ensureServiceEnvFile(text: string, serviceName: string, envPath: string): string {
+  const doc = parseDocument(text);
+  const svc = doc.getIn(["services", serviceName]) as any;
+  if (!svc) return text;
+
+  const existing = doc.getIn(["services", serviceName, "env_file"]);
+  if (existing == null) {
+    doc.setIn(["services", serviceName, "env_file"], new YAMLSeq());
+  }
+  const seq = doc.getIn(["services", serviceName, "env_file"]) as YAMLSeq;
+  const items = (seq.items ?? []).map((i: any) => (i.value !== undefined ? i.value : i));
+  if (!items.includes(envPath)) seq.add(envPath);
+
+  return doc.toString();
 }
