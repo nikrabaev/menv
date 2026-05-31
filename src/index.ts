@@ -2,6 +2,10 @@
 import { findRepoRoot } from "./cli/root.ts";
 import { runInit } from "./cli/init.ts";
 import { runGenerate } from "./cli/generate.ts";
+import { runBackup } from "./cli/backup.ts";
+import { runRestore } from "./cli/restore.ts";
+import { backupKey } from "./io/backup.ts";
+import { HELP_TEXT } from "./cli/help.ts";
 import { isMenvRepo } from "./store/load.ts";
 
 const VERSION = "0.1.0";
@@ -11,6 +15,11 @@ function stamp(): string {
 }
 
 const [, , cmd, ...rest] = Bun.argv;
+
+if (cmd === "--help" || cmd === "-h") {
+  console.log(HELP_TEXT);
+  process.exit(0);
+}
 
 if (cmd === "--version" || cmd === "-v") {
   console.log(VERSION);
@@ -30,6 +39,50 @@ if (cmd === "generate") {
   const files = await runGenerate(root, { env: envFlag, stamp: stamp() });
   console.log(`menv: generated ${files.length} files`);
   process.exit(0);
+}
+
+if (cmd === "backup") {
+  const { rel } = await runBackup(root, { key: backupKey(new Date()) });
+  // The exact wording is part of the command's contract, so it intentionally
+  // omits the `menv:` prefix the other commands use.
+  console.log(`Backup saved in ${rel}`);
+  process.exit(0);
+}
+
+if (cmd === "restore") {
+  const positional = rest.find((a) => !a.startsWith("-"));
+  const force = rest.includes("-f") || rest.includes("--force");
+  if (force && !positional) {
+    console.error("menv: --force requires a backup key");
+    process.exit(1);
+  }
+  if (!positional && !process.stdout.isTTY) {
+    console.error("menv: restore needs an interactive terminal (or pass a backup key)");
+    process.exit(1);
+  }
+  // Lazy-load Ink only for the interactive flow, mirroring the TUI import.
+  const { inkPrompts } = await import("./ui/restore.tsx");
+  const result = await runRestore(root, { key: positional, force }, inkPrompts);
+  switch (result.kind) {
+    case "not-found": {
+      const have = result.available?.length ? ` (have: ${result.available.join(", ")})` : "";
+      console.error(`menv: backup "${positional}" not found${have}`);
+      process.exit(1);
+      break;
+    }
+    case "no-backups":
+      console.log("menv: no backups found");
+      process.exit(0);
+      break;
+    case "cancelled":
+      console.log("menv: restore cancelled");
+      process.exit(0);
+      break;
+    case "done":
+      console.log(`menv: restored ${result.restored?.length ?? 0} files (${result.skipped?.length ?? 0} skipped)`);
+      process.exit(0);
+      break;
+  }
 }
 
 if (!(await isMenvRepo(root))) {
