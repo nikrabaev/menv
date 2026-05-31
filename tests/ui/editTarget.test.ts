@@ -11,11 +11,11 @@ function model(): RepoModel {
   };
 }
 
-test("editLabel describes the target", () => {
-  expect(editLabel({ kind: "value", env: "dev" })).toBe("value · dev");
-  expect(editLabel({ kind: "description" })).toBe("description");
-  expect(editLabel({ kind: "example" })).toBe("example");
-  expect(editLabel({ kind: "group" })).toBe("group");
+test("editLabel describes the target with a capitalized label", () => {
+  expect(editLabel({ kind: "value", env: "dev" })).toBe("Value · dev");
+  expect(editLabel({ kind: "description" })).toBe("Description");
+  expect(editLabel({ kind: "example" })).toBe("Example");
+  expect(editLabel({ kind: "group" })).toBe("Group");
 });
 
 test("editInitial reads the current field value", () => {

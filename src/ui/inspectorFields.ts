@@ -8,25 +8,24 @@ export type InspectorField =
   | { kind: "wiring"; label: string; summary: string }
   | { kind: "value"; label: string; env: string; text: string; secret: boolean };
 
-export function inspectorFields(model: RepoModel, variable: Variable): InspectorField[] {
+// `env` is the environment currently selected in the app: the inspector shows the
+// value for that one environment only (switch environments to see the others).
+export function inspectorFields(model: RepoModel, variable: Variable, env: string): InspectorField[] {
   const consumerName = (id: string) => model.consumers.find((c) => c.id === id)?.name ?? id;
-  const fields: InspectorField[] = [
-    { kind: "description", label: "description", text: variable.description },
-    { kind: "example", label: "example", text: variable.example ?? "" },
-    { kind: "group", label: "group", text: variable.group ?? "" },
-    { kind: "secret", label: "secret", on: variable.secret },
-    { kind: "wiring", label: "wiring", summary: variable.consumers.map(consumerName).join(" · ") },
-  ];
-  for (const e of model.environments) {
-    fields.push({
+  return [
+    { kind: "description", label: "Description", text: variable.description },
+    { kind: "example", label: "Example", text: variable.example ?? "" },
+    { kind: "group", label: "Group", text: variable.group ?? "" },
+    { kind: "secret", label: "Secret", on: variable.secret },
+    { kind: "wiring", label: "Wiring", summary: variable.consumers.map(consumerName).join(" · ") },
+    {
       kind: "value",
-      label: e.id,
-      env: e.id,
-      text: model.values[variable.id]?.[e.id] ?? "",
+      label: "Value",
+      env,
+      text: model.values[variable.id]?.[env] ?? "",
       secret: variable.secret,
-    });
-  }
-  return fields;
+    },
+  ];
 }
 
 // The text `c` should copy, or null for fields that hold no copyable text.

@@ -21,12 +21,9 @@ export function ScopeTree({ scopes, cursor, active = true, height }: { scopes: S
           );
         }
         const selected = idx === cursor;
-        // Group scopes are shown bracketed to read as group names, distinct from
-        // the apps/services/built-in scopes around them.
-        const label = s.kind === "group" ? `[${s.label}]` : s.label;
         return (
           <Text key={`${s.id}:${idx}`} inverse={active && selected} color={!active && selected ? "cyan" : undefined}>
-            {"  " + label + "  "}
+            {"  " + s.label + "  "}
           </Text>
         );
       })}

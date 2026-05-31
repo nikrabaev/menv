@@ -16,24 +16,29 @@ const model: RepoModel = {
   recipients: [],
 };
 
-test("inspectorFields lists fixed fields then one value row per environment", () => {
-  const fields = inspectorFields(model, variable);
+test("inspectorFields lists fixed fields then a single value row for the current env", () => {
+  const fields = inspectorFields(model, variable, "prod");
   expect(fields.map((f) => f.kind)).toEqual([
-    "description", "example", "group", "secret", "wiring", "value", "value",
+    "description", "example", "group", "secret", "wiring", "value",
   ]);
-  const dev = fields.find((f) => f.kind === "value" && f.label === "dev");
-  expect(dev).toMatchObject({ kind: "value", env: "dev", text: "pg://dev", secret: true });
+  const value = fields.find((f) => f.kind === "value");
+  expect(value).toMatchObject({ kind: "value", label: "Value", env: "prod", text: "pg://prod", secret: true });
+});
+
+test("the value row follows the requested environment", () => {
+  const value = inspectorFields(model, variable, "dev").find((f) => f.kind === "value");
+  expect(value).toMatchObject({ env: "dev", text: "pg://dev" });
 });
 
 test("wiring summary uses consumer display names", () => {
-  const wiring = inspectorFields(model, variable).find((f) => f.kind === "wiring")!;
+  const wiring = inspectorFields(model, variable, "dev").find((f) => f.kind === "wiring")!;
   expect(wiring).toMatchObject({ summary: "api" });
 });
 
 test("copyableText returns text for text fields and null for secret/wiring", () => {
-  const fields = inspectorFields(model, variable);
+  const fields = inspectorFields(model, variable, "prod");
   expect(copyableText(fields[0]!)).toBe("db conn"); // description
   expect(copyableText(fields.find((f) => f.kind === "secret")!)).toBeNull();
   expect(copyableText(fields.find((f) => f.kind === "wiring")!)).toBeNull();
-  expect(copyableText(fields.find((f) => f.kind === "value" && f.label === "prod")!)).toBe("pg://prod");
+  expect(copyableText(fields.find((f) => f.kind === "value")!)).toBe("pg://prod");
 });

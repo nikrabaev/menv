@@ -116,7 +116,7 @@ test("enter in the variable list edits the current environment value", async () 
   await tick(); // wait for useInput effect to register
   stdin.write("\r"); // vars pane is default
   await tick();
-  expect(lastFrame()).toContain("value · dev");
+  expect(lastFrame()).toContain("Value · dev");
   stdin.write("Z");
   await tick(); // let the controlled value re-render before Enter
   stdin.write("\r");
@@ -132,7 +132,7 @@ test("editing the description in the inspector persists via the store", async ()
   await tick();
   stdin.write("\r"); // open modal
   await tick();
-  expect(lastFrame()).toContain("description");
+  expect(lastFrame()).toContain("Description"); // edit-modal title
   stdin.write("X");
   await tick(); // let the controlled value re-render before Enter
   stdin.write("\r");
@@ -298,7 +298,7 @@ test("the variable list shows group headers when at least one group exists", asy
   expect(frame).toContain("Infra");
 });
 
-test("ctrl+down jumps the cursor to the next group's first variable", async () => {
+test("shift+down/up jump the cursor to the next/previous group's first variable", async () => {
   const model: RepoModel = {
     ...editModel,
     variables: [
@@ -312,10 +312,10 @@ test("ctrl+down jumps the cursor to the next group's first variable", async () =
   await tick();
   // Ungrouped sorts first, so UA is the initial selection (shown in the inspector).
   expect(lastFrame()).toContain("ungrouped-desc");
-  stdin.write("\x1b[1;5B"); // ctrl+down
+  stdin.write("\x1b[1;2B"); // shift+down -> next group
   await tick();
   expect(lastFrame()).toContain("infra-desc");
-  stdin.write("\x1b[1;5A"); // ctrl+up, back to the Ungrouped bucket
+  stdin.write("\x1b[1;2A"); // shift+up -> previous group (Ungrouped bucket)
   await tick();
   expect(lastFrame()).toContain("ungrouped-desc");
 });

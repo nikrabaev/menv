@@ -16,11 +16,15 @@ const model: RepoModel = {
   variables: [v], consumers: [], values: { v1: { dev: "pg://x" } }, recipients: [],
 };
 
-test("TopBar shows repo, env, and dirty indicator", () => {
-  const { lastFrame } = render(<TopBar root={model.root} env="dev" dirty={true} unsaved={3} />);
-  expect(lastFrame()).toContain("acme");
-  expect(lastFrame()).toContain("dev");
-  expect(lastFrame()).toContain("3");
+test("TopBar shows repo, every environment, and the dirty indicator", () => {
+  const { lastFrame } = render(<TopBar root={model.root} env="dev" environments={["dev", "prod", "staging"]} dirty={true} unsaved={3} />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("acme");
+  // Every environment is listed, not just the current one.
+  expect(frame).toContain("dev");
+  expect(frame).toContain("prod");
+  expect(frame).toContain("staging");
+  expect(frame).toContain("3");
 });
 
 test("VariableList renders the name and masks a secret's value", () => {
@@ -76,7 +80,7 @@ test("VariableList encloses group header names in brackets", () => {
   expect(frame).toContain("[Storage]");
 });
 
-test("ScopeTree encloses group scopes in brackets but leaves apps plain", () => {
+test("ScopeTree renders scope labels", () => {
   const scopes: Scope[] = [
     { id: "all", label: "All", kind: "all" },
     { id: "group:DB", label: "DB", kind: "group" },
@@ -84,9 +88,8 @@ test("ScopeTree encloses group scopes in brackets but leaves apps plain", () => 
   ];
   const { lastFrame } = render(<ScopeTree scopes={scopes} cursor={0} />);
   const frame = lastFrame() ?? "";
-  expect(frame).toContain("[DB]");
+  expect(frame).toContain("DB");
   expect(frame).toContain("api");
-  expect(frame).not.toContain("[api]");
 });
 
 test("VariableList stays flat with no headers when not grouped", () => {
@@ -181,41 +184,42 @@ test("VariableList truncates wiring hint beyond 3 consumers", () => {
 });
 
 test("Inspector lists fields and masks a secret value", () => {
-  const { lastFrame } = render(<Inspector model={model} variable={v} />);
+  const { lastFrame } = render(<Inspector model={model} variable={v} env="dev" />);
   const frame = lastFrame() ?? "";
   expect(frame).toContain("DATABASE_URL");
-  expect(frame).toContain("description");
-  expect(frame).toContain("secret");
+  expect(frame).toContain("Description");
+  expect(frame).toContain("Secret");
   expect(frame).not.toContain("pg://x"); // value column masked
 });
 
 test("Inspector shows 'empty' for an unset value field", () => {
   const plain: Variable = { ...v, secret: false };
   const m: RepoModel = { ...model, values: {} };
-  const { lastFrame } = render(<Inspector model={m} variable={plain} height={14} />);
+  const { lastFrame } = render(<Inspector model={m} variable={plain} env="dev" height={14} />);
   expect(lastFrame()).toContain("empty");
 });
 
 test("Inspector marks the selected field with a caret when focused", () => {
-  const { lastFrame } = render(<Inspector model={model} variable={v} active cursor={0} height={14} />);
+  const { lastFrame } = render(<Inspector model={model} variable={v} env="dev" active cursor={0} height={14} />);
   expect(lastFrame()).toContain("▸");
 });
 
 test("Inspector shows no caret when unfocused", () => {
-  const { lastFrame } = render(<Inspector model={model} variable={v} cursor={0} height={14} />);
+  const { lastFrame } = render(<Inspector model={model} variable={v} env="dev" cursor={0} height={14} />);
   expect(lastFrame()).not.toContain("▸");
 });
 
-test("Inspector windows its field list to fit a short pane", () => {
-  const manyEnvs: RepoModel = {
+test("Inspector shows only the current environment's value", () => {
+  const multi: RepoModel = {
     ...model,
-    environments: Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, isDefault: i === 0 })),
-    values: { v1: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`e${i}`, `val${i}`])) },
+    environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+    values: { v1: { dev: "DEVVAL", prod: "PRODVAL" } },
   };
-  const { lastFrame } = render(<Inspector model={manyEnvs} variable={{ ...v, secret: false }} active cursor={0} height={10} />);
+  const plain: Variable = { ...v, secret: false };
+  const { lastFrame } = render(<Inspector model={multi} variable={plain} env="prod" height={14} />);
   const frame = lastFrame() ?? "";
-  expect(frame.split("\n").length).toBeLessThanOrEqual(10);
-  expect(frame).toContain("more"); // overflow marker is present
+  expect(frame).toContain("PRODVAL"); // the selected env's value
+  expect(frame).not.toContain("DEVVAL"); // other environments are not shown
 });
 
 test("MoreIndicator shows the hidden count with a direction arrow", () => {

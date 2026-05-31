@@ -27,9 +27,10 @@ function displayText(f: InspectorField): string {
   }
 }
 
-export function Inspector({ model, variable, active = false, cursor = 0, height }: {
+export function Inspector({ model, variable, env, active = false, cursor = 0, height }: {
   model: RepoModel;
   variable: Variable | null;
+  env: string;
   active?: boolean;
   cursor?: number;
   height?: number;
@@ -41,7 +42,7 @@ export function Inspector({ model, variable, active = false, cursor = 0, height 
       </Box>
     );
   }
-  const fields = inspectorFields(model, variable);
+  const fields = inspectorFields(model, variable, env);
   const labelWidth = fields.length ? Math.max(...fields.map((f) => f.label.length)) : 0;
   // Inner content width is 56 (box 60 − border 2 − paddingX 2). The value column gets
   // what's left after the 2-cell caret/indent, the label, and one gutter cell.
@@ -53,19 +54,19 @@ export function Inspector({ model, variable, active = false, cursor = 0, height 
   const windowed = listWindow(fields, cursor, maxItems);
   return (
     <Box flexDirection="column" width={60} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
-      <Text bold>{variable.name} <Text color="cyan">· {variable.tier}</Text></Text>
+      <Text bold>{variable.name} {variable.tier !== 'local' ? (<Text color="cyan">· {variable.tier}</Text>) : null}</Text>
       <MoreIndicator direction="up" count={windowed.offset} />
       {windowed.items.map((f, i) => {
         const idx = windowed.offset + i;
         const isCurrent = active && idx === cursor;
         const masked = f.kind === "value" && f.secret;
-        const empty = f.kind === "value" && !f.secret && f.text === "";
+        const empty = (f.kind === "value" && !f.secret && f.text === "") || (f.kind === "group" && f.text === "");
         return (
           <Text key={`${f.label}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined}>
             {isCurrent ? "▸ " : "  "}
             <Text color="gray">{f.label.padEnd(labelWidth)}</Text>{" "}
             {empty
-              ? <Text italic color="gray">empty</Text>
+              ? <Text italic color="gray">{f.kind === 'group' ? 'none' : 'empty'}</Text>
               : <Text color={masked ? "yellow" : undefined}>{truncate(displayText(f), valueWidth)}</Text>}
           </Text>
         );

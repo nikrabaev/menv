@@ -105,7 +105,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const filtered = orderedVariables(matched, grouped);
   const groupStartIdx = groupStarts(matched, grouped);
   const current = filtered[varCursor] ?? null;
-  const fields = current ? inspectorFields(model, current) : [];
+  const fields = current ? inspectorFields(model, current, env) : [];
   // Clamp so the rendered/acted-on field stays in range as the variable changes.
   const inspCursor = Math.min(inspectorCursor, Math.max(0, fields.length - 1));
 
@@ -125,12 +125,12 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       setPane("vars");
       return;
     }
-    // Ctrl+↑/↓ jump between group buckets in the variable list.
-    if (key.ctrl && (key.upArrow || key.downArrow)) {
-      if (pane === "vars") {
-        const next = jumpGroup(groupStartIdx, varCursor, key.downArrow ? 1 : -1);
-        if (next !== varCursor) { setVarCursor(next); setInspectorCursor(0); }
-      }
+    // Shift/Option + ↑/↓ jump between group buckets in the variable list. macOS
+    // reserves Ctrl+↑/↓ (Mission Control) and never forwards Cmd to the terminal,
+    // so we use Shift (sent by most terminals) and Option/Meta (when mapped).
+    if (grouped && pane === "vars" && (key.shift || key.meta) && (key.upArrow || key.downArrow)) {
+      const next = jumpGroup(groupStartIdx, varCursor, key.downArrow ? 1 : -1);
+      if (next !== varCursor) { setVarCursor(next); setInspectorCursor(0); }
       return;
     }
     if (key.upArrow) {
@@ -219,7 +219,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   if (mode === "wire" && current) {
     return (
       <Box flexDirection="column" width={columns} height={rows}>
-        <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
+        <TopBar root={model.root} env={env} environments={model.environments.map((e) => e.id)} dirty={dirty} unsaved={dirty ? 1 : 0} />
         <WireModal
           varName={current.name}
           consumers={model.consumers}
@@ -234,11 +234,11 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
-      <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
+      <TopBar root={model.root} env={env} environments={model.environments.map((e) => e.id)} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} grouped={grouped} />
-        <Inspector model={model} variable={current} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
+        <VariableList variables={filtered} cursor={varCursor} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} grouped={grouped} />
+        <Inspector model={model} variable={current} env={env} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
       </Box>
       {mode === "edit" && current && editTarget ? (
         editTarget.kind === "group" ? (
@@ -294,7 +294,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
               </Text>
             ) : (
               <Text color="gray" wrap="truncate-end">
-                <Key>↑↓</Key> move{grouped && pane === "vars" ? <>{SEPARATOR}<Key>^↑↓</Key> group</> : null}{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
+                <Key>↑↓</Key> move{grouped && pane === "vars" ? <>{SEPARATOR}<Key>⇧↑↓</Key> group</> : null}{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
               </Text>
             )}
           </Box>

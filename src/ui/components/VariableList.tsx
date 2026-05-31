@@ -36,10 +36,9 @@ function truncate(text: string, width: number): string {
   return text.slice(0, width - 1) + "…";
 }
 
-export function VariableList({ variables, cursor, active = true, height, scopeLabel, consumers, showScopes, filter, model, env, grouped = false }: {
+export function VariableList({ variables, cursor, height, scopeLabel, consumers, showScopes, filter, model, env, grouped = false }: {
   variables: Variable[];
   cursor: number;
-  active?: boolean;
   height?: number;
   scopeLabel?: string;
   consumers?: Consumer[];
@@ -131,7 +130,9 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
         const contentLen = nameSeg.length + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
         // Trailing fill so a selected row's highlight reaches the pane's right edge.
         const fill = Math.max(0, rowWidth - contentLen);
-        const isCurrent = active && row.index === cursor;
+        // The cursor row is the variable shown in the inspector, so it stays
+        // highlighted even when the vars pane isn't focused.
+        const isCurrent = row.index === cursor;
         return (
           <Text key={`${v.id}:${row.index}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {nameSeg}

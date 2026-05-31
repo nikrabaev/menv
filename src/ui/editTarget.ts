@@ -10,7 +10,8 @@ export type EditTarget =
   | { kind: "group" };
 
 export function editLabel(t: EditTarget): string {
-  return t.kind === "value" ? `value · ${t.env}` : t.kind;
+  if (t.kind === "value") return `Value · ${t.env}`;
+  return t.kind.charAt(0).toUpperCase() + t.kind.slice(1);
 }
 
 export function editInitial(model: RepoModel, v: Variable, t: EditTarget): string {
