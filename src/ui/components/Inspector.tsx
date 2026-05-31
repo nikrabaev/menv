@@ -59,8 +59,9 @@ export function Inspector({ model, variable, env, active = false, cursor = 0, he
       {windowed.items.map((f, i) => {
         const idx = windowed.offset + i;
         const isCurrent = active && idx === cursor;
-        const masked = f.kind === "value" && f.secret;
-        const empty = (f.kind === "value" && !f.secret && f.text === "") || (f.kind === "group" && f.text === "");
+        // A secret with no value has nothing to mask, so it reads "empty" too.
+        const empty = (f.kind === "value" && f.text === "") || (f.kind === "group" && f.text === "");
+        const masked = f.kind === "value" && f.secret && !empty;
         return (
           <Text key={`${f.label}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined}>
             {isCurrent ? "▸ " : "  "}

@@ -58,10 +58,15 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
   const windowed = listWindow(rows, selectedRow, maxItems);
 
   const valueFor = (v: Variable) => (model && env ? valueOf(model, v.id, env) : "");
-  // The text shown in the value column: the mask for secrets, the placeholder for
-  // an unset value, otherwise the value itself.
-  const displayValueOf = (v: Variable) => (v.secret ? SECRET_MASK : valueFor(v) || EMPTY_LABEL);
-  const isEmptyValue = (v: Variable) => !v.secret && valueFor(v) === "";
+  // The text shown in the value column: the placeholder for an unset value (a secret
+  // with no value has nothing to mask), the mask for a secret with a value, otherwise
+  // the value itself.
+  const displayValueOf = (v: Variable) => {
+    const value = valueFor(v);
+    if (value === "") return EMPTY_LABEL;
+    return v.secret ? SECRET_MASK : value;
+  };
+  const isEmptyValue = (v: Variable) => valueFor(v) === "";
   const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(v.consumers, consumers) : null);
   // The scopes column reads, for a global variable, "global" followed by any
   // wiring; for a local one, just the wiring. Plain text, used for width/fill.
@@ -136,7 +141,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
         return (
           <Text key={`${v.id}:${row.index}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {nameSeg}
-            {valueWidth > 0 ? <Text italic={empty} color={v.secret ? "yellow" : empty ? "gray" : undefined}>{valueCell}</Text> : null}
+            {valueWidth > 0 ? <Text italic={empty} color={empty ? "gray" : v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
             {isGlobal ? <Text italic color="cyan">global</Text> : null}
             {isGlobal && hint ? " " : null}

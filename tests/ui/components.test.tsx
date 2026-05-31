@@ -107,6 +107,15 @@ test("VariableList shows 'empty' for a variable with no value in the current env
   expect(lastFrame()).toContain("empty");
 });
 
+test("VariableList shows 'empty' for a secret with no value, not the mask", () => {
+  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, consumers: [] };
+  const m: RepoModel = { ...model, variables: [secret], values: {} };
+  const { lastFrame } = render(<VariableList variables={[secret]} cursor={0} model={m} env="dev" />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("empty");
+  expect(frame).not.toContain("***"); // no value to mask
+});
+
 test("VariableList header announces the active filter query", () => {
   const { lastFrame } = render(<VariableList variables={[v]} cursor={0} filter="data" />);
   expect(lastFrame()).toContain("filter: data");
@@ -134,7 +143,8 @@ test("VariableList aligns value/scope columns across rows of differing name leng
   ];
   const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
   const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, consumers: ["app:api"] };
-  const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} consumers={consumers} showScopes />);
+  const m: RepoModel = { ...model, variables: [short, long], values: { s: { dev: "a" }, l: { dev: "b" } } };
+  const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} consumers={consumers} showScopes model={m} env="dev" />);
   const lines = (lastFrame() ?? "").split("\n").filter((l) => l.includes("***"));
   expect(lines.length).toBe(2);
   // The masked value starts at the same column on both rows...
@@ -197,6 +207,15 @@ test("Inspector shows 'empty' for an unset value field", () => {
   const m: RepoModel = { ...model, values: {} };
   const { lastFrame } = render(<Inspector model={m} variable={plain} env="dev" height={14} />);
   expect(lastFrame()).toContain("empty");
+});
+
+test("Inspector shows 'empty' for a secret value field with no value, not the mask", () => {
+  const secret: Variable = { ...v, secret: true };
+  const m: RepoModel = { ...model, values: {} };
+  const { lastFrame } = render(<Inspector model={m} variable={secret} env="dev" height={14} />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("empty");
+  expect(frame).not.toContain("***"); // no value to mask
 });
 
 test("Inspector marks the selected field with a caret when focused", () => {
