@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Box, Text, useApp, useInput, useStdout, render } from "ink";
-import type { RepoModel } from "../core/types.ts";
 import type { Store } from "../store/store.ts";
 import { useModel, useDirty } from "./useStore.ts";
 import { useTerminalSize } from "./useTerminalSize.ts";
@@ -9,15 +8,19 @@ import { ScopeTree } from "./components/ScopeTree.tsx";
 import { buildScopes, varsForScope, stepScope } from "./scopes.ts";
 import { VariableList } from "./components/VariableList.tsx";
 import { Inspector } from "./components/Inspector.tsx";
-import { EditValueModal } from "./components/EditValueModal.tsx";
+import { EditFieldModal } from "./components/EditFieldModal.tsx";
 import { NewVariableModal } from "./components/NewVariableModal.tsx";
 import { WireModal } from "./components/WireModal.tsx";
+import { inspectorFields, copyableText } from "./inspectorFields.ts";
+import { type EditTarget, editLabel, editInitial, applyEdit } from "./editTarget.ts";
+import { copyToClipboard } from "../io/clipboard.ts";
+import { valueOf } from "../core/model.ts";
 import { saveModel } from "../store/save.ts";
 import { createStore } from "../store/store.ts";
 import { loadRepo } from "../store/load.ts";
 import { loadOrCreateIdentity } from "../crypto/identity.ts";
 
-type Pane = "scopes" | "vars";
+type Pane = "scopes" | "vars" | "inspector";
 type Mode = "browse" | "edit" | "new" | "wire" | "filter";
 
 export const ENTER_FULLSCREEN = "\x1b[?1049h\x1b[2J\x1b[H";
@@ -35,11 +38,17 @@ export function exitFullscreen(stdout: NodeJS.WriteStream = process.stdout): voi
   if (isInteractiveStdout(stdout)) stdout.write(EXIT_FULLSCREEN);
 }
 
-const SEPARATOR = " · "
+const SEPARATOR = " · ";
 
-export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
+// A single keycap chip, e.g. ` tab `, matching the prior inline styling.
+const Key = ({ children }: { children: React.ReactNode }) => (
+  <Text bold backgroundColor="blackBright"> {children} </Text>
+);
+
+export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRows, viewportColumns }: {
   store: Store;
   onSaveStamp: () => string;
+  copy?: (text: string) => Promise<boolean>;
   viewportRows?: number;
   viewportColumns?: number;
 }) {
@@ -55,18 +64,16 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
   const [pane, setPane] = useState<Pane>("vars");
   const [scopeCursor, setScopeCursor] = useState(0);
   const [varCursor, setVarCursor] = useState(0);
+  const [inspectorCursor, setInspectorCursor] = useState(0);
   const [env, setEnv] = useState(model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev");
   const [mode, setMode] = useState<Mode>("browse");
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [status, setStatus] = useState("");
   const [filter, setFilter] = useState("");
+
   // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
-  // must equal the bottom region's *actual* rendered height. The wire modal lists every
-  // consumer, so cap its box at what the terminal can hold — leaving the top bar (3) and
-  // a minimal pane area (3) — and let it window its own list to fit (header + 2 border +
-  // 2 ellipsis = 5 chrome rows, the rest are items).
-  // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
-  // must equal the bottom region's actual rendered height. (Wire mode is the exception:
-  // it hides the panes and covers the full area below the top bar — see render below.)
+  // must equal the bottom region's *actual* rendered height. (Wire mode is the
+  // exception: it hides the panes and covers the full area below the top bar.)
   const bottomHeight =
     mode === "browse" ? 1 // status line
     : mode === "filter" ? 3 // border(2) + input(1)
@@ -80,6 +87,9 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
     ? variables.filter((v) => v.name.toLowerCase().includes(filter.toLowerCase()))
     : variables;
   const current = filtered[varCursor] ?? null;
+  const fields = current ? inspectorFields(model, current) : [];
+  // Clamp so the rendered/acted-on field stays in range as the variable changes.
+  const inspCursor = Math.min(inspectorCursor, Math.max(0, fields.length - 1));
 
   useInput((input, key) => {
     if (mode === "filter") {
@@ -104,16 +114,23 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       return;
     }
     if (key.tab) {
-      setPane((p) => (p === "scopes" ? "vars" : "scopes"));
+      setPane((p) => (p === "scopes" ? "vars" : p === "vars" ? (current ? "inspector" : "scopes") : "scopes"));
+      return;
+    }
+    if (key.escape && pane === "inspector") {
+      setPane("vars");
       return;
     }
     if (key.upArrow) {
       if (pane === "scopes") {
         const next = stepScope(scopes, scopeCursor, -1);
         setScopeCursor(next);
-        if (next !== scopeCursor) setVarCursor(0);
-      } else {
+        if (next !== scopeCursor) { setVarCursor(0); setInspectorCursor(0); }
+      } else if (pane === "vars") {
         setVarCursor((c) => Math.max(0, c - 1));
+        setInspectorCursor(0);
+      } else {
+        setInspectorCursor((c) => Math.max(0, c - 1));
       }
       return;
     }
@@ -121,9 +138,12 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       if (pane === "scopes") {
         const next = stepScope(scopes, scopeCursor, 1);
         setScopeCursor(next);
-        if (next !== scopeCursor) setVarCursor(0);
-      } else {
+        if (next !== scopeCursor) { setVarCursor(0); setInspectorCursor(0); }
+      } else if (pane === "vars") {
         setVarCursor((c) => Math.min(filtered.length - 1, c + 1));
+        setInspectorCursor(0);
+      } else {
+        setInspectorCursor((c) => Math.min(fields.length - 1, c + 1));
       }
       return;
     }
@@ -132,13 +152,34 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       setEnv((cur) => ids[(ids.indexOf(cur) + 1) % ids.length]);
       return;
     }
-    if (input === "d" && current) {
-      store.toggleSecret(current.id);
+    if (input === "c" && current) {
+      const field = pane === "inspector" ? fields[inspCursor] : undefined;
+      const text = field ? copyableText(field) : valueOf(model, current.id, env);
+      const label = field ? (field.kind === "value" ? `(${field.env})` : field.label) : `(${env})`;
+      if (!text) {
+        // null = a non-text field (secret/wiring); "" = an unset value/empty field.
+        setStatus("nothing to copy");
+        return;
+      }
+      const name = current.name;
+      void copy(text).then((ok) => setStatus(ok ? `copied ${name} ${label}` : "clipboard unavailable"));
       return;
     }
-    if (key.return && current && pane === "vars") {
-      setMode("edit");
-      return;
+    if (key.return && current) {
+      if (pane === "inspector") {
+        const f = fields[inspCursor];
+        if (!f) return;
+        if (f.kind === "secret") { store.toggleSecret(current.id); return; }
+        if (f.kind === "wiring") { setMode("wire"); return; }
+        setEditTarget(f.kind === "value" ? { kind: "value", env: f.env } : { kind: f.kind });
+        setMode("edit");
+        return;
+      }
+      if (pane === "vars") {
+        setEditTarget({ kind: "value", env });
+        setMode("edit");
+        return;
+      }
     }
     if (input === "/") {
       setMode("filter");
@@ -148,13 +189,11 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       setMode("new");
       return;
     }
-    if (input === "w" && current) {
-      setMode("wire");
-      return;
-    }
     if (input === "x" && current) {
       store.deleteVariable(current.id);
       setVarCursor((c) => Math.max(0, Math.min(c, filtered.length - 2)));
+      setInspectorCursor(0);
+      if (pane === "inspector") setPane("vars");
       return;
     }
     if (input === "s") {
@@ -187,15 +226,14 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
         <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} model={model} env={env} />
-        <Inspector model={model} variable={current} env={env} height={paneHeight} />
+        <Inspector model={model} variable={current} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
       </Box>
-      {mode === "edit" && current ? (
-        <EditValueModal
-          varName={current.name}
-          env={env}
-          initial={model.values[current.id]?.[env] ?? ""}
-          onSubmit={(v) => { store.setValue(current.id, env, v); setMode("browse"); }}
-          onCancel={() => setMode("browse")}
+      {mode === "edit" && current && editTarget ? (
+        <EditFieldModal
+          label={editLabel(editTarget)}
+          initial={editInitial(model, current, editTarget)}
+          onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
+          onCancel={() => { setMode("browse"); setEditTarget(null); }}
         />
       ) : mode === "filter" ? (
         <Box borderStyle="round" borderColor="cyan" paddingX={1}>
@@ -213,20 +251,24 @@ export function MenvApp({ store, onSaveStamp, viewportRows, viewportColumns }: {
         />
       ) : (
         <Box paddingX={1} justifyContent="space-between">
-          <Text color="gray">
-            <Text bold={true} backgroundColor={"blackBright"}> up </Text>/<Text bold={true} backgroundColor={"blackBright"}> down </Text> move{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> tab </Text> pane{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> enter </Text> edit{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> / </Text> filter{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> n </Text> new{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> w </Text> wire{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> x </Text> delete{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> e </Text> env{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> d </Text> secret{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> s </Text> save{SEPARATOR}
-            <Text bold={true} backgroundColor={"blackBright"}> q </Text> quit
-          </Text>
-          <Text color="green">{status}</Text>
+          {/* The hints sit in a shrinkable box and truncate (never wrap): the footer
+              must stay one row or it breaks the topBar(3)+paneHeight+bottomHeight(1)
+              budget and overlaps the panes. The status keeps its width, so feedback
+              stays visible even on a narrow terminal where the hints get clipped. */}
+          <Box flexShrink={1} marginRight={1}>
+            {pane === "inspector" ? (
+              <Text color="gray" wrap="truncate-end">
+                <Key>↑↓</Key> field{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>esc</Key> back{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
+              </Text>
+            ) : (
+              <Text color="gray" wrap="truncate-end">
+                <Key>↑↓</Key> move{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
+              </Text>
+            )}
+          </Box>
+          <Box flexShrink={0}>
+            <Text color="green">{status}</Text>
+          </Box>
         </Box>
       )}
     </Box>
