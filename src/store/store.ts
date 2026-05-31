@@ -11,6 +11,7 @@ export interface Store {
   toggleSecret(varId: string): void;
   setGroup(varId: string, group: string | null): void;
   setDescription(varId: string, description: string): void;
+  setExample(varId: string, example: string): void;
   wire(varId: string, consumerId: string, on: boolean): void;
 }
 
@@ -40,6 +41,7 @@ export function createStore(initial: RepoModel): Store {
     toggleSecret(varId) { mapVar(varId, (v) => ({ ...v, secret: !v.secret })); },
     setGroup(varId, group) { mapVar(varId, (v) => ({ ...v, group })); },
     setDescription(varId, description) { mapVar(varId, (v) => ({ ...v, description })); },
+    setExample(varId, example) { mapVar(varId, (v) => ({ ...v, example: example || undefined })); },
     wire(varId, consumerId, on) {
       mapVar(varId, (v) => ({
         ...v,

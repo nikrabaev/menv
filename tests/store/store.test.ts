@@ -38,3 +38,12 @@ test("markClean resets the dirty flag", () => {
   store.markClean();
   expect(store.isDirty()).toBe(false);
 });
+
+test("setExample sets and clears the example", () => {
+  const store = createStore(baseModel());
+  store.setExample("v1", "pg://example");
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.example).toBe("pg://example");
+  store.setExample("v1", "");
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.example).toBeUndefined();
+  expect(store.isDirty()).toBe(true);
+});
