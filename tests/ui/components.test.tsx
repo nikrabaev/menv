@@ -126,10 +126,35 @@ test("VariableList truncates wiring hint beyond 3 consumers", () => {
   expect(frame).toContain("and 2 more");
 });
 
-test("Inspector masks secret values", () => {
-  const { lastFrame } = render(<Inspector model={model} variable={v} env="dev" />);
-  expect(lastFrame()).toContain("DATABASE_URL");
-  expect(lastFrame()).not.toContain("pg://x");
+test("Inspector lists fields and masks a secret value", () => {
+  const { lastFrame } = render(<Inspector model={model} variable={v} />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("DATABASE_URL");
+  expect(frame).toContain("description");
+  expect(frame).toContain("secret");
+  expect(frame).not.toContain("pg://x"); // value column masked
+});
+
+test("Inspector marks the selected field with a caret when focused", () => {
+  const { lastFrame } = render(<Inspector model={model} variable={v} active cursor={0} height={14} />);
+  expect(lastFrame()).toContain("▸");
+});
+
+test("Inspector shows no caret when unfocused", () => {
+  const { lastFrame } = render(<Inspector model={model} variable={v} cursor={0} height={14} />);
+  expect(lastFrame()).not.toContain("▸");
+});
+
+test("Inspector windows its field list to fit a short pane", () => {
+  const manyEnvs: RepoModel = {
+    ...model,
+    environments: Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, isDefault: i === 0 })),
+    values: { v1: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`e${i}`, `val${i}`])) },
+  };
+  const { lastFrame } = render(<Inspector model={manyEnvs} variable={{ ...v, secret: false }} active cursor={0} height={10} />);
+  const frame = lastFrame() ?? "";
+  expect(frame.split("\n").length).toBeLessThanOrEqual(10);
+  expect(frame).toContain("more"); // overflow marker is present
 });
 
 test("MoreIndicator shows the hidden count with a direction arrow", () => {
