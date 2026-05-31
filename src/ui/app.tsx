@@ -256,7 +256,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
               budget and overlaps the panes. The status keeps its width, so feedback
               stays visible even on a narrow terminal where the hints get clipped. */}
           <Box flexShrink={1} marginRight={1}>
-            {pane === "inspector" ? (
+            {pane === "inspector" && current ? (
               <Text color="gray" wrap="truncate-end">
                 <Key>↑↓</Key> field{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>esc</Key> back{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
               </Text>

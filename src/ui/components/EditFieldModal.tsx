@@ -30,8 +30,11 @@ export function EditFieldModal({ label, initial, onSubmit, onCancel }: {
   });
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-      <Text>Edit <Text bold>{label}</Text></Text>
-      <Text>{value}</Text>
+      {/* truncate (never wrap): the modal must stay 5 rows to hold the bottomHeight
+          budget in app.tsx. The value shows its tail (truncate-start) so the chars
+          being typed at the end stay visible on a narrow terminal. */}
+      <Text wrap="truncate-end">Edit <Text bold>{label}</Text></Text>
+      <Text wrap="truncate-start">{value}</Text>
       <Text color="gray">enter save / esc cancel</Text>
     </Box>
   );

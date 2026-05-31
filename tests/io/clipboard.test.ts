@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
-import { clipboardCommand, copyToClipboard } from "../../src/io/clipboard.ts";
+import { clipboardCommands, copyToClipboard } from "../../src/io/clipboard.ts";
 
-test("clipboardCommand maps each platform to its tool", () => {
-  expect(clipboardCommand("darwin")).toEqual(["pbcopy"]);
-  expect(clipboardCommand("win32")).toEqual(["clip"]);
-  expect(clipboardCommand("linux")).toEqual(["xclip", "-selection", "clipboard"]);
+test("clipboardCommands lists the tools to try per platform", () => {
+  expect(clipboardCommands("darwin")).toEqual([["pbcopy"]]);
+  expect(clipboardCommands("win32")).toEqual([["clip"]]);
+  expect(clipboardCommands("linux")).toEqual([["wl-copy"], ["xclip", "-selection", "clipboard"]]);
 });
 
-test("clipboardCommand returns null for unsupported platforms", () => {
-  expect(clipboardCommand("aix" as NodeJS.Platform)).toBeNull();
+test("clipboardCommands returns no candidates for unsupported platforms", () => {
+  expect(clipboardCommands("aix" as NodeJS.Platform)).toEqual([]);
 });
 
 test("copyToClipboard reports failure when no clipboard tool exists", async () => {

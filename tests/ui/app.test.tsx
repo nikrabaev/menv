@@ -153,6 +153,19 @@ test("c copies the selected inspector field via the injected copy fn", async () 
   expect(lastFrame()).toContain("copied DATABASE_URL");
 });
 
+test("c in the variable list copies the current environment value", async () => {
+  const store = createStore(editModel);
+  let copied = "";
+  const { lastFrame, stdin } = render(
+    <MenvApp store={store} onSaveStamp={() => "s"} copy={async (t) => { copied = t; return true; }} viewportRows={20} viewportColumns={100} />,
+  );
+  await tick(); // wait for useInput effect to register
+  stdin.write("c"); // vars pane (default), env=dev, value "pg://x"
+  await tick();
+  expect(copied).toBe("pg://x");
+  expect(lastFrame()).toContain("copied DATABASE_URL (dev)");
+});
+
 test("c reports when the clipboard tool is unavailable", async () => {
   const store = createStore(editModel);
   const { lastFrame, stdin } = render(

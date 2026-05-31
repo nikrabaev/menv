@@ -1,17 +1,20 @@
 // System-clipboard write, the one effect this feature performs. Mirrors the
-// Bun.spawn idiom in src/crypto/identity.ts. `clipboardCommand` is split out as a
+// Bun.spawn idiom in src/crypto/identity.ts. `clipboardCommands` is split out as a
 // pure function so the platform mapping is unit-testable without spawning.
 
-export function clipboardCommand(platform: NodeJS.Platform): string[] | null {
+// Ordered clipboard-tool candidates for the platform, tried in turn until one
+// succeeds. Linux ships either Wayland (wl-copy) or X11 (xclip), and the wrong one
+// won't be installed, so we attempt both.
+export function clipboardCommands(platform: NodeJS.Platform): string[][] {
   switch (platform) {
     case "darwin":
-      return ["pbcopy"];
+      return [["pbcopy"]];
     case "win32":
-      return ["clip"];
+      return [["clip"]];
     case "linux":
-      return ["xclip", "-selection", "clipboard"];
+      return [["wl-copy"], ["xclip", "-selection", "clipboard"]];
     default:
-      return null;
+      return [];
   }
 }
 
@@ -19,15 +22,15 @@ export async function copyToClipboard(
   text: string,
   platform: NodeJS.Platform = process.platform,
 ): Promise<boolean> {
-  const cmd = clipboardCommand(platform);
-  if (!cmd) return false;
-  try {
-    const p = Bun.spawn(cmd, { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
-    p.stdin.write(text);
-    await p.stdin.end();
-    return (await p.exited) === 0;
-  } catch {
-    // Tool missing on PATH, spawn rejected, etc. — copy simply didn't happen.
-    return false;
+  for (const cmd of clipboardCommands(platform)) {
+    try {
+      const p = Bun.spawn(cmd, { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+      p.stdin.write(text);
+      await p.stdin.end();
+      if ((await p.exited) === 0) return true;
+    } catch {
+      // Tool missing on PATH (e.g. wl-copy absent on X11) — try the next candidate.
+    }
   }
+  return false;
 }
