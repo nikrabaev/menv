@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Box, Text, useInput, useApp, render } from "ink";
+import { Box, Text, useInput } from "ink";
 import { listWindow } from "./components/listWindow.ts";
 import { MoreIndicator } from "./components/MoreIndicator.tsx";
+import { inlinePrompt } from "./components/inlinePrompt.tsx";
 import type { RestorePrompts } from "../cli/restore.ts";
 
 // "20260112223049" -> "2026-01-12 22:30:49" for a readable hint next to the key.
@@ -90,32 +91,10 @@ export function ConflictResolver({ conflicts, onDone, onCancel }: {
   );
 }
 
-// Inline (non-fullscreen) Ink prompt: render, resolve via useApp().exit() inside a
-// callback, then fully unmount before the next prompt mounts so its useInput owns
-// stdin cleanly.
-async function prompt<T>(node: (resolve: (v: T) => void) => React.ReactElement, fallback: T): Promise<T> {
-  let result = fallback;
-  const Wrapper = () => {
-    const { exit } = useApp();
-    return node((v) => {
-      result = v;
-      exit();
-    });
-  };
-  const instance = render(<Wrapper />);
-  try {
-    await instance.waitUntilExit();
-  } finally {
-    instance.unmount();
-    instance.cleanup();
-  }
-  return result;
-}
-
 export async function selectBackup(keys: string[]): Promise<string | null> {
   const rows = process.stdout.rows ?? 24;
   const height = Math.max(5, Math.min(rows - 2, keys.length + 4));
-  return prompt<string | null>(
+  return inlinePrompt<string | null>(
     (resolve) => (
       <BackupSelectModal keys={keys} height={height} onSelect={resolve} onCancel={() => resolve(null)} />
     ),
@@ -124,7 +103,7 @@ export async function selectBackup(keys: string[]): Promise<string | null> {
 }
 
 export async function resolveConflicts(conflicts: string[]): Promise<Record<string, boolean> | null> {
-  return prompt<Record<string, boolean> | null>(
+  return inlinePrompt<Record<string, boolean> | null>(
     (resolve) => (
       <ConflictResolver conflicts={conflicts} onDone={resolve} onCancel={() => resolve(null)} />
     ),

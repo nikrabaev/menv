@@ -5,8 +5,14 @@ Usage:
 
 Commands:
   (none)                  Launch the interactive TUI (default)
-  init                    Scan the repo, set up the vault, update .gitignore
-  generate [--env <env>]  Regenerate .env files from the vault (headless/CI)
+  init [options]          Scan the repo, set up the vault, update .gitignore
+                            --backend <kind>  Key storage: keychain | 1password
+                                              | password (omit to pick
+                                              interactively)
+                            --vault <name>    1Password vault for the new item
+                                              (default: Private)
+  generate [--env <env>]  Regenerate .env files from the vault (headless/CI).
+                          The password backend reads MENV_PASSPHRASE.
   backup                  Back up every .env and .env.example file into
                           .menv/backups/<timestamp>
   restore [key] [-f]      Restore .env/.env.example files from a backup

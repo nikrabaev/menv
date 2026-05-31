@@ -21,6 +21,7 @@ export async function loadRepo(root: string, identity: string): Promise<RepoMode
     consumers: parts.consumers,
     values,
     recipients: parts.recipients,
+    keyBackend: parts.keyBackend,
   };
 }
 

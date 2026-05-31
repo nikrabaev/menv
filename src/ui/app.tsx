@@ -21,7 +21,9 @@ import { valueOf } from "../core/model.ts";
 import { saveModel } from "../store/save.ts";
 import { createStore } from "../store/store.ts";
 import { loadRepo } from "../store/load.ts";
-import { loadOrCreateIdentity } from "../crypto/identity.ts";
+import { resolveBackend } from "../crypto/resolveBackend.ts";
+import { readKeyBackendConfig } from "../io/persist.ts";
+import { interactivePassphraseProvider } from "./initPrompts.tsx";
 
 type Pane = "scopes" | "vars" | "inspector";
 type Mode = "browse" | "edit" | "new" | "wire" | "filter" | "quit";
@@ -331,8 +333,19 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
 }
 
 export async function launchTui(root: string): Promise<void> {
-  const kp = await loadOrCreateIdentity();
-  const model = await loadRepo(root, kp.identity);
+  // Resolve the repo's key backend and load the identity *before* fullscreen, so
+  // any passphrase prompt (password backend) renders in the normal terminal.
+  const backend = resolveBackend(await readKeyBackendConfig(root), {
+    root,
+    interactive: true,
+    pass: interactivePassphraseProvider(),
+  });
+  const identity = await backend.get();
+  if (!identity) {
+    console.error("menv: could not load the secret key for this repo. Run `menv init`.");
+    process.exit(1);
+  }
+  const model = await loadRepo(root, identity);
   const store = createStore(model);
   const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
   let instance: ReturnType<typeof render> | undefined;

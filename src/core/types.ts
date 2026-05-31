@@ -5,6 +5,17 @@ export type ConsumerId = string;
 export type VarId = string;
 export type Tier = "global" | "local";
 
+// How the secret age identity is stored. The public recipient always lives in
+// menv.toml and values are always encrypted to it; only the location of the
+// secret half varies by backend.
+export type KeyBackendKind = "keychain" | "1password" | "password";
+
+export interface KeyBackendConfig {
+  kind: KeyBackendKind;
+  // For "1password": the `op://vault/item/field` reference the identity lives at.
+  opRef?: string;
+}
+
 export interface Variable {
   id: VarId;
   name: string;
@@ -54,4 +65,10 @@ export interface RepoModel {
   consumers: Consumer[];
   values: Values;
   recipients: string[]; // age public keys
+  // How the secret identity is stored. Absent on a freshly scanned model (init
+  // chooses it) and treated as `{ kind: "keychain" }` when read — the pre-backends
+  // default, matching how an old menv.toml without the field deserializes.
+  keyBackend?: KeyBackendConfig;
 }
+
+export const DEFAULT_KEY_BACKEND: KeyBackendConfig = { kind: "keychain" };

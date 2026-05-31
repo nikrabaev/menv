@@ -5,6 +5,16 @@ are stored age-encrypted under `.menv/values/`; structure lives in `menv.toml` a
 `.menv/manifest.toml`. The runtime is **Bun** (not Node) — TS/TSX runs directly, no
 build step for development.
 
+The secret age identity is held by a **key backend**, chosen at `menv init`
+(`--backend keychain|1password|password`) and recorded under `[key_backend]` in
+`menv.toml` — see `src/crypto/identity.ts` and `src/crypto/resolveBackend.ts`.
+`keychain` (macOS only) and `1password` (`op` CLI) keep the identity in an external
+secret store; `password` writes it passphrase-encrypted to a **committed**
+`.menv/identity.age` (portable across machines — but anyone with repo access plus
+the passphrase can decrypt the vault, so the passphrase is the whole barrier).
+Headless `menv generate` takes the password-backend passphrase from
+`MENV_PASSPHRASE`.
+
 ## Layout
 
 - `src/cli/` — command handlers (`init`, `generate`, `root`)

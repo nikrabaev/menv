@@ -7,6 +7,7 @@ import { runRestore } from "./cli/restore.ts";
 import { backupKey } from "./io/backup.ts";
 import { HELP_TEXT } from "./cli/help.ts";
 import { isMenvRepo } from "./store/load.ts";
+import type { KeyBackendKind } from "./core/types.ts";
 
 const VERSION = "0.1.0";
 
@@ -28,8 +29,32 @@ if (cmd === "--version" || cmd === "-v") {
 
 const root = await findRepoRoot(process.cwd());
 
+function flagValue(flag: string): string | undefined {
+  return rest.includes(flag) ? rest[rest.indexOf(flag) + 1] : undefined;
+}
+
 if (cmd === "init") {
-  await runInit(root, { stamp: stamp() });
+  const backendRaw = flagValue("--backend");
+  const VALID: KeyBackendKind[] = ["keychain", "1password", "password"];
+  if (backendRaw && !VALID.includes(backendRaw as KeyBackendKind)) {
+    console.error(`menv: unknown --backend "${backendRaw}" (use: ${VALID.join(", ")})`);
+    process.exit(1);
+  }
+  const kind = backendRaw as KeyBackendKind | undefined;
+  const vault = flagValue("--vault");
+
+  // Lazy-load the Ink prompts only when we can actually prompt, keeping Ink out
+  // of non-interactive runs. With no TTY, runInit defaults to keychain (or uses
+  // --backend) and the password backend reads MENV_PASSPHRASE.
+  let promptKind: (() => Promise<KeyBackendKind>) | undefined;
+  let pass;
+  if (process.stdout.isTTY) {
+    const ui = await import("./ui/initPrompts.tsx");
+    promptKind = ui.promptBackendKind;
+    pass = ui.interactivePassphraseProvider();
+  }
+
+  await runInit(root, { kind, vault, stamp: stamp(), promptKind, pass });
   console.log(`menv: initialized at ${root}`);
   process.exit(0);
 }

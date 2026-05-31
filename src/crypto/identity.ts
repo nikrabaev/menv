@@ -1,9 +1,35 @@
+import { join, dirname } from "node:path";
+import { mkdir } from "node:fs/promises";
 import { generateKeypair, type Keypair } from "./age.ts";
+import { encryptWithPassphrase, decryptWithPassphrase } from "./age.ts";
 import { identityToRecipient } from "age-encryption";
+import type { KeyBackendConfig } from "../core/types.ts";
 
+// A place the secret age identity can be stored. `get` returns the identity
+// string (or null if none is stored yet); `set` persists a newly generated
+// identity and returns the config that must be recorded in menv.toml so later
+// runs can reconstruct the same backend (notably the 1Password reference).
 export interface KeyBackend {
-  get(): Promise<string | null>; // returns stored identity string or null
-  set(identity: string): Promise<void>;
+  get(): Promise<string | null>;
+  set(identity: string): Promise<KeyBackendConfig>;
+}
+
+// Supplies a passphrase to the password backend. The interactive implementation
+// prompts; the env implementation reads MENV_PASSPHRASE. `unlock` is for an
+// existing blob, `create` for a brand-new one (prompt twice + confirm).
+export interface PassphraseProvider {
+  unlock(): Promise<string>;
+  create(): Promise<string>;
+  // When true the password backend may call `unlock` again after a wrong
+  // passphrase (a re-prompt). Non-interactive providers get a single attempt.
+  interactive?: boolean;
+}
+
+export class WrongPassphraseError extends Error {
+  constructor() {
+    super("wrong passphrase");
+    this.name = "WrongPassphraseError";
+  }
 }
 
 const SERVICE = "menv-identity";
@@ -64,6 +90,7 @@ export const keychainBackend: KeyBackend = {
     if (code !== 0) {
       throw new Error(`security add-generic-password failed (exit ${code}): ${err}`);
     }
+    return { kind: "keychain" };
   },
 };
 
@@ -75,4 +102,154 @@ export async function loadOrCreateIdentity(backend: KeyBackend = keychainBackend
   const kp = await generateKeypair();
   await backend.set(kp.identity);
   return kp;
+}
+
+// ── password backend ──────────────────────────────────────────────────────────
+// Stores the identity as a passphrase-encrypted blob at .menv/identity.age. The
+// blob is committed (see GITIGNORE_BLOCK), so the vault travels with the repo;
+// the passphrase is the only secret.
+
+export const IDENTITY_FILE = "identity.age";
+
+export interface PasswordBackendOpts {
+  root: string;
+  pass: PassphraseProvider;
+  // Injectable for tests; default to on-disk .menv/identity.age.
+  readFile?: (path: string) => Promise<Uint8Array | null>;
+  writeFile?: (path: string, data: Uint8Array) => Promise<void>;
+  retries?: number; // interactive re-prompts on a wrong passphrase (default 3)
+}
+
+async function defaultReadFile(path: string): Promise<Uint8Array | null> {
+  const f = Bun.file(path);
+  if (!(await f.exists())) return null;
+  return new Uint8Array(await f.arrayBuffer());
+}
+
+async function defaultWriteFile(path: string, data: Uint8Array): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await Bun.write(path, data);
+}
+
+export function passwordBackend(opts: PasswordBackendOpts): KeyBackend {
+  const path = join(opts.root, ".menv", IDENTITY_FILE);
+  const readFile = opts.readFile ?? defaultReadFile;
+  const writeFile = opts.writeFile ?? defaultWriteFile;
+  return {
+    async get() {
+      const blob = await readFile(path);
+      if (!blob) return null;
+      const attempts = opts.pass.interactive ? (opts.retries ?? 3) : 1;
+      for (let i = 0; i < attempts; i++) {
+        const passphrase = await opts.pass.unlock();
+        try {
+          return await decryptWithPassphrase(blob, passphrase);
+        } catch {
+          // wrong passphrase — re-prompt if interactive, else fall through
+        }
+      }
+      throw new WrongPassphraseError();
+    },
+    async set(identity) {
+      const passphrase = await opts.pass.create();
+      const ct = await encryptWithPassphrase(identity, passphrase);
+      await writeFile(path, ct);
+      return { kind: "password" };
+    },
+  };
+}
+
+// Reads MENV_PASSPHRASE for the headless `generate` path; throws (rather than
+// blocking on stdin) when it is unset.
+export function envPassphraseProvider(env: Record<string, string | undefined> = Bun.env): PassphraseProvider {
+  const read = () => {
+    const v = env.MENV_PASSPHRASE;
+    if (!v) {
+      throw new Error(
+        "MENV_PASSPHRASE is not set — required for the password backend in a non-interactive context",
+      );
+    }
+    return v;
+  };
+  return {
+    interactive: false,
+    async unlock() { return read(); },
+    async create() { return read(); },
+  };
+}
+
+// ── 1Password backend ─────────────────────────────────────────────────────────
+// Stores the identity in a 1Password item via the `op` CLI; only the
+// `op://vault/item/field` reference is recorded in menv.toml.
+
+export interface OpResult { code: number; stdout: string; stderr: string; }
+export type OpExec = (args: string[]) => Promise<OpResult>;
+
+export interface OnePasswordBackendOpts {
+  ref?: string;          // existing op:// reference (from menv.toml) — needed by get()
+  vault?: string;        // vault for a newly created item (default "Private")
+  title?: string;        // title for a newly created item
+  exec?: OpExec;         // injectable for tests; default spawns `op`
+}
+
+// Conventional "command not found" exit; defaultOpExec uses it when `op` is absent.
+const OP_NOT_FOUND = 127;
+
+const defaultOpExec: OpExec = async (args) => {
+  try {
+    const p = Bun.spawn(["op", ...args], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr] = await Promise.all([
+      new Response(p.stdout).text(),
+      new Response(p.stderr).text(),
+    ]);
+    return { code: await p.exited, stdout, stderr };
+  } catch {
+    // Bun.spawn throws (ENOENT) when `op` isn't on PATH.
+    return { code: OP_NOT_FOUND, stdout: "", stderr: "op: command not found" };
+  }
+};
+
+function opError(r: OpResult): Error {
+  if (r.code === OP_NOT_FOUND || /command not found|no such file/i.test(r.stderr)) {
+    return new Error(
+      "1Password CLI (`op`) not found. Install it: https://developer.1password.com/docs/cli/get-started/",
+    );
+  }
+  if (/sign[ -]?in|not currently signed in|authoriz|session/i.test(r.stderr)) {
+    return new Error(`1Password is not signed in. Run \`op signin\` and try again. (${r.stderr.trim()})`);
+  }
+  return new Error(`op failed (exit ${r.code}): ${r.stderr.trim()}`);
+}
+
+export function onePasswordBackend(opts: OnePasswordBackendOpts): KeyBackend {
+  const exec = opts.exec ?? defaultOpExec;
+  return {
+    async get() {
+      if (!opts.ref) return null;
+      const r = await exec(["read", opts.ref]);
+      if (r.code !== 0) throw opError(r);
+      return r.stdout.trim() || null;
+    },
+    async set(identity) {
+      const vault = opts.vault ?? "Private";
+      const title = opts.title ?? "menv identity";
+      const r = await exec([
+        "item", "create",
+        "--category", "password",
+        "--title", title,
+        "--vault", vault,
+        "--format", "json",
+        `password=${identity}`,
+      ]);
+      if (r.code !== 0) throw opError(r);
+      let id: string | undefined;
+      try {
+        id = (JSON.parse(r.stdout) as { id?: string }).id;
+      } catch {
+        throw new Error("1Password: could not parse `op item create` output");
+      }
+      if (!id) throw new Error("1Password: created item has no id");
+      return { kind: "1password", opRef: `op://${vault}/${id}/password` };
+    },
+  };
 }

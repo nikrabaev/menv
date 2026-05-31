@@ -1,11 +1,13 @@
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
-import type { Consumer, Environment, RepoModel, Variable } from "../core/types.ts";
+import { DEFAULT_KEY_BACKEND } from "../core/types.ts";
+import type { Consumer, Environment, KeyBackendConfig, RepoModel, Variable } from "../core/types.ts";
 
 export function modelToToml(m: RepoModel): { config: string; manifest: string } {
   const config = stringifyToml({
     environments: m.environments.map((e) => e.id),
     default_environment: m.environments.find((e) => e.isDefault)?.id ?? m.environments[0]?.id,
     recipients: m.recipients,
+    key_backend: keyBackendToToml(m.keyBackend ?? DEFAULT_KEY_BACKEND),
     apps: m.consumers.filter((c) => c.kind === "app").map((c) => ({
       id: c.id, name: c.name, path: (c as any).path, env_file: (c as any).envFile ?? "",
     })),
@@ -26,11 +28,26 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
   return { config, manifest };
 }
 
+// Serialize the backend config. `op_ref` is emitted as "" when absent, matching
+// how other optional string fields round-trip ("" ⇒ undefined on the way back).
+function keyBackendToToml(cfg: KeyBackendConfig): { kind: string; op_ref: string } {
+  return { kind: cfg.kind, op_ref: cfg.opRef ?? "" };
+}
+
+function parseKeyBackend(raw: unknown): KeyBackendConfig {
+  const kb = raw as { kind?: string; op_ref?: string } | undefined;
+  if (kb && (kb.kind === "keychain" || kb.kind === "1password" || kb.kind === "password")) {
+    return { kind: kb.kind, opRef: kb.op_ref || undefined };
+  }
+  return DEFAULT_KEY_BACKEND; // absent or unknown ⇒ the pre-backends default
+}
+
 export function tomlToModelParts(config: string, manifest: string): {
   environments: Environment[];
   recipients: string[];
   consumers: Consumer[];
   variables: Variable[];
+  keyBackend: KeyBackendConfig;
 } {
   const c = parseToml(config) as any;
   const man = parseToml(manifest) as any;
@@ -56,7 +73,13 @@ export function tomlToModelParts(config: string, manifest: string): {
     consumers: v.consumers ?? [], example: v.example || undefined,
   }));
 
-  return { environments, recipients: (c.recipients ?? []) as string[], consumers: [...apps, ...services], variables };
+  return {
+    environments,
+    recipients: (c.recipients ?? []) as string[],
+    consumers: [...apps, ...services],
+    variables,
+    keyBackend: parseKeyBackend(c.key_backend),
+  };
 }
 
 import { join } from "node:path";
@@ -76,4 +99,11 @@ export async function readModelFiles(root: string) {
   const config = await Bun.file(join(root, CONFIG_FILE)).text();
   const manifest = await Bun.file(join(root, MANIFEST_FILE)).text();
   return tomlToModelParts(config, manifest);
+}
+
+// Light read of just the backend config from menv.toml. The generate and TUI
+// paths need to construct the backend *before* loading/decrypting the vault.
+export async function readKeyBackendConfig(root: string): Promise<KeyBackendConfig> {
+  const c = parseToml(await Bun.file(join(root, CONFIG_FILE)).text()) as any;
+  return parseKeyBackend(c.key_backend);
 }

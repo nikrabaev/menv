@@ -31,6 +31,17 @@ describe("persist", () => {
   });
 });
 
+test("round-trips the 1password key_backend config", () => {
+  const m: RepoModel = { ...model, keyBackend: { kind: "1password", opRef: "op://Dev/itm/password" } };
+  const { config, manifest } = modelToToml(m);
+  expect(tomlToModelParts(config, manifest).keyBackend).toEqual({ kind: "1password", opRef: "op://Dev/itm/password" });
+});
+
+test("a config without key_backend defaults to keychain", () => {
+  const config = `environments = ["dev"]\ndefault_environment = "dev"\nrecipients = []\n`;
+  expect(tomlToModelParts(config, `variables = []\n`).keyBackend).toEqual({ kind: "keychain" });
+});
+
 test("round-trips the optional example value", () => {
   const m: RepoModel = {
     root: "/r",

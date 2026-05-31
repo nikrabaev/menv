@@ -9,7 +9,7 @@ function memBackend(): KeyBackend {
   let stored: string | null = null;
   return {
     async get() { return stored; },
-    async set(v) { stored = v; },
+    async set(v) { stored = v; return { kind: "keychain" }; },
   };
 }
 
