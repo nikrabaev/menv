@@ -12,8 +12,8 @@ function model(): RepoModel {
       { id: "v3", name: "WEB_FLAG", tier: "local", ownerApp: "app:web", description: "", group: null, secret: false, consumers: ["app:web"] },
     ],
     consumers: [
-      { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
-      { kind: "app", id: "app:web", name: "web", path: "apps/web", envFiles: {} },
+      { kind: "app", id: "app:api", name: "api", path: "apps/api" },
+      { kind: "app", id: "app:web", name: "web", path: "apps/web" },
       { kind: "service", id: "svc:pg", name: "postgres", composeFile: "docker-compose.yml", inject: "env_file" },
     ],
     values: {},

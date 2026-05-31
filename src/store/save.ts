@@ -18,18 +18,20 @@ function envValuesById(model: RepoModel, env: string): Record<string, string> {
   return out;
 }
 
-export async function saveModel(model: RepoModel, stamp: string): Promise<SaveSummary> {
+// `env` is the active environment whose values are materialized into each app's
+// `.env`. All environments' encrypted values are still written to the vault.
+export async function saveModel(model: RepoModel, env: string, stamp: string): Promise<SaveSummary> {
   const files: string[] = [];
 
   await writeModelFiles(model);
   files.push("menv.toml", ".menv/manifest.toml");
 
-  for (const env of model.environments) {
-    await saveEnvValues(model.root, env.id, envValuesById(model, env.id), model.recipients);
-    files.push(`.menv/values/${env.id}.env.age`);
+  for (const e of model.environments) {
+    await saveEnvValues(model.root, e.id, envValuesById(model, e.id), model.recipients);
+    files.push(`.menv/values/${e.id}.env.age`);
   }
 
-  files.push(...(await writeGeneratedFiles(model, stamp)));
+  files.push(...(await writeGeneratedFiles(model, env, stamp)));
 
   for (const c of model.consumers) {
     if (c.kind !== "service" || c.inject !== "env_file" || !c.envFileRef) continue;

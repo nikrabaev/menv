@@ -27,7 +27,10 @@ export interface AppTarget {
   id: AppId;
   name: string;
   path: string; // relative to repo root
-  envFiles: Record<EnvId, string>; // env -> filename relative to app path
+  // The single .env file this app gets, relative to its path (canonically ".env").
+  // Absent means the app has no env file and is not generated. Values for whichever
+  // environment is active are written here; menv never writes per-env files.
+  envFile?: string;
 }
 
 export interface ServiceTarget {

@@ -7,7 +7,7 @@ function baseModel(): RepoModel {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [{ id: "v1", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
-    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env" } }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: {},
     recipients: [],
   };

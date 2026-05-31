@@ -28,6 +28,7 @@ export async function runInit(root: string, opts: InitOpts = {}): Promise<void> 
   const { model } = await scanRepo(root);
   const kp = await loadOrCreateIdentity(opts.backend ?? keychainBackend);
   model.recipients = [kp.recipient];
-  await saveModel(model, opts.stamp ?? `init-${model.environments[0]?.id ?? "dev"}`);
+  const env = model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev";
+  await saveModel(model, env, opts.stamp ?? `init-${env}`);
   await ensureGitignore(root);
 }

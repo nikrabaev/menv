@@ -7,7 +7,7 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
     default_environment: m.environments.find((e) => e.isDefault)?.id ?? m.environments[0]?.id,
     recipients: m.recipients,
     apps: m.consumers.filter((c) => c.kind === "app").map((c) => ({
-      id: c.id, name: c.name, path: (c as any).path, env_files: (c as any).envFiles,
+      id: c.id, name: c.name, path: (c as any).path, env_file: (c as any).envFile ?? "",
     })),
     services: m.consumers.filter((c) => c.kind === "service").map((c) => ({
       id: c.id, name: c.name, compose_file: (c as any).composeFile,
@@ -41,7 +41,9 @@ export function tomlToModelParts(config: string, manifest: string): {
   }));
 
   const apps: Consumer[] = ((c.apps ?? []) as any[]).map((a) => ({
-    kind: "app", id: a.id, name: a.name, path: a.path, envFiles: a.env_files ?? {},
+    kind: "app", id: a.id, name: a.name, path: a.path,
+    // Prefer the new single env_file; fall back to legacy env_files (any entry ⇒ ".env").
+    envFile: a.env_file || (a.env_files && Object.keys(a.env_files).length ? ".env" : undefined),
   }));
   const services: Consumer[] = ((c.services ?? []) as any[]).map((s) => ({
     kind: "service", id: s.id, name: s.name, composeFile: s.compose_file,

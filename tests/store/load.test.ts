@@ -16,11 +16,11 @@ test("loadRepo reconstructs the model including decrypted values", async () => {
     root,
     environments: [{ id: "dev", isDefault: true }],
     variables: [{ id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
-    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env" } }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { "var:PORT": { dev: "3000" } },
     recipients: [recipient],
   };
-  await saveModel(model, "s1");
+  await saveModel(model, "dev", "s1");
 
   const loaded = await loadRepo(root, identity);
   expect(loaded.values["var:PORT"].dev).toBe("3000");

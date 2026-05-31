@@ -13,7 +13,7 @@ const model: RepoModel = {
     { id: "v2", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
   ],
   consumers: [
-    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env", prod: ".env.production" } },
+    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" },
     { kind: "service", id: "svc:pg", name: "postgres", composeFile: "docker-compose.yml", inject: "env_file", envFileRef: "apps/api/.env" },
   ],
   values: {},
@@ -39,7 +39,7 @@ test("round-trips the optional example value", () => {
       { id: "var:REDIS_URL", name: "REDIS_URL", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
       { id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
     ],
-    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: {},
     recipients: [],
   };

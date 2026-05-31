@@ -6,10 +6,12 @@ import { useTerminalSize } from "./useTerminalSize.ts";
 import { TopBar } from "./components/TopBar.tsx";
 import { ScopeTree } from "./components/ScopeTree.tsx";
 import { buildScopes, varsForScope, stepScope } from "./scopes.ts";
+import { orderedVariables, groupStarts, jumpGroup, groupNames } from "./grouping.ts";
 import { VariableList } from "./components/VariableList.tsx";
 import { Inspector } from "./components/Inspector.tsx";
 import { EditFieldModal } from "./components/EditFieldModal.tsx";
 import { NewVariableModal } from "./components/NewVariableModal.tsx";
+import { GroupComboModal } from "./components/GroupComboModal.tsx";
 import { WireModal } from "./components/WireModal.tsx";
 import { TextInput } from "./components/TextInput.tsx";
 import { inspectorFields, copyableText } from "./inspectorFields.ts";
@@ -72,25 +74,36 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const [status, setStatus] = useState("");
   const [filter, setFilter] = useState("");
 
+  // Group editing uses the combobox, whose suggestion block (and thus height) is
+  // sized to the number of existing groups, capped.
+  const GROUP_SUGGEST_CAP = 6;
+  const allGroups = groupNames(model.variables);
+  const groupSuggestRows = Math.min(GROUP_SUGGEST_CAP, allGroups.length);
+  const groupEditing = mode === "edit" && editTarget?.kind === "group";
+
   // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
   // must equal the bottom region's *actual* rendered height. (Wire mode is the
   // exception: it hides the panes and covers the full area below the top bar.)
   const bottomHeight =
     mode === "browse" ? 1 // status line
     : mode === "filter" ? 3 // border(2) + input(1)
+    : groupEditing ? groupSuggestRows + 5 // border(2) + title + field + suggestions + hint
     : mode === "edit" || mode === "new" ? 5 // border(2) + title + field + hint
     : 1;
   const paneHeight = Math.max(3, rows - 3 - bottomHeight);
 
   const scope = scopes[scopeCursor];
-  // The list is presented alphabetically by name; varsForScope returns a fresh
-  // array so this sort never mutates the model.
-  const variables = (scope ? varsForScope(model, scope.id) : model.variables)
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const filtered = filter
-    ? variables.filter((v) => v.name.toLowerCase().includes(filter.toLowerCase()))
-    : variables;
+  const inScope = scope ? varsForScope(model, scope.id) : model.variables;
+  const matched = filter
+    ? inScope.filter((v) => v.name.toLowerCase().includes(filter.toLowerCase()))
+    : inScope;
+  // Group the list whenever the visible set carries at least one group; otherwise
+  // it's a flat, name-sorted list. `ordered` is the display order the cursor indexes
+  // into (ungrouped first, then groups), and matches VariableList's own layout.
+  // A group scope is already a single group, so its header would be redundant.
+  const grouped = scope?.kind !== "group" && matched.some((v) => v.group !== null);
+  const filtered = orderedVariables(matched, grouped);
+  const groupStartIdx = groupStarts(matched, grouped);
   const current = filtered[varCursor] ?? null;
   const fields = current ? inspectorFields(model, current) : [];
   // Clamp so the rendered/acted-on field stays in range as the variable changes.
@@ -110,6 +123,14 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
     }
     if (key.escape && pane === "inspector") {
       setPane("vars");
+      return;
+    }
+    // Ctrl+↑/↓ jump between group buckets in the variable list.
+    if (key.ctrl && (key.upArrow || key.downArrow)) {
+      if (pane === "vars") {
+        const next = jumpGroup(groupStartIdx, varCursor, key.downArrow ? 1 : -1);
+        if (next !== varCursor) { setVarCursor(next); setInspectorCursor(0); }
+      }
       return;
     }
     if (key.upArrow) {
@@ -188,7 +209,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       return;
     }
     if (input === "s") {
-      void saveModel(store.getModel(), onSaveStamp()).then((sum) => {
+      void saveModel(store.getModel(), env, onSaveStamp()).then((sum) => {
         store.markClean();
         setStatus(`saved ${sum.files.length} files`);
       });
@@ -216,17 +237,28 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} grouped={grouped} />
         <Inspector model={model} variable={current} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
       </Box>
       {mode === "edit" && current && editTarget ? (
-        <EditFieldModal
-          label={editLabel(editTarget)}
-          initial={editInitial(model, current, editTarget)}
-          width={columns}
-          onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
-          onCancel={() => { setMode("browse"); setEditTarget(null); }}
-        />
+        editTarget.kind === "group" ? (
+          <GroupComboModal
+            initial={editInitial(model, current, editTarget)}
+            groups={allGroups}
+            suggestionRows={groupSuggestRows}
+            width={columns}
+            onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
+            onCancel={() => { setMode("browse"); setEditTarget(null); }}
+          />
+        ) : (
+          <EditFieldModal
+            label={editLabel(editTarget)}
+            initial={editInitial(model, current, editTarget)}
+            width={columns}
+            onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
+            onCancel={() => { setMode("browse"); setEditTarget(null); }}
+          />
+        )
       ) : mode === "filter" ? (
         <Box borderStyle="round" borderColor="cyan" paddingX={1} width={columns}>
           <Text>/ </Text>
@@ -262,7 +294,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
               </Text>
             ) : (
               <Text color="gray" wrap="truncate-end">
-                <Key>↑↓</Key> move{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
+                <Key>↑↓</Key> move{grouped && pane === "vars" ? <>{SEPARATOR}<Key>^↑↓</Key> group</> : null}{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
               </Text>
             )}
           </Box>

@@ -49,20 +49,15 @@ async function writeFile(root: string, rel: string, content: string, stamp: stri
   return rel;
 }
 
-export async function writeGeneratedFiles(model: RepoModel, stamp: string): Promise<string[]> {
+// Writes each app a single `.env` holding the values of the active environment
+// `env`, plus a `.env.example`. menv stores every environment in the vault; only
+// the active one is materialized on disk (switch environments inside menv).
+export async function writeGeneratedFiles(model: RepoModel, env: string, stamp: string): Promise<string[]> {
   const written: string[] = [];
   for (const c of model.consumers) {
-    if (c.kind !== "app") continue;
-    for (const env of model.environments) {
-      const filename = c.envFiles[env.id];
-      if (!filename) continue;
-      const rel = join(c.path, filename);
-      written.push(await writeFile(model.root, rel, renderAppEnv(model, c.id, env.id), stamp));
-    }
-    if (Object.keys(c.envFiles).length > 0) {
-      const exampleRel = join(c.path, ".env.example");
-      written.push(await writeFile(model.root, exampleRel, renderAppExample(model, c.id), stamp));
-    }
+    if (c.kind !== "app" || !c.envFile) continue;
+    written.push(await writeFile(model.root, join(c.path, c.envFile), renderAppEnv(model, c.id, env), stamp));
+    written.push(await writeFile(model.root, join(c.path, ".env.example"), renderAppExample(model, c.id), stamp));
   }
   return written;
 }

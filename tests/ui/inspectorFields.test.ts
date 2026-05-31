@@ -11,7 +11,7 @@ const model: RepoModel = {
   root: "/r",
   environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
   variables: [variable],
-  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }],
+  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }],
   values: { v1: { dev: "pg://dev", prod: "pg://prod" } },
   recipients: [],
 };

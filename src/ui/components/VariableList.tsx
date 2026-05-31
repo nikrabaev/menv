@@ -4,6 +4,7 @@ import type { Consumer, RepoModel, Variable } from "../../core/types.ts";
 import { valueOf } from "../../core/model.ts";
 import { listWindow } from "./listWindow.ts";
 import { MoreIndicator } from "./MoreIndicator.tsx";
+import { groupedRows } from "../grouping.ts";
 
 const MAX_SCOPE_SHOWN = 3;
 // Secret values are never shown; the value column renders this (in yellow) instead.
@@ -35,7 +36,7 @@ function truncate(text: string, width: number): string {
   return text.slice(0, width - 1) + "…";
 }
 
-export function VariableList({ variables, cursor, active = true, height, scopeLabel, consumers, showScopes, filter, model, env }: {
+export function VariableList({ variables, cursor, active = true, height, scopeLabel, consumers, showScopes, filter, model, env, grouped = false }: {
   variables: Variable[];
   cursor: number;
   active?: boolean;
@@ -46,9 +47,16 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
   filter?: string;
   model?: RepoModel;
   env?: string;
+  // When set, the list is split into group buckets with header rows; `cursor` is
+  // still a variable index (the display order matches grouping's orderedVariables).
+  grouped?: boolean;
 }) {
-  const maxItems = height ? Math.max(0, height - 5) : variables.length;
-  const windowed = listWindow(variables, cursor, maxItems);
+  // Rows interleave group headers with variables. Windowing operates on rows so a
+  // header occupies a line; the cursor (a variable index) maps to its var row.
+  const rows = groupedRows(variables, grouped);
+  const selectedRow = Math.max(0, rows.findIndex((r) => r.kind === "var" && r.index === cursor));
+  const maxItems = height ? Math.max(0, height - 5) : rows.length;
+  const windowed = listWindow(rows, selectedRow, maxItems);
 
   const valueFor = (v: Variable) => (model && env ? valueOf(model, v.id, env) : "");
   // The text shown in the value column: the mask for secrets, the placeholder for
@@ -100,8 +108,20 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
       <Text color="gray">VARIABLES{scopeLabel ? <Text color="cyan"> · {scopeLabel}</Text> : null}{filter ? <Text color="yellow"> · filter: {filter}</Text> : null}</Text>
       {variables.length === 0 && <Text color="gray">  (none)</Text>}
       <MoreIndicator direction="up" count={windowed.offset} />
-      {windowed.items.map((v, i) => {
-        const idx = windowed.offset + i;
+      {windowed.items.map((row, i) => {
+        if (row.kind === "header") {
+          // A real group reads bold; the virtual "Ungrouped" bucket is muted so it
+          // recedes behind the named groups.
+          return (
+            <Text key={`h:${row.label}:${windowed.offset + i}`} wrap="truncate-end">
+              {GUTTER}
+              {row.muted
+                ? <Text color="gray">[{row.label}]</Text>
+                : <Text bold color="cyan">[{row.label}]</Text>}
+            </Text>
+          );
+        }
+        const v = row.variable;
         const isGlobal = showScopes && v.tier === "global";
         const hint = hintFor(v);
         const nameSeg = GUTTER + v.name.padEnd(nameWidth) + GUTTER;
@@ -111,9 +131,9 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
         const contentLen = nameSeg.length + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
         // Trailing fill so a selected row's highlight reaches the pane's right edge.
         const fill = Math.max(0, rowWidth - contentLen);
-        const isCurrent = active && idx === cursor;
+        const isCurrent = active && row.index === cursor;
         return (
-          <Text key={`${v.id}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
+          <Text key={`${v.id}:${row.index}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {nameSeg}
             {valueWidth > 0 ? <Text italic={empty} color={v.secret ? "yellow" : empty ? "gray" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
@@ -125,7 +145,7 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
           </Text>
         );
       })}
-      <MoreIndicator direction="down" count={variables.length - (windowed.offset + windowed.items.length)} />
+      <MoreIndicator direction="down" count={rows.length - (windowed.offset + windowed.items.length)} />
     </Box>
   );
 }

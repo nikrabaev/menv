@@ -6,7 +6,9 @@ import { VariableList } from "../../src/ui/components/VariableList.tsx";
 import { Inspector } from "../../src/ui/components/Inspector.tsx";
 import { WireModal } from "../../src/ui/components/WireModal.tsx";
 import { MoreIndicator } from "../../src/ui/components/MoreIndicator.tsx";
+import { ScopeTree } from "../../src/ui/components/ScopeTree.tsx";
 import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
+import type { Scope } from "../../src/ui/scopes.ts";
 
 const v: Variable = { id: "v1", name: "DATABASE_URL", tier: "global", description: "db", group: "DB", secret: true, consumers: ["app:api"] };
 const model: RepoModel = {
@@ -50,6 +52,51 @@ test("VariableList truncates a value too long for the line", async () => {
   expect(frame).toContain("…"); // cut with an ellipsis
 });
 
+test("VariableList groups variables under headers, ungrouped first", () => {
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const m: RepoModel = { ...model, variables: [b, a], values: { a: { dev: "x" }, b: { dev: "y" } } };
+  const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} grouped model={m} env="dev" />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("Ungrouped");
+  expect(frame).toContain("Storage");
+  // Ungrouped bucket (ALPHA) renders before the Storage group (BETA).
+  expect(frame.indexOf("Ungrouped")).toBeLessThan(frame.indexOf("ALPHA"));
+  expect(frame.indexOf("ALPHA")).toBeLessThan(frame.indexOf("Storage"));
+  expect(frame.indexOf("Storage")).toBeLessThan(frame.indexOf("BETA"));
+});
+
+test("VariableList encloses group header names in brackets", () => {
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const m: RepoModel = { ...model, variables: [b, a], values: {} };
+  const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} grouped model={m} env="dev" />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("[Ungrouped]");
+  expect(frame).toContain("[Storage]");
+});
+
+test("ScopeTree encloses group scopes in brackets but leaves apps plain", () => {
+  const scopes: Scope[] = [
+    { id: "all", label: "All", kind: "all" },
+    { id: "group:DB", label: "DB", kind: "group" },
+    { id: "app:api", label: "api", kind: "app" },
+  ];
+  const { lastFrame } = render(<ScopeTree scopes={scopes} cursor={0} />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("[DB]");
+  expect(frame).toContain("api");
+  expect(frame).not.toContain("[api]");
+});
+
+test("VariableList stays flat with no headers when not grouped", () => {
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const m: RepoModel = { ...model, variables: [b, a], values: {} };
+  const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} model={m} env="dev" />);
+  expect(lastFrame()).not.toContain("Ungrouped");
+});
+
 test("VariableList shows 'empty' for a variable with no value in the current env", () => {
   const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };
   const m: RepoModel = { ...model, variables: [plain], values: {} };
@@ -69,8 +116,8 @@ test("VariableList header omits filter when none is applied", () => {
 
 test("VariableList shows scope wiring in All mode", () => {
   const consumers: Consumer[] = [
-    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
-    { kind: "app", id: "app:inbox", name: "inbox", path: "apps/inbox", envFiles: {} },
+    { kind: "app", id: "app:api", name: "api", path: "apps/api" },
+    { kind: "app", id: "app:inbox", name: "inbox", path: "apps/inbox" },
   ];
   const wiredVar: Variable = { ...v, consumers: ["app:api", "app:inbox"] };
   const { lastFrame } = render(<VariableList variables={[wiredVar]} cursor={0} consumers={consumers} showScopes />);
@@ -80,7 +127,7 @@ test("VariableList shows scope wiring in All mode", () => {
 
 test("VariableList aligns value/scope columns across rows of differing name length", () => {
   const consumers: Consumer[] = [
-    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} },
+    { kind: "app", id: "app:api", name: "api", path: "apps/api" },
   ];
   const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
   const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, consumers: ["app:api"] };
@@ -96,7 +143,7 @@ test("VariableList aligns value/scope columns across rows of differing name leng
 });
 
 test("VariableList pads rows to the full pane width so the highlight spans the row", async () => {
-  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }];
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
   const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
   const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: false, consumers: ["app:api"] };
   const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} height={10} consumers={consumers} showScopes />);
@@ -111,7 +158,7 @@ test("VariableList pads rows to the full pane width so the highlight spans the r
 });
 
 test("VariableList labels global variables in the scopes column", () => {
-  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: {} }];
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
   const globalVar: Variable = { ...v, id: "g", name: "NODE_ENV", tier: "global", secret: false, consumers: [] };
   const localVar: Variable = { ...v, id: "l", name: "IMAP_HOST", tier: "local", ownerApp: "app:api", secret: false, consumers: ["app:api"] };
   const { lastFrame } = render(<VariableList variables={[globalVar, localVar]} cursor={0} consumers={consumers} showScopes />);
@@ -123,7 +170,7 @@ test("VariableList labels global variables in the scopes column", () => {
 
 test("VariableList truncates wiring hint beyond 3 consumers", () => {
   const consumers: Consumer[] = Array.from({ length: 5 }, (_, i) => ({
-    kind: "app" as const, id: `app:c${i}`, name: `c${i}`, path: `apps/c${i}`, envFiles: {},
+    kind: "app" as const, id: `app:c${i}`, name: `c${i}`, path: `apps/c${i}`,
   }));
   const varWithMany: Variable = { ...v, consumers: consumers.map((c) => c.id) };
   const { lastFrame } = render(<VariableList variables={[varWithMany]} cursor={0} consumers={consumers} showScopes />);
@@ -182,7 +229,7 @@ test("MoreIndicator renders nothing when nothing is hidden", () => {
 
 test("WireModal windows its list to fit height without overflowing", () => {
   const consumers: Consumer[] = Array.from({ length: 20 }, (_, i) => ({
-    kind: "app", id: `app:${i}`, name: `app-${i}`, path: `apps/${i}`, envFiles: {},
+    kind: "app", id: `app:${i}`, name: `app-${i}`, path: `apps/${i}`,
   }));
   // height 8 → border(2) + header(1) leaves 4 content rows. Cursor is at the top,
   // so there's no top marker: 4 item rows + the bottom marker.

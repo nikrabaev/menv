@@ -38,7 +38,6 @@ export async function detectApps(root: string): Promise<AppTarget[]> {
         id: `app:${pkg.name ?? dir}`,
         name: pkg.name ?? dir,
         path: relative(root, join(root, dir)) || ".",
-        envFiles: {},
       });
     }
   }
@@ -93,7 +92,9 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
       }
       const env = envIdForFile(file);
       envIds.add(env);
-      app.envFiles[env] = file;
+      // Existing per-env files seed the vault, but the app is canonicalized to a
+      // single ".env" output; menv stops writing per-env files going forward.
+      app.envFile = ".env";
       const text = await Bun.file(join(root, app.path, file)).text();
       for (const e of parseDotenv(text)) {
         const byApp = occ.get(e.key) ?? occ.set(e.key, new Map()).get(e.key)!;
@@ -159,8 +160,8 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
         if (!v.example) v.example = e.value;
         if (!v.description && e.description) v.description = e.description;
       } else {
-        // Example-only key: no real env file declared it. The owning app keeps an
-        // empty envFiles, so writeGeneratedFiles intentionally skips its .env.example.
+        // Example-only key: no real env file declared it. The owning app keeps
+        // envFile undefined, so writeGeneratedFiles intentionally skips it.
         const id = `var:${app.id}:${e.key}`;
         variables.push({
           id, name: e.key, tier: "local", ownerApp: app.id,

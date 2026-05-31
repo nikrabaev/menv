@@ -17,7 +17,7 @@ const model: RepoModel = {
   variables: [
     { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: "DB", secret: true, consumers: ["app:api"] },
   ],
-  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env" } }],
+  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
   recipients: [],
 };
@@ -93,7 +93,7 @@ const editModel: RepoModel = {
   variables: [
     { id: "v1", name: "DATABASE_URL", tier: "global", description: "db", group: null, secret: false, consumers: ["app:api"], example: "ex" },
   ],
-  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFiles: { dev: ".env" } }],
+  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
   recipients: [],
 };
@@ -279,6 +279,97 @@ test("the variable list is sorted by name regardless of model order", async () =
   const frame = lastFrame() ?? "";
   expect(frame.indexOf("ALPHA")).toBeLessThan(frame.indexOf("MANGO"));
   expect(frame.indexOf("MANGO")).toBeLessThan(frame.indexOf("ZEBRA"));
+});
+
+test("the variable list shows group headers when at least one group exists", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "g", name: "GA", tier: "global", description: "", group: "Infra", secret: false, consumers: [] },
+      { id: "u", name: "UA", tier: "global", description: "", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("Ungrouped");
+  expect(frame).toContain("Infra");
+});
+
+test("ctrl+down jumps the cursor to the next group's first variable", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "g", name: "GA", tier: "global", description: "infra-desc", group: "Infra", secret: false, consumers: [] },
+      { id: "u", name: "UA", tier: "global", description: "ungrouped-desc", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  // Ungrouped sorts first, so UA is the initial selection (shown in the inspector).
+  expect(lastFrame()).toContain("ungrouped-desc");
+  stdin.write("\x1b[1;5B"); // ctrl+down
+  await tick();
+  expect(lastFrame()).toContain("infra-desc");
+  stdin.write("\x1b[1;5A"); // ctrl+up, back to the Ungrouped bucket
+  await tick();
+  expect(lastFrame()).toContain("ungrouped-desc");
+});
+
+test("editing a variable's group offers existing groups and applies a new one", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "v1", name: "HAS_GROUP", tier: "global", description: "", group: "DB", secret: false, consumers: [] },
+      { id: "v2", name: "NO_GROUP", tier: "global", description: "", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  // Ungrouped sorts first, so NO_GROUP is selected. Focus the inspector and move to
+  // the group field (description -> example -> group), then open the picker.
+  stdin.write("\t");
+  await tick();
+  stdin.write("\x1b[B"); await tick(); // example
+  stdin.write("\x1b[B"); await tick(); // group
+  stdin.write("\r"); await tick();
+  expect(lastFrame()).toContain("DB"); // the existing group is proposed
+  for (const ch of "Cache") { stdin.write(ch); await tick(); }
+  stdin.write("\r"); await tick();
+  expect(store.getModel().variables.find((v) => v.id === "v2")!.group).toBe("Cache");
+});
+
+test("a group scope drops the redundant group header from the list", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "a", name: "ALPHA", tier: "global", description: "", group: "PAYMENTS", secret: false, consumers: [] },
+      { id: "b", name: "BETA", tier: "global", description: "", group: "PAYMENTS", secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={18} viewportColumns={110} />);
+  await tick();
+  // Focus the scopes pane (vars -> inspector -> scopes) and select the PAYMENTS
+  // group scope (All -> Global -> Root -> [GROUPS] -> PAYMENTS).
+  stdin.write("\t"); await tick();
+  stdin.write("\t"); await tick();
+  stdin.write("\x1b[B"); await tick();
+  stdin.write("\x1b[B"); await tick();
+  stdin.write("\x1b[B"); await tick();
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("ALPHA");
+  expect(frame).toContain("BETA");
+  // "PAYMENTS" still appears in the scope tree, the list title, and the inspector
+  // group field — but NOT as an in-list header (that would be a 4th occurrence).
+  expect(frame.split("PAYMENTS").length - 1).toBe(3);
 });
 
 test("the footer stays within the layout budget on a narrow terminal", async () => {
