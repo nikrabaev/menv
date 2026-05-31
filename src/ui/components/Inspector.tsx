@@ -20,7 +20,7 @@ function displayText(f: InspectorField): string {
     case "secret": return f.on ? "yes" : "no";
     case "wiring": return f.summary || "-";
     case "group": return f.text || "-";
-    case "value": return f.secret ? SECRET_MASK : (f.text || "- not set");
+    case "value": return f.secret ? SECRET_MASK : f.text;
     case "description":
     case "example":
       return f.text;
@@ -59,11 +59,14 @@ export function Inspector({ model, variable, active = false, cursor = 0, height 
         const idx = windowed.offset + i;
         const isCurrent = active && idx === cursor;
         const masked = f.kind === "value" && f.secret;
+        const empty = f.kind === "value" && !f.secret && f.text === "";
         return (
           <Text key={`${f.label}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined}>
             {isCurrent ? "▸ " : "  "}
             <Text color="gray">{f.label.padEnd(labelWidth)}</Text>{" "}
-            <Text color={masked ? "yellow" : undefined}>{truncate(displayText(f), valueWidth)}</Text>
+            {empty
+              ? <Text italic color="gray">empty</Text>
+              : <Text color={masked ? "yellow" : undefined}>{truncate(displayText(f), valueWidth)}</Text>}
           </Text>
         );
       })}

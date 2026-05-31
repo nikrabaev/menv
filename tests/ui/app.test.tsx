@@ -118,6 +118,7 @@ test("enter in the variable list edits the current environment value", async () 
   await tick();
   expect(lastFrame()).toContain("value · dev");
   stdin.write("Z");
+  await tick(); // let the controlled value re-render before Enter
   stdin.write("\r");
   await tick();
   expect(store.getModel().values.v1!.dev).toBe("pg://xZ");
@@ -133,6 +134,7 @@ test("editing the description in the inspector persists via the store", async ()
   await tick();
   expect(lastFrame()).toContain("description");
   stdin.write("X");
+  await tick(); // let the controlled value re-render before Enter
   stdin.write("\r");
   await tick();
   expect(store.getModel().variables[0]!.description).toBe("dbX");
@@ -214,9 +216,69 @@ test("enter on a value row edits that environment's value", async () => {
   stdin.write("\r");
   await tick();
   stdin.write("Y");
+  await tick(); // let the controlled value re-render before Enter
   stdin.write("\r");
   await tick();
   expect(store.getModel().values.v1!.dev).toBe("pg://xY");
+});
+
+test("filter mode narrows the variable list as the query is typed", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "v2", name: "API_TOKEN", tier: "global", description: "", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("/"); // enter filter mode
+  await tick();
+  for (const ch of "token") { stdin.write(ch); await tick(); } // case-insensitive substring
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("API_TOKEN");
+  expect(frame).not.toContain("DATABASE_URL");
+});
+
+test("backspace in filter mode widens the match again", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "v2", name: "API_TOKEN", tier: "global", description: "", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("/");
+  await tick();
+  for (const ch of "tokenZ") { stdin.write(ch); await tick(); } // matches nothing
+  expect(lastFrame() ?? "").not.toContain("API_TOKEN");
+  stdin.write("\x7F"); // backspace removes the stray Z
+  await tick();
+  expect(lastFrame() ?? "").toContain("API_TOKEN");
+});
+
+test("the variable list is sorted by name regardless of model order", async () => {
+  const model: RepoModel = {
+    ...editModel,
+    variables: [
+      { id: "z", name: "ZEBRA", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "a", name: "ALPHA", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "m", name: "MANGO", tier: "global", description: "", group: null, secret: false, consumers: [] },
+    ],
+    values: {},
+  };
+  const store = createStore(model);
+  const { lastFrame } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  const frame = lastFrame() ?? "";
+  expect(frame.indexOf("ALPHA")).toBeLessThan(frame.indexOf("MANGO"));
+  expect(frame.indexOf("MANGO")).toBeLessThan(frame.indexOf("ZEBRA"));
 });
 
 test("the footer stays within the layout budget on a narrow terminal", async () => {

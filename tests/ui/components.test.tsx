@@ -50,6 +50,13 @@ test("VariableList truncates a value too long for the line", async () => {
   expect(frame).toContain("…"); // cut with an ellipsis
 });
 
+test("VariableList shows 'empty' for a variable with no value in the current env", () => {
+  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };
+  const m: RepoModel = { ...model, variables: [plain], values: {} };
+  const { lastFrame } = render(<VariableList variables={[plain]} cursor={0} model={m} env="dev" />);
+  expect(lastFrame()).toContain("empty");
+});
+
 test("VariableList header announces the active filter query", () => {
   const { lastFrame } = render(<VariableList variables={[v]} cursor={0} filter="data" />);
   expect(lastFrame()).toContain("filter: data");
@@ -133,6 +140,13 @@ test("Inspector lists fields and masks a secret value", () => {
   expect(frame).toContain("description");
   expect(frame).toContain("secret");
   expect(frame).not.toContain("pg://x"); // value column masked
+});
+
+test("Inspector shows 'empty' for an unset value field", () => {
+  const plain: Variable = { ...v, secret: false };
+  const m: RepoModel = { ...model, values: {} };
+  const { lastFrame } = render(<Inspector model={m} variable={plain} height={14} />);
+  expect(lastFrame()).toContain("empty");
 });
 
 test("Inspector marks the selected field with a caret when focused", () => {

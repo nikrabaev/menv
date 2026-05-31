@@ -8,6 +8,9 @@ import { MoreIndicator } from "./MoreIndicator.tsx";
 const MAX_SCOPE_SHOWN = 3;
 // Secret values are never shown; the value column renders this (in yellow) instead.
 const SECRET_MASK = "***";
+// Placeholder shown (in grey italics) in the value column when a variable has no
+// value set for the current environment.
+const EMPTY_LABEL = "empty";
 const GUTTER = " ";
 // Value-column width used before the pane width is known (first render). Once the
 // pane is measured the column is sized to the room actually left on the line.
@@ -48,6 +51,10 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
   const windowed = listWindow(variables, cursor, maxItems);
 
   const valueFor = (v: Variable) => (model && env ? valueOf(model, v.id, env) : "");
+  // The text shown in the value column: the mask for secrets, the placeholder for
+  // an unset value, otherwise the value itself.
+  const displayValueOf = (v: Variable) => (v.secret ? SECRET_MASK : valueFor(v) || EMPTY_LABEL);
+  const isEmptyValue = (v: Variable) => !v.secret && valueFor(v) === "";
   const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(v.consumers, consumers) : null);
   // The scopes column reads, for a global variable, "global" followed by any
   // wiring; for a local one, just the wiring. Plain text, used for width/fill.
@@ -84,7 +91,7 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
   const gutters = 3 + (scopesWidth > 0 ? 1 : 0); // lead + after-name + after-value (+ after-scopes)
   const valueRoom = rowWidth > 0 ? Math.max(0, rowWidth - nameWidth - scopesWidth - gutters) : VALUE_FALLBACK_WIDTH;
   const naturalValueWidth = variables.length
-    ? Math.max(0, ...variables.map((v) => (v.secret ? SECRET_MASK.length : valueFor(v).length)))
+    ? Math.max(0, ...variables.map((v) => displayValueOf(v).length))
     : 0;
   const valueWidth = Math.min(valueRoom, naturalValueWidth);
 
@@ -98,7 +105,8 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
         const isGlobal = showScopes && v.tier === "global";
         const hint = hintFor(v);
         const nameSeg = GUTTER + v.name.padEnd(nameWidth) + GUTTER;
-        const valueCell = valueWidth > 0 ? truncate(v.secret ? SECRET_MASK : valueFor(v), valueWidth).padEnd(valueWidth) : "";
+        const empty = isEmptyValue(v);
+        const valueCell = valueWidth > 0 ? truncate(displayValueOf(v), valueWidth).padEnd(valueWidth) : "";
         const scopeLen = scopeTextFor(v).length;
         const contentLen = nameSeg.length + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
         // Trailing fill so a selected row's highlight reaches the pane's right edge.
@@ -107,7 +115,7 @@ export function VariableList({ variables, cursor, active = true, height, scopeLa
         return (
           <Text key={`${v.id}:${idx}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {nameSeg}
-            {valueWidth > 0 ? <Text color={v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
+            {valueWidth > 0 ? <Text italic={empty} color={v.secret ? "yellow" : empty ? "gray" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
             {isGlobal ? <Text italic color="cyan">global</Text> : null}
             {isGlobal && hint ? " " : null}

@@ -22,16 +22,17 @@ function model(): RepoModel {
 }
 
 describe("buildScopes", () => {
-  test("starts with All then Root", () => {
+  test("starts with All, Global, then Root", () => {
     const s = buildScopes(model());
     expect(s[0]).toEqual({ id: "all", label: "All", kind: "all" });
-    expect(s[1]).toEqual({ id: "root", label: "Root", kind: "root" });
+    expect(s[1]).toEqual({ id: "global", label: "Global", kind: "global" });
+    expect(s[2]).toEqual({ id: "root", label: "Root", kind: "root" });
   });
 
   test("emits section headers followed by their members", () => {
     const labels = buildScopes(model()).map((x) => x.label);
     // postgres has no wired variables, so SERVICES section is suppressed
-    expect(labels).toEqual(["All", "Root", "APPS", "api", "web", "GROUPS", "DB"]);
+    expect(labels).toEqual(["All", "Global", "Root", "APPS", "api", "web", "GROUPS", "DB"]);
     expect(buildScopes(model()).find((x) => x.label === "APPS")!.kind).toBe("header");
   });
 
@@ -58,6 +59,9 @@ describe("varsForScope", () => {
   test("all returns every variable", () => {
     expect(varsForScope(model(), "all").map((v) => v.name).sort()).toEqual(["DATABASE_URL", "PORT", "WEB_FLAG"]);
   });
+  test("global returns only global-tier variables", () => {
+    expect(varsForScope(model(), "global").map((v) => v.name)).toEqual(["DATABASE_URL"]);
+  });
   test("root returns only global-tier variables", () => {
     expect(varsForScope(model(), "root").map((v) => v.name)).toEqual(["DATABASE_URL"]);
   });
@@ -71,12 +75,12 @@ describe("varsForScope", () => {
 
 describe("stepScope", () => {
   test("skips a header row when moving down", () => {
-    const s = buildScopes(model()); // idx1=Root, idx2=APPS(header), idx3=api
-    expect(stepScope(s, 1, 1)).toBe(3);
+    const s = buildScopes(model()); // idx2=Root, idx3=APPS(header), idx4=api
+    expect(stepScope(s, 2, 1)).toBe(4);
   });
   test("skips a header row when moving up", () => {
-    const s = buildScopes(model()); // idx3=api, idx2=APPS(header), idx1=Root
-    expect(stepScope(s, 3, -1)).toBe(1);
+    const s = buildScopes(model()); // idx4=api, idx3=APPS(header), idx2=Root
+    expect(stepScope(s, 4, -1)).toBe(2);
   });
   test("clamps at the end", () => {
     const s = buildScopes(model());

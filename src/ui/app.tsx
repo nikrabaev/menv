@@ -11,6 +11,7 @@ import { Inspector } from "./components/Inspector.tsx";
 import { EditFieldModal } from "./components/EditFieldModal.tsx";
 import { NewVariableModal } from "./components/NewVariableModal.tsx";
 import { WireModal } from "./components/WireModal.tsx";
+import { TextInput } from "./components/TextInput.tsx";
 import { inspectorFields, copyableText } from "./inspectorFields.ts";
 import { type EditTarget, editLabel, editInitial, applyEdit } from "./editTarget.ts";
 import { copyToClipboard } from "../io/clipboard.ts";
@@ -82,7 +83,11 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const paneHeight = Math.max(3, rows - 3 - bottomHeight);
 
   const scope = scopes[scopeCursor];
-  const variables = scope ? varsForScope(model, scope.id) : model.variables;
+  // The list is presented alphabetically by name; varsForScope returns a fresh
+  // array so this sort never mutates the model.
+  const variables = (scope ? varsForScope(model, scope.id) : model.variables)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
   const filtered = filter
     ? variables.filter((v) => v.name.toLowerCase().includes(filter.toLowerCase()))
     : variables;
@@ -92,22 +97,8 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const inspCursor = Math.min(inspectorCursor, Math.max(0, fields.length - 1));
 
   useInput((input, key) => {
-    if (mode === "filter") {
-      if (key.escape || key.return) {
-        setMode("browse");
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setFilter((cur) => cur.slice(0, -1));
-        setVarCursor(0);
-        return;
-      }
-      if (input) {
-        setFilter((cur) => cur + input);
-        setVarCursor(0);
-      }
-      return;
-    }
+    // Text-entry modes (filter/edit/new) route keys to their own TextInput; the
+    // global keymap below is browse-only.
     if (mode !== "browse") return;
     if (input === "q") {
       exit();
@@ -225,22 +216,31 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       <TopBar root={model.root} env={env} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} model={model} env={env} />
+        <VariableList variables={filtered} cursor={varCursor} active={pane === "vars"} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} />
         <Inspector model={model} variable={current} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
       </Box>
       {mode === "edit" && current && editTarget ? (
         <EditFieldModal
           label={editLabel(editTarget)}
           initial={editInitial(model, current, editTarget)}
+          width={columns}
           onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
           onCancel={() => { setMode("browse"); setEditTarget(null); }}
         />
       ) : mode === "filter" ? (
-        <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-          <Text>/ {filter}</Text>
+        <Box borderStyle="round" borderColor="cyan" paddingX={1} width={columns}>
+          <Text>/ </Text>
+          <TextInput
+            value={filter}
+            width={columns - 6} // border(2) + paddingX(2) + the "/ " prefix(2)
+            onChange={(v) => { setFilter(v); setVarCursor(0); }}
+            onSubmit={() => setMode("browse")}
+            onCancel={() => setMode("browse")}
+          />
         </Box>
       ) : mode === "new" ? (
         <NewVariableModal
+          width={columns}
           onSubmit={(name) => {
             const tier = scope?.kind === "app" ? "local" : "global";
             const ownerApp = tier === "local" ? scope!.id : undefined;

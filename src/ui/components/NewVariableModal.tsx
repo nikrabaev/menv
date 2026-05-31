@@ -1,33 +1,24 @@
-import React, { useRef, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import React, { useState } from "react";
+import { Box, Text } from "ink";
+import { TextInput } from "./TextInput.tsx";
 
-export function NewVariableModal({ onSubmit, onCancel }: { onSubmit: (name: string) => void; onCancel: () => void }) {
+export function NewVariableModal({ onSubmit, onCancel, width }: {
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+  width?: number;
+}) {
   const [name, setName] = useState("");
-  const nameRef = useRef("");
-  const update = (next: string) => {
-    nameRef.current = next;
-    setName(next);
-  };
-  useInput((input, key) => {
-    if (key.escape) {
-      onCancel();
-      return;
-    }
-    if (key.return) {
-      const trimmed = nameRef.current.trim();
-      if (trimmed) onSubmit(trimmed);
-      return;
-    }
-    if (key.backspace || key.delete) {
-      update(nameRef.current.slice(0, -1));
-      return;
-    }
-    if (input) update(nameRef.current + input);
-  });
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width}>
       <Text>New variable name:</Text>
-      <Text>{name}</Text>
+      <TextInput
+        value={name}
+        onChange={setName}
+        // Ignore an empty submit, matching the old behaviour (no blank-named vars).
+        onSubmit={(v) => { const trimmed = v.trim(); if (trimmed) onSubmit(trimmed); }}
+        onCancel={onCancel}
+        width={width ? width - 4 : undefined}
+      />
       <Text color="gray">enter create / esc cancel</Text>
     </Box>
   );

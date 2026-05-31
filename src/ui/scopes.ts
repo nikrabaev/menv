@@ -1,6 +1,6 @@
 import type { RepoModel, Variable } from "../core/types.ts";
 
-export type ScopeKind = "all" | "root" | "app" | "service" | "group" | "header";
+export type ScopeKind = "all" | "global" | "root" | "app" | "service" | "group" | "header";
 
 export interface Scope {
   id: string;
@@ -15,6 +15,7 @@ export function isSelectable(scope: Scope): boolean {
 export function buildScopes(model: RepoModel): Scope[] {
   const scopes: Scope[] = [
     { id: "all", label: "All", kind: "all" },
+    { id: "global", label: "Global", kind: "global" },
     { id: "root", label: "Root", kind: "root" },
   ];
 
@@ -46,6 +47,7 @@ export function buildScopes(model: RepoModel): Scope[] {
 // skips header rows — and would fall through to the consumer branch returning [].
 export function varsForScope(model: RepoModel, scopeId: string): Variable[] {
   if (scopeId === "all") return model.variables;
+  if (scopeId === "global") return model.variables.filter((v) => v.tier === "global");
   if (scopeId === "root") return model.variables.filter((v) => v.tier === "global");
   if (scopeId.startsWith("group:")) {
     const g = scopeId.slice("group:".length);

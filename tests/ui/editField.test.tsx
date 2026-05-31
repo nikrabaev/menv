@@ -11,6 +11,7 @@ test("renders the field label and submits the typed value", async () => {
   expect(lastFrame()).toContain("description");
   await new Promise((r) => setTimeout(r, 0));
   stdin.write("hello");
+  await new Promise((r) => setTimeout(r, 10)); // let the controlled value re-render before Enter
   stdin.write("\r");
   await new Promise((r) => setTimeout(r, 10));
   expect(submitted).toBe("hello");

@@ -1,40 +1,32 @@
-import React, { useRef, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import React, { useState } from "react";
+import { Box, Text } from "ink";
+import { TextInput } from "./TextInput.tsx";
 
-export function EditFieldModal({ label, initial, onSubmit, onCancel }: {
+export function EditFieldModal({ label, initial, onSubmit, onCancel, width, mask }: {
   label: string;
   initial: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  // Full modal width; the input windows within it so the caret stays visible.
+  width?: number;
+  // When set, the value renders masked (secret entry) while editing the real text.
+  mask?: string;
 }) {
   const [value, setValue] = useState(initial);
-  const valueRef = useRef(initial);
-  const update = (next: string) => {
-    valueRef.current = next;
-    setValue(next);
-  };
-  useInput((input, key) => {
-    if (key.escape) {
-      onCancel();
-      return;
-    }
-    if (key.return) {
-      onSubmit(valueRef.current);
-      return;
-    }
-    if (key.backspace || key.delete) {
-      update(valueRef.current.slice(0, -1));
-      return;
-    }
-    if (input) update(valueRef.current + input);
-  });
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-      {/* truncate (never wrap): the modal must stay 5 rows to hold the bottomHeight
-          budget in app.tsx. The value shows its tail (truncate-start) so the chars
-          being typed at the end stay visible on a narrow terminal. */}
+    // The modal must stay 5 rows to hold the bottomHeight budget in app.tsx:
+    // border(2) + title + field + hint. The title truncates (never wraps) so a long
+    // label can't push the box taller; the field windows internally.
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
       <Text wrap="truncate-end">Edit <Text bold>{label}</Text></Text>
-      <Text wrap="truncate-start">{value}</Text>
+      <TextInput
+        value={value}
+        onChange={setValue}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        mask={mask}
+        width={width ? width - 4 : undefined}
+      />
       <Text color="gray">enter save / esc cancel</Text>
     </Box>
   );
