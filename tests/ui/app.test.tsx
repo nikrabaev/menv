@@ -372,6 +372,44 @@ test("a group scope drops the redundant group header from the list", async () =>
   expect(frame.split("PAYMENTS").length - 1).toBe(3);
 });
 
+test("q with unsaved changes shows the save-before-exit prompt", async () => {
+  const store = createStore(editModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  store.setValue("v1", "dev", "pg://dirty"); // make the model dirty
+  await tick();
+  stdin.write("q");
+  await tick();
+  expect(lastFrame()).toContain("Save changes before exiting?");
+  expect(lastFrame()).toContain("[Y/n]");
+});
+
+test("Ctrl+C with unsaved changes shows the save-before-exit prompt", async () => {
+  const store = createStore(editModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  store.setValue("v1", "dev", "pg://dirty");
+  await tick();
+  stdin.write("\x03"); // Ctrl+C
+  await tick();
+  expect(lastFrame()).toContain("Save changes before exiting?");
+});
+
+test("esc cancels the quit prompt and returns to browse", async () => {
+  const store = createStore(editModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  store.setValue("v1", "dev", "pg://dirty");
+  await tick();
+  stdin.write("q");
+  await tick();
+  expect(lastFrame()).toContain("Save changes before exiting?");
+  stdin.write("\x1b"); // esc
+  await tick();
+  expect(lastFrame()).not.toContain("Save changes before exiting?");
+  expect(lastFrame()).toContain("move"); // browse footer hint is back
+});
+
 test("the footer stays within the layout budget on a narrow terminal", async () => {
   // The footer hint bar is wide; if it wrapped it would exceed bottomHeight (1) and
   // overlap the panes. wrap="truncate-end" must keep the whole frame at <= rows lines.

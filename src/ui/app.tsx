@@ -24,7 +24,7 @@ import { loadRepo } from "../store/load.ts";
 import { loadOrCreateIdentity } from "../crypto/identity.ts";
 
 type Pane = "scopes" | "vars" | "inspector";
-type Mode = "browse" | "edit" | "new" | "wire" | "filter";
+type Mode = "browse" | "edit" | "new" | "wire" | "filter" | "quit";
 
 export const ENTER_FULLSCREEN = "\x1b[?1049h\x1b[2J\x1b[H";
 export const EXIT_FULLSCREEN = "\x1b[?1049l";
@@ -87,6 +87,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const bottomHeight =
     mode === "browse" ? 1 // status line
     : mode === "filter" ? 3 // border(2) + input(1)
+    : mode === "quit" ? 3 // border(2) + prompt(1)
     : groupEditing ? groupSuggestRows + 5 // border(2) + title + field + suggestions + hint
     : mode === "edit" || mode === "new" ? 5 // border(2) + title + field + hint
     : 1;
@@ -109,12 +110,29 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   // Clamp so the rendered/acted-on field stays in range as the variable changes.
   const inspCursor = Math.min(inspectorCursor, Math.max(0, fields.length - 1));
 
+  // Save on quit, then exit. Mirrors the `s` shortcut's error handling: a failed
+  // save surfaces as a status message and drops back to browse instead of exiting.
+  const saveAndExit = () => {
+    void saveModel(store.getModel(), env, onSaveStamp())
+      .then(() => { store.markClean(); exit(); })
+      .catch((err) => { setStatus(`save failed: ${err?.message ?? err}`); setMode("browse"); });
+  };
+
   useInput((input, key) => {
+    // Quit confirmation: Enter/y saves, n/Ctrl+C discards, Esc cancels.
+    if (mode === "quit") {
+      if (key.return || input === "y") { saveAndExit(); return; }
+      if (input === "n" || (key.ctrl && input === "c")) { exit(); return; }
+      if (key.escape) { setMode("browse"); return; }
+      return;
+    }
     // Text-entry modes (filter/edit/new) route keys to their own TextInput; the
     // global keymap below is browse-only.
     if (mode !== "browse") return;
-    if (input === "q") {
-      exit();
+    // q and Ctrl+C exit, but prompt to save first when there are unsaved changes.
+    if (input === "q" || (key.ctrl && input === "c")) {
+      if (dirty) setMode("quit");
+      else exit();
       return;
     }
     if (key.tab) {
@@ -270,6 +288,11 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
             onCancel={() => setMode("browse")}
           />
         </Box>
+      ) : mode === "quit" ? (
+        <Box borderStyle="round" borderColor="yellow" paddingX={1} width={columns}>
+          <Text>Save changes before exiting? </Text>
+          <Text bold>[Y/n]</Text>
+        </Box>
       ) : mode === "new" ? (
         <NewVariableModal
           width={columns}
@@ -315,7 +338,9 @@ export async function launchTui(root: string): Promise<void> {
   let instance: ReturnType<typeof render> | undefined;
   enterFullscreen();
   try {
-    instance = render(<MenvApp store={store} onSaveStamp={stamp} />);
+    // The app intercepts Ctrl+C to confirm quitting when there are unsaved
+    // changes, so Ink must not exit on it.
+    instance = render(<MenvApp store={store} onSaveStamp={stamp} />, { exitOnCtrlC: false });
     await instance.waitUntilExit();
   } finally {
     instance?.unmount();
