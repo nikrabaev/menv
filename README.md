@@ -13,9 +13,9 @@ values age-encrypted in one vault, `.env` files generated on demand.**
 
 ---
 
-`menv` discovers every `.env` and `docker-compose` service in your repo, lifts the
+`menv` discovers every `.env` file in your repo, lifts the
 values into a single **age-encrypted vault**, and gives you a fast keyboard-driven
-TUI to edit, group, and **wire** variables to the apps and services that consume
+TUI to edit, group, and **wire** variables to the apps that consume
 them. The encrypted vault is committed; the plaintext `.env` files are regenerated
 on demand and stay git-ignored.
 
@@ -32,7 +32,7 @@ the **single source of truth**:
   `.menv/values/`. Each app's `.env` is *generated* from the vault, never hand-edited.
 - **Shared vs. owned, made explicit.** A value used by several apps is a *global*;
   one owned by a single app is *local*. You see the difference at a glance.
-- **Wiring, not copy-paste.** Decide which apps and services receive a variable;
+- **Wiring, not copy-paste.** Decide which apps receive a variable;
   `menv` writes it into exactly those `.env` files.
 - **Commit the secrets, safely.** The vault is ciphertext. Only the holder of the
   age identity can read it — and you choose where that identity lives.
@@ -55,8 +55,8 @@ menv init        # scan the repo, create the vault, update .gitignore
 menv             # launch the TUI
 ```
 
-`menv init` walks your workspace, finds every `.env*` file and `docker-compose`
-service, encrypts the discovered values, and asks where to keep the secret key
+`menv init` walks your workspace, finds every `.env*` file, encrypts the
+discovered values, and asks where to keep the secret key
 (see [Key backends](#key-backends)). Run `menv` with no arguments any time to open
 the editor.
 
@@ -68,7 +68,7 @@ Three panes, driven entirely from the keyboard:
 
 | Pane | What it shows |
 |------|---------------|
-| **Scopes** | `All` / `Global`, then your **apps**, **services**, and variable **groups**. Selecting one filters the list. |
+| **Scopes** | `All` / `Global`, then your **apps** and variable **groups**. Selecting one filters the list. |
 | **Variables** | The variables in the current scope, grouped and name-sorted. Secrets render as `***`; unset values show `empty`. |
 | **Inspector** | Every field of the selected variable — description, example, group, secret flag, **wiring**, and the value for the active environment. |
 
@@ -101,7 +101,7 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   `SENTRY_DSN`). A **local** is owned by a single app (`STRIPE_SECRET_KEY` in `web`).
   `menv init` infers the tier: a name with matching values across two or more apps
   becomes global; everything else stays local.
-- **Wiring** — Which consumers (apps / services) actually receive a variable. A
+- **Wiring** — Which apps actually receive a variable. A
   global can be wired to many; a local is delivered to its owner. On save, `menv`
   writes each variable into exactly the `.env` files of its wired consumers.
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
@@ -156,7 +156,7 @@ menv [command] [options]
 
 ```text
 your-repo/
-├─ menv.toml                 # committed — envs, recipients, apps, services, [key_backend]
+├─ menv.toml                 # committed — envs, recipients, apps, [key_backend]
 ├─ .menv/
 │  ├─ manifest.toml          # committed — variable definitions (name, tier, group, wiring…)
 │  ├─ identity.age           # committed — ONLY for the `password` backend (encrypted key)
@@ -217,7 +217,7 @@ src/
 ├─ cli/      # command handlers: init, generate, backup, restore, root
 ├─ core/     # domain model and types
 ├─ crypto/   # age encryption, identities, key backends, the vault
-├─ io/       # discovery, dotenv/compose parsing, persistence, generation
+├─ io/       # discovery, dotenv parsing, persistence, generation
 ├─ store/    # in-memory store, load/save
 └─ ui/       # Ink components, app.tsx, scopes & grouping
 tests/       # mirrors src/ one-to-one

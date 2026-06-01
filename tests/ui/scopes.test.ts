@@ -14,7 +14,6 @@ function model(): RepoModel {
     consumers: [
       { kind: "app", id: "app:api", name: "api", path: "apps/api" },
       { kind: "app", id: "app:web", name: "web", path: "apps/web" },
-      { kind: "service", id: "svc:pg", name: "postgres", composeFile: "docker-compose.yml", inject: "env_file" },
     ],
     values: {},
     recipients: [],
@@ -31,27 +30,26 @@ describe("buildScopes", () => {
 
   test("emits section headers followed by their members", () => {
     const labels = buildScopes(model()).map((x) => x.label);
-    // postgres has no wired variables, so SERVICES section is suppressed
     expect(labels).toEqual(["All", "Global", "Root", "APPS", "api", "web", "GROUPS", "DB"]);
     expect(buildScopes(model()).find((x) => x.label === "APPS")!.kind).toBe("header");
   });
 
   test("omits a section header when it has no members", () => {
     const m = model();
-    m.consumers = m.consumers.filter((c) => c.kind === "app"); // drop the service
+    for (const v of m.variables) v.group = null; // no grouped variables left
     const labels = buildScopes(m).map((x) => x.label);
     expect(labels).toContain("APPS");
-    expect(labels).not.toContain("SERVICES");
+    expect(labels).not.toContain("GROUPS");
   });
 
-  test("omits apps/services that have no wired variables", () => {
+  test("omits apps that have no wired variables", () => {
     const m = model();
-    // wire a variable to postgres so it appears, verify it does
-    m.variables[0]!.consumers = [...m.variables[0]!.consumers, "svc:pg"];
-    expect(buildScopes(m).map((x) => x.label)).toContain("postgres");
-    // remove the wire — postgres should disappear again
-    m.variables[0]!.consumers = m.variables[0]!.consumers.filter((c) => c !== "svc:pg");
-    expect(buildScopes(m).map((x) => x.label)).not.toContain("postgres");
+    m.consumers.push({ kind: "app", id: "app:worker", name: "worker", path: "apps/worker" });
+    // worker has no wired variables, so it does not appear
+    expect(buildScopes(m).map((x) => x.label)).not.toContain("worker");
+    // wire a variable to it — now it appears
+    m.variables[0]!.consumers = [...m.variables[0]!.consumers, "app:worker"];
+    expect(buildScopes(m).map((x) => x.label)).toContain("worker");
   });
 });
 

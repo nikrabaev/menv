@@ -1,6 +1,6 @@
 import type { RepoModel, Variable } from "../core/types.ts";
 
-export type ScopeKind = "all" | "global" | "root" | "app" | "service" | "group" | "header";
+export type ScopeKind = "all" | "global" | "root" | "app" | "group" | "header";
 
 export interface Scope {
   id: string;
@@ -25,12 +25,6 @@ export function buildScopes(model: RepoModel): Scope[] {
   if (apps.length) {
     scopes.push({ id: "header:apps", label: "APPS", kind: "header" });
     for (const c of apps) scopes.push({ id: c.id, label: c.name, kind: "app" });
-  }
-
-  const services = model.consumers.filter((c) => c.kind === "service" && hasVars(c.id));
-  if (services.length) {
-    scopes.push({ id: "header:services", label: "SERVICES", kind: "header" });
-    for (const c of services) scopes.push({ id: c.id, label: c.name, kind: "service" });
   }
 
   const groups = [...new Set(model.variables.map((v) => v.group).filter(Boolean))] as string[];

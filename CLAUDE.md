@@ -20,7 +20,7 @@ Headless `menv generate` takes the password-backend passphrase from
 - `src/cli/` — command handlers (`init`, `generate`, `root`)
 - `src/core/` — domain model and types
 - `src/crypto/` — age encryption, identity, vault
-- `src/io/` — discovery, dotenv/compose parsing, file persistence, generation
+- `src/io/` — discovery, dotenv parsing, file persistence, generation
 - `src/store/` — in-memory store, load/save
 - `src/ui/` — Ink components, `app.tsx` (the main layout), `scopes.ts`
 - `tests/` — mirrors `src/` one-to-one

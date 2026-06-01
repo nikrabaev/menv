@@ -14,7 +14,6 @@ const model: RepoModel = {
   ],
   consumers: [
     { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" },
-    { kind: "service", id: "svc:pg", name: "postgres", composeFile: "docker-compose.yml", inject: "env_file", envFileRef: "apps/api/.env" },
   ],
   values: {},
   recipients: ["age1example"],

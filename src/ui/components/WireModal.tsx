@@ -32,7 +32,7 @@ export function WireModal({ varName, consumers, wired, onToggle, onClose, height
         const idx = windowed.offset + i;
         return (
           <Text key={`${c.id}:${idx}`} inverse={idx === cursor}>
-            [{wired.includes(c.id) ? "x" : " "}] {c.kind === "service" ? "svc " : ""}{c.name}
+            [{wired.includes(c.id) ? "x" : " "}] {c.name}
           </Text>
         );
       })}

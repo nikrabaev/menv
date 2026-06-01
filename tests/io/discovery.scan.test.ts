@@ -68,14 +68,3 @@ test("imports example values and creates example-only locals", async () => {
   expect(redis.ownerApp).toBe("app:api");
   expect(model.values[redis.id]).toBeUndefined();
 });
-
-test("gives same-named services in different compose files unique ids", async () => {
-  const root = mkdtempSync(join(tmpdir(), "menv-"));
-  await Bun.write(join(root, "docker-compose.yml"), "services:\n  web:\n    image: app\n");
-  await Bun.write(join(root, "docker-compose.dev.yml"), "services:\n  web:\n    image: app-dev\n");
-
-  const { model } = await scanRepo(root);
-  const serviceIds = model.consumers.filter((c) => c.kind === "service").map((c) => c.id);
-  expect(serviceIds.length).toBe(2);
-  expect(new Set(serviceIds).size).toBe(2);
-});

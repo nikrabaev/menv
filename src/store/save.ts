@@ -1,8 +1,6 @@
-import { join } from "node:path";
 import { writeModelFiles } from "../io/persist.ts";
 import { saveEnvValues } from "../crypto/vault.ts";
 import { writeGeneratedFiles } from "../io/generate.ts";
-import { ensureServiceEnvFile } from "../io/compose.ts";
 import type { RepoModel } from "../core/types.ts";
 
 export interface SaveSummary {
@@ -32,17 +30,6 @@ export async function saveModel(model: RepoModel, env: string, stamp: string): P
   }
 
   files.push(...(await writeGeneratedFiles(model, env, stamp)));
-
-  for (const c of model.consumers) {
-    if (c.kind !== "service" || c.inject !== "env_file" || !c.envFileRef) continue;
-    const composePath = join(model.root, c.composeFile);
-    const text = await Bun.file(composePath).text();
-    const next = ensureServiceEnvFile(text, c.name, c.envFileRef);
-    if (next !== text) {
-      await Bun.write(composePath, next);
-      files.push(c.composeFile);
-    }
-  }
 
   return { files };
 }

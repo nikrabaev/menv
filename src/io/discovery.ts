@@ -45,8 +45,7 @@ export async function detectApps(root: string): Promise<AppTarget[]> {
 }
 
 import { parseDotenv } from "./dotenv.ts";
-import { parseComposeServices } from "./compose.ts";
-import type { Consumer, RepoModel, ServiceTarget, Values, Variable } from "../core/types.ts";
+import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
 
 function envIdForFile(filename: string): string {
   if (filename === ".env" || filename === ".env.local") return "dev";
@@ -59,23 +58,6 @@ const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL/i.test
 
 export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const apps = await detectApps(root);
-
-  // compose services
-  const services: ServiceTarget[] = [];
-  const composeGlob = new Bun.Glob("docker-compose*.{yml,yaml}");
-  for await (const rel of composeGlob.scan({ cwd: root, onlyFiles: true })) {
-    const text = await Bun.file(join(root, rel)).text();
-    for (const s of parseComposeServices(text, rel)) {
-      services.push({
-        kind: "service",
-        id: `svc:${s.composeFile}:${s.name}`,
-        name: s.name,
-        composeFile: rel,
-        inject: s.envFiles.length ? "env_file" : "environment",
-        envFileRef: s.envFiles[0],
-      });
-    }
-  }
 
   // Phase 1: real env files -> occurrences (name -> appId -> env -> value)
   const occ = new Map<string, Map<string, Map<string, string>>>();
@@ -176,7 +158,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const environments = [...envIds].sort().map((id, i) => ({
     id, isDefault: id === "dev" || (i === 0 && !envIds.has("dev")),
   }));
-  const consumers: Consumer[] = [...apps, ...services];
+  const consumers: Consumer[] = [...apps];
 
   return { model: { root, environments, variables, consumers, values, recipients: [] } };
 }
