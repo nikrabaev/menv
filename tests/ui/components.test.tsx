@@ -5,6 +5,7 @@ import { TopBar } from "../../src/ui/components/TopBar.tsx";
 import { VariableList } from "../../src/ui/components/VariableList.tsx";
 import { Inspector } from "../../src/ui/components/Inspector.tsx";
 import { WireModal } from "../../src/ui/components/WireModal.tsx";
+import { PropagateModal } from "../../src/ui/components/PropagateModal.tsx";
 import { MoreIndicator } from "../../src/ui/components/MoreIndicator.tsx";
 import { ScopeTree } from "../../src/ui/components/ScopeTree.tsx";
 import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
@@ -90,6 +91,16 @@ test("ScopeTree renders scope labels", () => {
   const frame = lastFrame() ?? "";
   expect(frame).toContain("DB");
   expect(frame).toContain("api");
+});
+
+test("ScopeTree shows a per-env tag on a tagged app scope", () => {
+  const scopes: Scope[] = [
+    { id: "all", label: "All", kind: "all" },
+    { id: "app:api", label: "api", kind: "app", tag: "per-env" },
+    { id: "app:web", label: "web", kind: "app" },
+  ];
+  const { lastFrame } = render(<ScopeTree scopes={scopes} cursor={0} />);
+  expect(lastFrame()).toContain("per-env");
 });
 
 test("VariableList stays flat with no headers when not grouped", () => {
@@ -267,4 +278,25 @@ test("WireModal windows its list to fit height without overflowing", () => {
   // Tail items are hidden behind an overflow marker that counts them (4 shown, 16 below).
   expect(frame).toContain("↓ 16 more");
   expect(frame).not.toContain("app-19");
+});
+
+test("PropagateModal lists the sharing environments but never the value", () => {
+  const { lastFrame } = render(
+    <PropagateModal varName="API_URL" sharedEnvs={["staging", "prod"]} width={90} />,
+  );
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("API_URL");
+  expect(frame).toContain("staging");
+  expect(frame).toContain("prod");
+  expect(frame).toContain("update them too");
+});
+
+test("PropagateModal caps the listed envs and shows a +N more overflow", () => {
+  const many = Array.from({ length: 9 }, (_, i) => `env${i}`);
+  const { lastFrame } = render(<PropagateModal varName="X" sharedEnvs={many} cap={6} width={60} />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("env0");
+  expect(frame).toContain("env5");
+  expect(frame).not.toContain("env6"); // beyond the cap
+  expect(frame).toContain("+3 more");
 });

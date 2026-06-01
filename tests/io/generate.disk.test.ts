@@ -71,6 +71,44 @@ test("skips a consumer with no wired variables (no stray empty file)", async () 
   expect(existsSync(join(root, ".env"))).toBe(false);
 });
 
+test("perenv mode writes one .env.<env> per environment (ignoring the active env)", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
+    values: { v1: { dev: "3000", prod: "8080" } },
+    recipients: [],
+  };
+  // Active env is "dev", but per-env mode writes every environment's file.
+  await writeGeneratedFiles(model, "dev", "ts1");
+  expect(await Bun.file(join(root, "apps", "api", ".env.dev")).text()).toContain("PORT=3000");
+  expect(await Bun.file(join(root, "apps", "api", ".env.prod")).text()).toContain("PORT=8080");
+  expect(await Bun.file(join(root, "apps", "api", ".env.example")).text()).toContain("PORT=");
+  // The single canonical .env is not written in per-env mode.
+  expect(existsSync(join(root, "apps", "api", ".env"))).toBe(false);
+});
+
+test("perenv mode skips an environment the consumer has no values in", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    // "dev" is a global environment (some other app uses it) that api has no data in.
+    environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
+    values: { v1: { prod: "8080" } }, // only prod has a value
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "dev", "ts1");
+  expect(await Bun.file(join(root, "apps", "api", ".env.prod")).text()).toContain("PORT=8080");
+  // No stray empty .env.dev for an environment api doesn't participate in.
+  expect(existsSync(join(root, "apps", "api", ".env.dev"))).toBe(false);
+});
+
 test("writes only .env for the active env across multiple environments", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await mkdir(join(root, "apps", "api"), { recursive: true });

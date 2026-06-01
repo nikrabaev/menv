@@ -24,12 +24,13 @@ test("generate recreates .env from the vault", async () => {
   expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("PORT=3000");
 });
 
-test("generate --env writes the chosen environment's values into .env", async () => {
+test("generate writes per-env files for a consumer that had .env.<env> files", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await Bun.write(join(root, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n");
   await mkdir(join(root, "apps", "api"), { recursive: true });
   await Bun.write(join(root, "apps", "api", "package.json"), JSON.stringify({ name: "api" }));
-  // Two real env files seed a "dev" and a "production" environment in the vault.
+  // The presence of a `.env.production` file flips the consumer to per-env mode:
+  // `.env` seeds "dev", `.env.production` seeds "production".
   await Bun.write(join(root, "apps", "api", ".env"), "PORT=3000\n");
   await Bun.write(join(root, "apps", "api", ".env.production"), "PORT=8080\n");
 
@@ -37,11 +38,10 @@ test("generate --env writes the chosen environment's values into .env", async ()
   const backend = { async get() { return kp.identity; }, async set() {} };
   await runInit(root, { backend, stamp: "s1" });
 
-  // No --env uses the default (dev); --env production switches the .env contents.
+  // Per-env mode writes one file per environment, side by side, regardless of --env.
   await runGenerate(root, { backend, stamp: "s2" });
-  expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("PORT=3000");
-  await runGenerate(root, { backend, env: "production", stamp: "s3" });
-  expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("PORT=8080");
+  expect(await Bun.file(join(root, "apps", "api", ".env.dev")).text()).toContain("PORT=3000");
+  expect(await Bun.file(join(root, "apps", "api", ".env.production")).text()).toContain("PORT=8080");
 });
 
 test("generate with the password backend reads MENV_PASSPHRASE", async () => {

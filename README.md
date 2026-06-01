@@ -70,7 +70,7 @@ Three panes, driven entirely from the keyboard:
 
 | Pane | What it shows |
 |------|---------------|
-| **Scopes** | `All`, then your **targets** (each app, plus the repo root) and variable **groups**. Selecting one filters the list. |
+| **Scopes** | `All`, then your **targets** (each app, plus the repo root) and variable **groups**. Selecting one filters the list; a per-env target is tagged `per-env`. |
 | **Variables** | The variables in the current scope, grouped and name-sorted. Secrets render as `***`; unset values show `empty`. |
 | **Inspector** | Every field of the selected variable — description, example, group, secret flag, **wiring**, and the value for the active environment. |
 
@@ -85,9 +85,10 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 | `⇧↑` `⇧↓` *(or `⌥↑` `⌥↓`)* | Jump between group blocks in the variable list |
 | `Tab` | Cycle panes: scopes → variables → inspector |
 | `Esc` | From the inspector, back to the variable list |
-| `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal |
+| `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal. Editing a value shared by other environments offers to update them too (default **No**). |
 | `c` | Copy the value (or field) to the clipboard |
 | `e` | Switch environment (`dev` → `prod` → …) |
+| `m` | On an app scope, toggle its **file mode** (single `.env` ↔ per-env `.env.<env>`) |
 | `/` | Filter variables by name |
 | `n` | New variable |
 | `x` | Delete the selected variable |
@@ -99,6 +100,14 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 - **Environments** — `dev`, `prod`, `staging`, … Every variable can hold a distinct
   value per environment. The active environment (top bar, switch with `e`) decides
   which value is written into the generated `.env` files.
+- **File modes** — Each consumer is either **single** (one `.env`, the default — it
+  holds the active environment's values) or **per-env** (one `.env.<env>` file per
+  environment, side by side). `menv init` picks **per-env** automatically for any
+  consumer that already has `.env.<env>` files (e.g. `.env.production`); everything
+  else stays single. Toggle it later with `m` in the TUI or `menv mode <consumer>
+  <single|perenv>`. A per-env consumer only gets a file for the environments it
+  actually has values in — so `menv` round-trips exactly the `.env.<env>` files that
+  existed, not one for every global environment.
 - **Grouping by value** — `menv init` decides what's one variable by *value*, not by
   tier. When several apps define the same name with the same value, they collapse
   into a single variable wired to all of them; where the values differ, each value
@@ -135,6 +144,9 @@ menv list --json                                # machine-readable, full records
 menv wire   STRIPE_KEY api                       # also deliver it to `api`
 menv unwire STRIPE_KEY worker                    # stop delivering it to `worker`
 menv rm OLD_FLAG                                 # remove a variable entirely
+
+menv mode api perenv                             # api emits .env.<env> files
+menv mode web single                             # web emits a single .env
 ```
 
 A few things worth knowing:
@@ -198,6 +210,7 @@ menv [command] [options]
   wire   NAME <c1,c2,…>   Wire a variable to consumers (apps and/or "root")
   unwire NAME <c1,c2,…>   Unwire a variable from consumers
   rm NAME [--scope <c>]   Delete a variable
+  mode <consumer> <m>     Set a consumer's .env layout: single | perenv
 
   Materialize & back up:
 
@@ -229,11 +242,13 @@ your-repo/
 │  │  ├─ dev.env.age         # git-ignored — age-encrypted values for `dev`
 │  │  └─ prod.env.age        # git-ignored — …one file per environment
 │  └─ backups/               # git-ignored — timestamped .env snapshots
-├─ apps/web/
+├─ apps/web/                 # single mode (default)
 │  ├─ .env                   # git-ignored — generated for the active environment
 │  └─ .env.example           # committed — values-free template
-└─ apps/api/
-   └─ …
+└─ apps/api/                 # per-env mode
+   ├─ .env.dev               # git-ignored — one file per environment it has values in
+   ├─ .env.prod              # git-ignored
+   └─ .env.example           # committed — values-free template
 ```
 
 `menv init` appends this block to `.gitignore`:
@@ -262,8 +277,9 @@ menv generate --env prod
 MENV_PASSPHRASE='…' menv generate --env prod
 ```
 
-`menv generate` decrypts the chosen environment from the vault and writes each
-app's `.env` (plus refreshed `.env.example` templates).
+`menv generate` decrypts the vault and writes each app's `.env` (plus refreshed
+`.env.example` templates). `--env` selects which environment lands in a
+single-mode app's `.env`; per-env apps always get all their `.env.<env>` files.
 
 ## Development
 
@@ -279,7 +295,7 @@ crypto side-effects:
 
 ```text
 src/
-├─ cli/      # command handlers: init, define, set, get, list, wire, rm, generate, backup, restore
+├─ cli/      # command handlers: init, define, set, get, list, wire, mode, rm, generate, backup, restore
 ├─ core/     # domain model and types
 ├─ crypto/   # age encryption, identities, key backends, the vault
 ├─ io/       # discovery, dotenv parsing, persistence, generation

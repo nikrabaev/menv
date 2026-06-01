@@ -89,6 +89,23 @@ test("a repo-root .env is scanned and groups with apps that share the value", as
   expect(model.values[rootOnly.id]!.dev).toBe("y");
 });
 
+test("a consumer with .env.<env> files is detected as per-env; plain .env stays single", async () => {
+  const root = await setup(["web", "api"]);
+  // api keeps per-environment files; web has only a plain .env (+ local/example).
+  await Bun.write(join(root, "apps", "api", ".env.development"), "PORT=3000\n");
+  await Bun.write(join(root, "apps", "api", ".env.production"), "PORT=8080\n");
+  await Bun.write(join(root, "apps", "web", ".env"), "PORT=3000\n");
+  await Bun.write(join(root, "apps", "web", ".env.local"), "PORT=3001\n");
+  await Bun.write(join(root, "apps", "web", ".env.example"), "PORT=\n");
+
+  const { model } = await scanRepo(root);
+
+  const api = model.consumers.find((c) => c.id === "app:api")!;
+  const web = model.consumers.find((c) => c.id === "app:web")!;
+  expect(api.envMode).toBe("perenv");
+  expect(web.envMode).toBe("single");
+});
+
 test("imports example values and creates example-only variables", async () => {
   const root = await setup();
   await Bun.write(join(root, "apps", "api", ".env"), "DATABASE_URL=pg://real\n");

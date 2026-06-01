@@ -409,6 +409,78 @@ test("esc cancels the quit prompt and returns to browse", async () => {
   expect(lastFrame()).toContain("move"); // browse footer hint is back
 });
 
+const propModel: RepoModel = {
+  root: "/repo/acme",
+  environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+  variables: [{ id: "v1", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"] }],
+  consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "single" }],
+  values: { v1: { dev: "shared", prod: "shared" } },
+  recipients: [],
+};
+
+test("editing a value shared across environments offers to propagate it", async () => {
+  const store = createStore(propModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("\r"); // vars pane: edit value · dev
+  await tick();
+  expect(lastFrame()).toContain("Value · dev");
+  stdin.write("X"); // "shared" -> "sharedX"
+  await tick();
+  stdin.write("\r"); // submit
+  await tick();
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("update them too");
+  expect(frame).toContain("prod");
+  // The current env is saved immediately; prod is untouched until confirmed.
+  expect(store.getModel().values.v1!.dev).toBe("sharedX");
+  expect(store.getModel().values.v1!.prod).toBe("shared");
+  stdin.write("y");
+  await tick();
+  expect(store.getModel().values.v1!.prod).toBe("sharedX");
+  expect(lastFrame()).not.toContain("update them too");
+});
+
+test("declining the propagation prompt updates only the current environment", async () => {
+  const store = createStore(propModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("\r"); await tick();
+  stdin.write("X"); await tick();
+  stdin.write("\r"); await tick();
+  expect(lastFrame()).toContain("update them too");
+  stdin.write("n"); // default No
+  await tick();
+  expect(store.getModel().values.v1!.dev).toBe("sharedX");
+  expect(store.getModel().values.v1!.prod).toBe("shared");
+  expect(lastFrame()).not.toContain("update them too");
+});
+
+test("editing a value no other environment shares skips the prompt", async () => {
+  const store = createStore({ ...propModel, values: { v1: { dev: "a", prod: "b" } } });
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("\r"); await tick();
+  stdin.write("X"); await tick(); // "a" -> "aX"
+  stdin.write("\r"); await tick();
+  expect(lastFrame()).not.toContain("update them too");
+  expect(store.getModel().values.v1!.dev).toBe("aX");
+});
+
+test("m toggles the file mode of the focused app scope", async () => {
+  const store = createStore(propModel);
+  const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={20} viewportColumns={100} />);
+  await tick();
+  stdin.write("\t"); await tick(); // vars -> inspector
+  stdin.write("\t"); await tick(); // inspector -> scopes
+  stdin.write("\x1b[B"); await tick(); // All -> api (header skipped)
+  stdin.write("m"); await tick();
+  expect(store.getModel().consumers.find((c) => c.id === "app:api")!.envMode).toBe("perenv");
+  expect(lastFrame()).toContain("per-env"); // tag / status now shows
+  stdin.write("m"); await tick();
+  expect(store.getModel().consumers.find((c) => c.id === "app:api")!.envMode).toBe("single");
+});
+
 test("the footer stays within the layout budget on a narrow terminal", async () => {
   // The footer hint bar is wide; if it wrapped it would exceed bottomHeight (1) and
   // overlap the panes. wrap="truncate-end" must keep the whole frame at <= rows lines.

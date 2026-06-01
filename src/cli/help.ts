@@ -31,6 +31,8 @@ Commands:
   wire NAME <c1,c2,...>   Wire a variable to consumers (apps and/or "root")
   unwire NAME <c1,c2,...> Unwire a variable from consumers
   rm NAME [--scope <c>]   Delete a variable
+  mode <consumer> <m>     Set a consumer's .env file layout: single (one .env) or
+                          perenv (one .env.<env> per environment)
 
   backup                  Back up every .env and .env.example file into
                           .menv/backups/<timestamp>

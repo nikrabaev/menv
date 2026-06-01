@@ -13,6 +13,7 @@ import { EditFieldModal } from "./components/EditFieldModal.tsx";
 import { NewVariableModal } from "./components/NewVariableModal.tsx";
 import { GroupComboModal } from "./components/GroupComboModal.tsx";
 import { WireModal } from "./components/WireModal.tsx";
+import { PropagateModal } from "./components/PropagateModal.tsx";
 import { TextInput } from "./components/TextInput.tsx";
 import { inspectorFields, copyableText } from "./inspectorFields.ts";
 import { type EditTarget, editLabel, editInitial, applyEdit } from "./editTarget.ts";
@@ -26,7 +27,11 @@ import { readKeyBackendConfig } from "../io/persist.ts";
 import { interactivePassphraseProvider } from "./initPrompts.tsx";
 
 type Pane = "scopes" | "vars" | "inspector";
-type Mode = "browse" | "edit" | "new" | "wire" | "filter" | "quit";
+type Mode = "browse" | "edit" | "new" | "wire" | "filter" | "quit" | "propagate";
+
+// State for the "update other environments too?" prompt: the just-edited value and
+// the other environments that shared its previous value.
+type Propagate = { varId: string; env: string; newValue: string; sharedEnvs: string[] };
 
 export const ENTER_FULLSCREEN = "\x1b[?1049h\x1b[2J\x1b[H";
 export const EXIT_FULLSCREEN = "\x1b[?1049l";
@@ -73,6 +78,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const [env, setEnv] = useState(model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev");
   const [mode, setMode] = useState<Mode>("browse");
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [propagate, setPropagate] = useState<Propagate | null>(null);
   const [status, setStatus] = useState("");
   const [filter, setFilter] = useState("");
 
@@ -83,6 +89,12 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const groupSuggestRows = Math.min(GROUP_SUGGEST_CAP, allGroups.length);
   const groupEditing = mode === "edit" && editTarget?.kind === "group";
 
+  // The propagate prompt lists the sharing environments (capped, with a "+N more"
+  // overflow row), sizing its modal — and thus the budget below.
+  const PROPAGATE_CAP = 6;
+  const propagateRows = propagate ? Math.min(PROPAGATE_CAP, propagate.sharedEnvs.length) : 0;
+  const propagateOverflow = propagate ? propagate.sharedEnvs.length > PROPAGATE_CAP : false;
+
   // The layout is exact: topBar(3) + paneHeight + bottomHeight = rows, so bottomHeight
   // must equal the bottom region's *actual* rendered height. (Wire mode is the
   // exception: it hides the panes and covers the full area below the top bar.)
@@ -90,6 +102,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
     mode === "browse" ? 1 // status line
     : mode === "filter" ? 3 // border(2) + input(1)
     : mode === "quit" ? 3 // border(2) + prompt(1)
+    : mode === "propagate" ? propagateRows + (propagateOverflow ? 1 : 0) + 4 // border(2) + title + envs + hint
     : groupEditing ? groupSuggestRows + 5 // border(2) + title + field + suggestions + hint
     : mode === "edit" || mode === "new" ? 5 // border(2) + title + field + hint
     : 1;
@@ -120,12 +133,55 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       .catch((err) => { setStatus(`save failed: ${err?.message ?? err}`); setMode("browse"); });
   };
 
+  // Commit an edit from the field modal. A value edit that changes a value shared
+  // by other environments opens the propagation prompt (the current env is saved
+  // immediately); every other edit applies and closes straight away.
+  const submitEdit = (varId: string, target: EditTarget, value: string) => {
+    if (target.kind === "value") {
+      const oldVal = model.values[varId]?.[target.env] ?? "";
+      if (value !== oldVal) {
+        const shared = model.environments
+          .filter((e) => e.id !== target.env && (model.values[varId]?.[e.id] ?? "") === oldVal)
+          .map((e) => e.id);
+        store.setValue(varId, target.env, value);
+        if (shared.length > 0) {
+          setPropagate({ varId, env: target.env, newValue: value, sharedEnvs: shared });
+          setEditTarget(null);
+          setMode("propagate");
+          return;
+        }
+      }
+    } else {
+      applyEdit(store, varId, target, value);
+    }
+    setMode("browse");
+    setEditTarget(null);
+  };
+
   useInput((input, key) => {
     // Quit confirmation: Enter/y saves, n/Ctrl+C discards, Esc cancels.
     if (mode === "quit") {
       if (key.return || input === "y") { saveAndExit(); return; }
       if (input === "n" || (key.ctrl && input === "c")) { exit(); return; }
       if (key.escape) { setMode("browse"); return; }
+      return;
+    }
+    // Propagation prompt: the current env was already saved on submit, so "No" is a
+    // no-op. y pushes the new value to the sharing envs too; n/Enter/Esc decline.
+    if (mode === "propagate") {
+      if (!propagate) { setMode("browse"); return; }
+      if (input === "y") {
+        store.setValues(propagate.varId, propagate.sharedEnvs, propagate.newValue);
+        setStatus(`updated ${propagate.sharedEnvs.length + 1} environments`);
+        setPropagate(null);
+        setMode("browse");
+        return;
+      }
+      if (input === "n" || key.return || key.escape) {
+        setPropagate(null);
+        setMode("browse");
+        return;
+      }
       return;
     }
     // Text-entry modes (filter/edit/new) route keys to their own TextInput; the
@@ -182,6 +238,14 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
     if (input === "e") {
       const ids = model.environments.map((e) => e.id);
       setEnv((cur) => ids[(ids.indexOf(cur) + 1) % ids.length]);
+      return;
+    }
+    // m toggles the focused app scope's file mode (single ↔ per-env).
+    if (input === "m" && pane === "scopes" && scope?.kind === "app") {
+      const consumer = model.consumers.find((c) => c.id === scope.id);
+      const next = consumer?.envMode === "perenv" ? "single" : "perenv";
+      store.setEnvMode(scope.id, next);
+      setStatus(`${consumer?.name ?? scope.id}: ${next === "perenv" ? "per-env files" : "single .env"}`);
       return;
     }
     if (input === "c" && current) {
@@ -275,10 +339,17 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
             label={editLabel(editTarget)}
             initial={editInitial(model, current, editTarget)}
             width={columns}
-            onSubmit={(v) => { applyEdit(store, current.id, editTarget, v); setMode("browse"); setEditTarget(null); }}
+            onSubmit={(v) => submitEdit(current.id, editTarget, v)}
             onCancel={() => { setMode("browse"); setEditTarget(null); }}
           />
         )
+      ) : mode === "propagate" && propagate ? (
+        <PropagateModal
+          varName={model.variables.find((v) => v.id === propagate.varId)?.name ?? propagate.varId}
+          sharedEnvs={propagate.sharedEnvs}
+          cap={PROPAGATE_CAP}
+          width={columns}
+        />
       ) : mode === "filter" ? (
         <Box borderStyle="round" borderColor="cyan" paddingX={1} width={columns}>
           <Text>/ </Text>
@@ -322,7 +393,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
               </Text>
             ) : (
               <Text color="gray" wrap="truncate-end">
-                <Key>↑↓</Key> move{grouped && pane === "vars" ? <>{SEPARATOR}<Key>⇧↑↓</Key> group</> : null}{SEPARATOR}<Key>tab</Key> pane{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
+                <Key>↑↓</Key> move{grouped && pane === "vars" ? <>{SEPARATOR}<Key>⇧↑↓</Key> group</> : null}{SEPARATOR}<Key>tab</Key> pane{pane === "scopes" ? <>{SEPARATOR}<Key>m</Key> mode</> : null}{SEPARATOR}<Key>⏎</Key> edit{SEPARATOR}<Key>c</Key> copy{SEPARATOR}<Key>/</Key> filter{SEPARATOR}<Key>n</Key> new{SEPARATOR}<Key>x</Key> delete{SEPARATOR}<Key>e</Key> env{SEPARATOR}<Key>s</Key> save{SEPARATOR}<Key>q</Key> quit
               </Text>
             )}
           </Box>

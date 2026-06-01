@@ -9,6 +9,7 @@ import { runSet } from "./cli/set.ts";
 import { runGet } from "./cli/get.ts";
 import { runList } from "./cli/list.ts";
 import { runWire, runUnwire } from "./cli/wire.ts";
+import { runMode } from "./cli/mode.ts";
 import { runRm } from "./cli/rm.ts";
 import { readValue } from "./cli/context.ts";
 import { backupKey } from "./io/backup.ts";
@@ -183,6 +184,17 @@ try {
     if (scopes.length === 0) throw new Error(`menv: ${cmd} requires at least one scope (e.g. an app name or "root")`);
     await (cmd === "wire" ? runWire : runUnwire)(root, name, scopes, { env: flags.env, stamp: stamp() });
     console.log(`menv: ${cmd}d ${name} ${cmd === "wire" ? "to" : "from"} ${scopes.join(", ")}`);
+    process.exit(0);
+  } else if (cmd === "mode") {
+    const { positionals } = parseArgs(["env"]);
+    const consumer = positionals[0];
+    const mode = positionals[1];
+    if (!consumer) throw new Error("menv: mode requires a consumer (app name or id, or \"root\")");
+    if (mode !== "single" && mode !== "perenv") {
+      throw new Error(`menv: mode requires "single" or "perenv" (got ${mode ? `"${mode}"` : "nothing"})`);
+    }
+    await runMode(root, consumer, mode, { stamp: stamp() });
+    console.log(`menv: set ${consumer} to ${mode}`);
     process.exit(0);
   } else if (cmd === "rm") {
     const { positionals, flags } = parseArgs(["env", "scope"]);

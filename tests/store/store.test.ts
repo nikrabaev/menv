@@ -65,3 +65,26 @@ test("setConsumers replaces the wiring set and de-dupes", () => {
   store.setConsumers("v1", []);
   expect(store.getModel().variables.find((v) => v.id === "v1")!.consumers).toEqual([]);
 });
+
+test("setValues writes a value to every listed env in one change", () => {
+  const store = createStore(baseModel());
+  store.setValue("v1", "dev", "3000");
+  let notified = 0;
+  store.subscribe(() => notified++);
+  store.setValues("v1", ["dev", "staging", "prod"], "8080");
+  expect(store.getModel().values.v1).toEqual({ dev: "8080", staging: "8080", prod: "8080" });
+  expect(notified).toBe(1); // a single notify, not one per env
+});
+
+test("setEnvMode sets the mode and ensures an envFile gate when going per-env", () => {
+  const model = baseModel();
+  // An app with no envFile yet (not materialized at init).
+  model.consumers = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
+  const store = createStore(model);
+  store.setEnvMode("app:api", "perenv");
+  const c = store.getModel().consumers.find((c) => c.id === "app:api")!;
+  expect(c.envMode).toBe("perenv");
+  expect(c.envFile).toBe(".env"); // gate materialized so generation runs
+  store.setEnvMode("app:api", "single");
+  expect(store.getModel().consumers.find((c) => c.id === "app:api")!.envMode).toBe("single");
+});

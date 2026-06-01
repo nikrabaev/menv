@@ -55,6 +55,14 @@ function envIdForFile(filename: string): string {
   return m[1];
 }
 
+// A per-environment file is `.env.<env>` for a real environment — i.e. not the
+// plain `.env`, the `.env.local` dev override, or the `.env.example` template.
+// Its presence in a consumer dir flips that consumer to "perenv" mode.
+function isPerEnvFile(filename: string): boolean {
+  const m = /^\.env\.(.+)$/.exec(filename);
+  return m !== null && m[1] !== "example" && m[1] !== "local";
+}
+
 const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL/i.test(name);
 
 export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
@@ -75,6 +83,8 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const descByName = new Map<string, string>();
   const envIds = new Set<string>();
   const exampleFiles: Array<{ app: AppTarget; file: string }> = [];
+  // Consumers that already keep `.env.<env>` files default to "perenv" mode.
+  const perenvIds = new Set<string>();
 
   for (const app of scanTargets) {
     const glob = new Bun.Glob(".env*");
@@ -85,8 +95,9 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
       }
       const env = envIdForFile(file);
       envIds.add(env);
-      // Existing per-env files seed the vault, but the app is canonicalized to a
-      // single ".env" output; menv stops writing per-env files going forward.
+      if (isPerEnvFile(file)) perenvIds.add(app.id);
+      // Existing env files seed the vault and mark the app for generation. Layout
+      // (single ".env" vs per-env ".env.<env>") is decided by envMode below.
       app.envFile = ".env";
       const text = await Bun.file(join(root, app.path, file)).text();
       for (const e of parseDotenv(text)) {
@@ -172,7 +183,10 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const environments = [...envIds].sort().map((id, i) => ({
     id, isDefault: id === "dev" || (i === 0 && !envIds.has("dev")),
   }));
-  const consumers: Consumer[] = [...scanTargets];
+  const consumers: Consumer[] = scanTargets.map((c) => ({
+    ...c,
+    envMode: perenvIds.has(c.id) ? "perenv" : "single",
+  }));
 
   return { model: { root, environments, variables, consumers, values, recipients: [] } };
 }

@@ -49,17 +49,32 @@ async function writeFile(root: string, rel: string, content: string, stamp: stri
   return rel;
 }
 
-// Writes each app a single `.env` holding the values of the active environment
-// `env`, plus a `.env.example`. menv stores every environment in the vault; only
-// the active one is materialized on disk (switch environments inside menv).
+// Writes each app its env file(s) plus a `.env.example`. In "single" mode (the
+// default) one `.env` holds the active environment `env`; menv keeps every
+// environment in the vault and materializes only the active one on disk (switch
+// environments inside menv). In "perenv" mode one `.env.<env>` is written per
+// environment the consumer actually has values in, side by side, and `env` is
+// ignored for file selection.
 export async function writeGeneratedFiles(model: RepoModel, env: string, stamp: string): Promise<string[]> {
   const written: string[] = [];
   for (const c of model.consumers) {
     if (c.kind !== "app" || !c.envFile) continue;
+    const vars = varsForConsumer(model, c.id);
     // Skip consumers with nothing wired to them — keeps `init` from leaving a
     // stray empty `./.env` at the always-present root target (and empty app envs).
-    if (varsForConsumer(model, c.id).length === 0) continue;
-    written.push(await writeFile(model.root, join(c.path, c.envFile), renderAppEnv(model, c.id, env), stamp));
+    if (vars.length === 0) continue;
+    if (c.envMode === "perenv") {
+      // Only environments this consumer has data in get a file: environments are
+      // global, so without this filter an unrelated env (one another app uses)
+      // would leave a stray empty `.env.<env>` here. This also means menv
+      // round-trips exactly the per-env files that existed at init.
+      for (const e of model.environments) {
+        if (!vars.some((v) => model.values[v.id]?.[e.id] !== undefined)) continue;
+        written.push(await writeFile(model.root, join(c.path, `.env.${e.id}`), renderAppEnv(model, c.id, e.id), stamp));
+      }
+    } else {
+      written.push(await writeFile(model.root, join(c.path, c.envFile), renderAppEnv(model, c.id, env), stamp));
+    }
     written.push(await writeFile(model.root, join(c.path, ".env.example"), renderAppExample(model, c.id), stamp));
   }
   return written;

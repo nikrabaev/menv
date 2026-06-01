@@ -10,6 +10,7 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
     key_backend: keyBackendToToml(m.keyBackend ?? DEFAULT_KEY_BACKEND),
     apps: m.consumers.filter((c) => c.kind === "app").map((c) => ({
       id: c.id, name: c.name, path: (c as any).path, env_file: (c as any).envFile ?? "",
+      env_mode: (c as any).envMode ?? "single",
     })),
   });
 
@@ -57,6 +58,8 @@ export function tomlToModelParts(config: string, manifest: string): {
     kind: "app", id: a.id, name: a.name, path: a.path,
     // Prefer the new single env_file; fall back to legacy env_files (any entry ⇒ ".env").
     envFile: a.env_file || (a.env_files && Object.keys(a.env_files).length ? ".env" : undefined),
+    // Absent or anything but "perenv" ⇒ "single" (the pre-modes default).
+    envMode: a.env_mode === "perenv" ? "perenv" : "single",
   }));
   // Legacy manifests may still carry `tier` / `owner_app` keys; smol-toml parses
   // them and we simply don't read them — the next save drops them.

@@ -32,15 +32,23 @@ export interface Environment {
   isDefault: boolean;
 }
 
+// How an app's env files are laid out on disk:
+//   "single" — one `.env` (canonical) holding the active environment's values.
+//   "perenv" — one `.env.<env>` per environment, all written side by side.
+// Absent ⇒ "single" (the pre-modes default, matching an old menv.toml).
+export type EnvFileMode = "single" | "perenv";
+
 export interface AppTarget {
   kind: "app";
   id: AppId;
   name: string;
   path: string; // relative to repo root
-  // The single .env file this app gets, relative to its path (canonically ".env").
-  // Absent means the app has no env file and is not generated. Values for whichever
-  // environment is active are written here; menv never writes per-env files.
+  // In "single" mode this is the .env file the app gets, relative to its path
+  // (canonically ".env"). In "perenv" mode the filenames are derived (`.env.<env>`)
+  // and this field is purely the "is this app generated" gate. Absent either way
+  // means the app has no env file and is not generated.
   envFile?: string;
+  envMode?: EnvFileMode; // absent ⇒ "single"
 }
 
 export type Consumer = AppTarget;

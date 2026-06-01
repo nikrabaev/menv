@@ -13,8 +13,8 @@ const model: RepoModel = {
     { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api", "root"] },
   ],
   consumers: [
-    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" },
-    { kind: "app", id: "root", name: "root", path: ".", envFile: ".env" },
+    { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "single" },
+    { kind: "app", id: "root", name: "root", path: ".", envFile: ".env", envMode: "perenv" },
   ],
   values: {},
   recipients: ["age1example"],
@@ -52,6 +52,22 @@ describe("persist", () => {
     // The parsed shape has no tier/ownerApp keys.
     expect("tier" in parts.variables[0]!).toBe(false);
     expect("ownerApp" in parts.variables[0]!).toBe(false);
+  });
+
+  test("an app block without env_mode defaults to single", () => {
+    const config = [
+      'environments = ["dev"]',
+      'default_environment = "dev"',
+      "recipients = []",
+      "[[apps]]",
+      'id = "app:api"',
+      'name = "api"',
+      'path = "apps/api"',
+      'env_file = ".env"',
+      "",
+    ].join("\n");
+    const parts = tomlToModelParts(config, "variables = []\n");
+    expect(parts.consumers[0]!.envMode).toBe("single");
   });
 });
 
