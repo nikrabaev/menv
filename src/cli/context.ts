@@ -32,7 +32,7 @@ export function defaultEnv(model: RepoModel, requested?: string): string {
     }
     return requested;
   }
-  return model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev";
+  return model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "development";
 }
 
 // Map a user-supplied scope token to a consumer id. Accepts a consumer id

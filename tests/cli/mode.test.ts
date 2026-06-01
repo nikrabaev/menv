@@ -15,7 +15,7 @@ test("mode flips a consumer to per-env and persists it", async () => {
   const { model } = await loadModel(root, { backend });
   expect(model.consumers.find((c) => c.id === "app:api")!.envMode).toBe("perenv");
   // Generation now emits a per-env file rather than the single .env.
-  expect(existsSync(join(root, "apps", "api", ".env.dev"))).toBe(true);
+  expect(existsSync(join(root, "apps", "api", ".env.development"))).toBe(true);
 
   await runMode(root, "api", "single", { backend, stamp: "m2" });
   expect((await loadModel(root, { backend })).model.consumers.find((c) => c.id === "app:api")!.envMode).toBe("single");

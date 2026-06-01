@@ -75,7 +75,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
   const [scopeCursor, setScopeCursor] = useState(0);
   const [varCursor, setVarCursor] = useState(0);
   const [inspectorCursor, setInspectorCursor] = useState(0);
-  const [env, setEnv] = useState(model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev");
+  const [env, setEnv] = useState(model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "development");
   const [mode, setMode] = useState<Mode>("browse");
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [propagate, setPropagate] = useState<Propagate | null>(null);

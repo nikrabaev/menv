@@ -87,7 +87,7 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 | `Esc` | From the inspector, back to the variable list |
 | `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal. Editing a value shared by other environments offers to update them too (default **No**). |
 | `c` | Copy the value (or field) to the clipboard |
-| `e` | Switch environment (`dev` → `prod` → …) |
+| `e` | Switch environment (`development` → `prod` → …) |
 | `m` | On an app scope, toggle its **file mode** (single `.env` ↔ per-env `.env.<env>`) |
 | `/` | Filter variables by name |
 | `n` | New variable |
@@ -97,7 +97,7 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 
 ## Concepts
 
-- **Environments** — `dev`, `prod`, `staging`, … Every variable can hold a distinct
+- **Environments** — `development`, `prod`, `staging`, … Every variable can hold a distinct
   value per environment. The active environment (top bar, switch with `e`) decides
   which value is written into the generated `.env` files.
 - **File modes** — Each consumer is either **single** (one `.env`, the default — it
@@ -239,14 +239,14 @@ your-repo/
 │  ├─ manifest.toml          # committed — variable definitions (name, group, secret, wiring…)
 │  ├─ identity.age           # committed — ONLY for the `password` backend (encrypted key)
 │  ├─ values/
-│  │  ├─ dev.env.age         # git-ignored — age-encrypted values for `dev`
+│  │  ├─ development.env.age  # git-ignored — age-encrypted values for `development`
 │  │  └─ prod.env.age        # git-ignored — …one file per environment
 │  └─ backups/               # git-ignored — timestamped .env snapshots
 ├─ apps/web/                 # single mode (default)
 │  ├─ .env                   # git-ignored — generated for the active environment
 │  └─ .env.example           # committed — values-free template
 └─ apps/api/                 # per-env mode
-   ├─ .env.dev               # git-ignored — one file per environment it has values in
+   ├─ .env.development        # git-ignored — one file per environment it has values in
    ├─ .env.prod              # git-ignored
    └─ .env.example           # committed — values-free template
 ```

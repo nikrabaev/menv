@@ -30,7 +30,7 @@ test("generate writes per-env files for a consumer that had .env.<env> files", a
   await mkdir(join(root, "apps", "api"), { recursive: true });
   await Bun.write(join(root, "apps", "api", "package.json"), JSON.stringify({ name: "api" }));
   // The presence of a `.env.production` file flips the consumer to per-env mode:
-  // `.env` seeds "dev", `.env.production` seeds "production".
+  // `.env` seeds "development", `.env.production` seeds "production".
   await Bun.write(join(root, "apps", "api", ".env"), "PORT=3000\n");
   await Bun.write(join(root, "apps", "api", ".env.production"), "PORT=8080\n");
 
@@ -40,7 +40,7 @@ test("generate writes per-env files for a consumer that had .env.<env> files", a
 
   // Per-env mode writes one file per environment, side by side, regardless of --env.
   await runGenerate(root, { backend, stamp: "s2" });
-  expect(await Bun.file(join(root, "apps", "api", ".env.dev")).text()).toContain("PORT=3000");
+  expect(await Bun.file(join(root, "apps", "api", ".env.development")).text()).toContain("PORT=3000");
   expect(await Bun.file(join(root, "apps", "api", ".env.production")).text()).toContain("PORT=8080");
 });
 

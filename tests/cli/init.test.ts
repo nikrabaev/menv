@@ -25,7 +25,7 @@ test("init creates config, manifest, vault and gitignore", async () => {
 
   expect(await Bun.file(join(root, "menv.toml")).exists()).toBe(true);
   expect(await Bun.file(join(root, ".menv", "manifest.toml")).exists()).toBe(true);
-  expect(await Bun.file(join(root, ".menv", "values", "dev.env.age")).exists()).toBe(true);
+  expect(await Bun.file(join(root, ".menv", "values", "development.env.age")).exists()).toBe(true);
   expect(await Bun.file(join(root, ".gitignore")).text()).toContain(".menv/values/");
 });
 

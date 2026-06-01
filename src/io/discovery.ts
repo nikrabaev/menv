@@ -49,9 +49,9 @@ import { freeVarId } from "../core/model.ts";
 import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
 
 function envIdForFile(filename: string): string {
-  if (filename === ".env" || filename === ".env.local") return "dev";
+  if (filename === ".env" || filename === ".env.local") return "development";
   const m = /^\.env\.(.+)$/.exec(filename);
-  if (!m || m[1] === "example") return "dev";
+  if (!m || m[1] === "example") return "development";
   return m[1];
 }
 
@@ -108,7 +108,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
       }
     }
   }
-  if (envIds.size === 0) envIds.add("dev");
+  if (envIds.size === 0) envIds.add("development");
 
   const variables: Variable[] = [];
   const values: Values = {};
@@ -181,7 +181,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   }
 
   const environments = [...envIds].sort().map((id, i) => ({
-    id, isDefault: id === "dev" || (i === 0 && !envIds.has("dev")),
+    id, isDefault: id === "development" || (i === 0 && !envIds.has("development")),
   }));
   const consumers: Consumer[] = scanTargets.map((c) => ({
     ...c,

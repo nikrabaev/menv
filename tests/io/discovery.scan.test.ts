@@ -26,11 +26,11 @@ test("apps that share a value collapse into one variable wired to all of them", 
   expect(node.length).toBe(1);
   expect(node[0]!.id).toBe("var:NODE_ENV");
   expect(node[0]!.consumers.sort()).toEqual(["app:api", "app:web"]);
-  expect(model.values[node[0]!.id]!.dev).toBe("development");
+  expect(model.values[node[0]!.id]!.development).toBe("development");
 
   const webOnly = model.variables.find((v) => v.name === "WEB_ONLY")!;
   expect(webOnly.consumers).toEqual(["app:web"]);
-  expect(model.values["var:DATABASE_URL"]!.dev).toBe("pg://x");
+  expect(model.values["var:DATABASE_URL"]!.development).toBe("pg://x");
 });
 
 test("same name with different values across apps splits into one variable per value", async () => {
@@ -48,8 +48,8 @@ test("same name with different values across apps splits into one variable per v
   expect(web.id).not.toBe(api.id);
   expect(web.consumers).toEqual(["app:web"]);
   expect(api.consumers).toEqual(["app:api"]);
-  expect(model.values[api.id]!.dev).toBe("development");
-  expect(model.values[web.id]!.dev).toBe("production");
+  expect(model.values[api.id]!.development).toBe("development");
+  expect(model.values[web.id]!.development).toBe("production");
 });
 
 test("a value shared by some apps groups them; the odd one out gets its own variable", async () => {
@@ -66,9 +66,9 @@ test("a value shared by some apps groups them; the odd one out gets its own vari
   const shared = node.find((v) => v.id === "var:NODE_ENV")!;
   const lone = node.find((v) => v.id === "var:NODE_ENV#2")!;
   expect(shared.consumers.sort()).toEqual(["app:api", "app:web"]);
-  expect(model.values[shared.id]!.dev).toBe("development");
+  expect(model.values[shared.id]!.development).toBe("development");
   expect(lone.consumers).toEqual(["app:worker"]);
-  expect(model.values[lone.id]!.dev).toBe("production");
+  expect(model.values[lone.id]!.development).toBe("production");
 });
 
 test("a repo-root .env is scanned and groups with apps that share the value", async () => {
@@ -86,7 +86,7 @@ test("a repo-root .env is scanned and groups with apps that share the value", as
 
   const rootOnly = model.variables.find((v) => v.name === "ROOT_ONLY")!;
   expect(rootOnly.consumers).toEqual(["root"]);
-  expect(model.values[rootOnly.id]!.dev).toBe("y");
+  expect(model.values[rootOnly.id]!.development).toBe("y");
 });
 
 test("a consumer with .env.<env> files is detected as per-env; plain .env stays single", async () => {
@@ -115,7 +115,7 @@ test("imports example values and creates example-only variables", async () => {
 
   const db = model.variables.find((v) => v.name === "DATABASE_URL")!;
   expect(db.example).toBe("pg://example");
-  expect(model.values[db.id]!.dev).toBe("pg://real");
+  expect(model.values[db.id]!.development).toBe("pg://real");
 
   const redis = model.variables.find((v) => v.name === "REDIS_URL")!;
   expect(redis.example).toBe("redis://localhost:6379");

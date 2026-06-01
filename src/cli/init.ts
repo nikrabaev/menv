@@ -66,7 +66,7 @@ export async function runInit(root: string, opts: InitOpts = {}): Promise<void> 
   model.recipients = [await recipientFromIdentity(identity)];
   model.keyBackend = config;
 
-  const env = model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev";
+  const env = model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "development";
   await saveModel(model, env, opts.stamp ?? `init-${env}`);
   await ensureGitignore(root);
 }
