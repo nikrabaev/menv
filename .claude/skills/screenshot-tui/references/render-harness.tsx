@@ -30,36 +30,35 @@ const v = (
   group: string | null,
   secret: boolean,
   consumers: string[],
-  tier: "global" | "local" = "global",
-  ownerApp?: string,
   description = "",
   example?: string,
-): Variable => ({ id: `var:${name}`, name, tier, ownerApp, description, group, secret, consumers, example });
+): Variable => ({ id: `var:${name}`, name, description, group, secret, consumers, example });
 
 // EDIT: the demo data. These two apps + a dozen variables exercise grouping,
-// global vs. local, wiring, secrets, and an unset value.
+// wiring, secrets, single vs. per-env file mode, and an unset value.
 const WEB = "app:web";
 const API = "app:api";
 
 function demoModel(): RepoModel {
   const consumers: Consumer[] = [
-    { kind: "app", id: WEB, name: "web", path: "apps/web", envFile: ".env" },
-    { kind: "app", id: API, name: "api", path: "apps/api", envFile: ".env" },
+    { kind: "app", id: WEB, name: "web", path: "apps/web", envFile: ".env", envMode: "single" },
+    // api keeps per-environment files (.env.dev / .env.prod) — tagged "per-env".
+    { kind: "app", id: API, name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" },
   ];
 
   const variables: Variable[] = [
-    v("DATABASE_URL", "Database", true, [WEB, API], "global", undefined, "Primary Postgres connection string", "postgres://localhost:5432/app"),
-    v("REDIS_URL", "Database", true, [WEB, API], "global", undefined, "Cache + job queue", "redis://localhost:6379/0"),
-    v("LOG_LEVEL", "Observability", false, [WEB, API], "global", undefined, "debug | info | warn | error", "info"),
-    v("SENTRY_DSN", "Observability", true, [WEB, API], "global", undefined, "Error reporting endpoint"),
-    v("STRIPE_PUBLISHABLE_KEY", "Payments", false, [WEB], "local", WEB, "Browser-safe Stripe key", "pk_test_..."),
-    v("STRIPE_SECRET_KEY", "Payments", true, [WEB], "local", WEB, "Server-side Stripe key"),
-    v("JWT_SECRET", "Secrets", true, [API], "local", API, "Signs session tokens"),
-    v("OPENAI_API_KEY", "Secrets", true, [API], "local", API, "LLM access"),
-    v("SESSION_SECRET", "Secrets", true, [WEB], "local", WEB, "Cookie signing key"),
-    v("NEXT_PUBLIC_API_URL", "Runtime", false, [WEB], "local", WEB, "Public API base URL", "https://api.example.com"),
-    v("PORT", "Runtime", false, [API], "local", API, "HTTP listen port", "8080"),
-    v("CONCURRENCY", "Runtime", false, [API], "local", API, "Background job pool size", "8"),
+    v("DATABASE_URL", "Database", true, [WEB, API], "Primary Postgres connection string", "postgres://localhost:5432/app"),
+    v("REDIS_URL", "Database", true, [WEB, API], "Cache + job queue", "redis://localhost:6379/0"),
+    v("LOG_LEVEL", "Observability", false, [WEB, API], "debug | info | warn | error", "info"),
+    v("SENTRY_DSN", "Observability", true, [WEB, API], "Error reporting endpoint"),
+    v("STRIPE_PUBLISHABLE_KEY", "Payments", false, [WEB], "Browser-safe Stripe key", "pk_test_..."),
+    v("STRIPE_SECRET_KEY", "Payments", true, [WEB], "Server-side Stripe key"),
+    v("JWT_SECRET", "Secrets", true, [API], "Signs session tokens"),
+    v("OPENAI_API_KEY", "Secrets", true, [API], "LLM access"),
+    v("SESSION_SECRET", "Secrets", true, [WEB], "Cookie signing key"),
+    v("NEXT_PUBLIC_API_URL", "Runtime", false, [WEB], "Public API base URL", "https://api.example.com"),
+    v("PORT", "Runtime", false, [API], "HTTP listen port", "8080"),
+    v("CONCURRENCY", "Runtime", false, [API], "Background job pool size", "8"),
   ];
 
   const values: RepoModel["values"] = {
