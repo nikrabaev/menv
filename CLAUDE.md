@@ -39,6 +39,20 @@ bun run build          # compile a standalone ./menv binary
 In a checkout that's already been `bun link`ed, the `menv` binary on `PATH` is
 equivalent to `bun run menv`.
 
+## Documentation
+
+`README.md` is the user-facing front door — keep it in step with the code. When a
+change alters something the README describes (a command or flag, a keybinding, the
+on-disk layout, a key backend, the discovery rules, the feature set), update the
+README in the **same** change rather than leaving it to drift.
+
+That includes the hero screenshot at `assets/screenshot.png`. Whenever the TUI's
+appearance changes in a way a reader would notice — panes, the top bar, scopes,
+the inspector fields, colours, the footer hints — regenerate it with the
+`screenshot-tui` skill (`.claude/skills/screenshot-tui/`), which renders the real
+`MenvApp` rather than a mock-up. The skill also keeps the editable
+`assets/screenshot.svg` source alongside the PNG.
+
 ## Coding style
 
 - **Bun-first.** Use Bun APIs (`Bun.file`, `Bun.argv`, `Bun.write`) over Node
