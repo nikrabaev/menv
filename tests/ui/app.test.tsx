@@ -15,7 +15,7 @@ const model: RepoModel = {
   root: "/repo/acme",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: "DB", secret: true, consumers: ["app:api"] },
+    { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, consumers: ["app:api"] },
   ],
   consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
@@ -30,8 +30,8 @@ test("renders three panes with data", () => {
   expect(lastFrame()).toContain("DATABASE_URL");
   expect(lastFrame()).toContain("acme");
   expect(lastFrame()).toContain("All");
-  expect(lastFrame()).toContain("Root");
-  expect(lastFrame()).toContain("APPS");
+  expect(lastFrame()).toContain("TARGETS");
+  expect(lastFrame()).toContain("api");
 });
 
 test("limits rendered rows to the viewport", () => {
@@ -40,7 +40,6 @@ test("limits rendered rows to the viewport", () => {
     variables: Array.from({ length: 30 }, (_, i) => ({
       id: `v${i}`,
       name: `VAR_${i}`,
-      tier: "global",
       description: "",
       group: null,
       secret: false,
@@ -91,7 +90,7 @@ const editModel: RepoModel = {
   root: "/repo/acme",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", tier: "global", description: "db", group: null, secret: false, consumers: ["app:api"], example: "ex" },
+    { id: "v1", name: "DATABASE_URL", description: "db", group: null, secret: false, consumers: ["app:api"], example: "ex" },
   ],
   consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
@@ -226,8 +225,8 @@ test("filter mode narrows the variable list as the query is typed", async () => 
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: null, secret: false, consumers: [] },
-      { id: "v2", name: "API_TOKEN", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, consumers: [] },
+      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -246,8 +245,8 @@ test("backspace in filter mode widens the match again", async () => {
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: null, secret: false, consumers: [] },
-      { id: "v2", name: "API_TOKEN", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, consumers: [] },
+      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -267,9 +266,9 @@ test("the variable list is sorted by name regardless of model order", async () =
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "z", name: "ZEBRA", tier: "global", description: "", group: null, secret: false, consumers: [] },
-      { id: "a", name: "ALPHA", tier: "global", description: "", group: null, secret: false, consumers: [] },
-      { id: "m", name: "MANGO", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "z", name: "ZEBRA", description: "", group: null, secret: false, consumers: [] },
+      { id: "a", name: "ALPHA", description: "", group: null, secret: false, consumers: [] },
+      { id: "m", name: "MANGO", description: "", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -285,8 +284,8 @@ test("the variable list shows group headers when at least one group exists", asy
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "g", name: "GA", tier: "global", description: "", group: "Infra", secret: false, consumers: [] },
-      { id: "u", name: "UA", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "g", name: "GA", description: "", group: "Infra", secret: false, consumers: [] },
+      { id: "u", name: "UA", description: "", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -302,8 +301,8 @@ test("shift+down/up jump the cursor to the next/previous group's first variable"
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "g", name: "GA", tier: "global", description: "infra-desc", group: "Infra", secret: false, consumers: [] },
-      { id: "u", name: "UA", tier: "global", description: "ungrouped-desc", group: null, secret: false, consumers: [] },
+      { id: "g", name: "GA", description: "infra-desc", group: "Infra", secret: false, consumers: [] },
+      { id: "u", name: "UA", description: "ungrouped-desc", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -324,8 +323,8 @@ test("editing a variable's group offers existing groups and applies a new one", 
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "HAS_GROUP", tier: "global", description: "", group: "DB", secret: false, consumers: [] },
-      { id: "v2", name: "NO_GROUP", tier: "global", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "HAS_GROUP", description: "", group: "DB", secret: false, consumers: [] },
+      { id: "v2", name: "NO_GROUP", description: "", group: null, secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -349,8 +348,8 @@ test("a group scope drops the redundant group header from the list", async () =>
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "a", name: "ALPHA", tier: "global", description: "", group: "PAYMENTS", secret: false, consumers: [] },
-      { id: "b", name: "BETA", tier: "global", description: "", group: "PAYMENTS", secret: false, consumers: [] },
+      { id: "a", name: "ALPHA", description: "", group: "PAYMENTS", secret: false, consumers: [] },
+      { id: "b", name: "BETA", description: "", group: "PAYMENTS", secret: false, consumers: [] },
     ],
     values: {},
   };
@@ -358,7 +357,7 @@ test("a group scope drops the redundant group header from the list", async () =>
   const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={18} viewportColumns={110} />);
   await tick();
   // Focus the scopes pane (vars -> inspector -> scopes) and select the PAYMENTS
-  // group scope (All -> Global -> Root -> [GROUPS] -> PAYMENTS).
+  // group scope (All -> [GROUPS] -> PAYMENTS; extra downs clamp at the last row).
   stdin.write("\t"); await tick();
   stdin.write("\t"); await tick();
   stdin.write("\x1b[B"); await tick();

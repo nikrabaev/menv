@@ -15,7 +15,7 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
 
   const manifest = stringifyToml({
     variables: m.variables.map((v) => ({
-      id: v.id, name: v.name, tier: v.tier, owner_app: v.ownerApp ?? "",
+      id: v.id, name: v.name,
       description: v.description, group: v.group ?? "", secret: v.secret, consumers: v.consumers,
       example: v.example ?? "",
     })),
@@ -58,8 +58,10 @@ export function tomlToModelParts(config: string, manifest: string): {
     // Prefer the new single env_file; fall back to legacy env_files (any entry ⇒ ".env").
     envFile: a.env_file || (a.env_files && Object.keys(a.env_files).length ? ".env" : undefined),
   }));
+  // Legacy manifests may still carry `tier` / `owner_app` keys; smol-toml parses
+  // them and we simply don't read them — the next save drops them.
   const variables: Variable[] = ((man.variables ?? []) as any[]).map((v) => ({
-    id: v.id, name: v.name, tier: v.tier, ownerApp: v.owner_app || undefined,
+    id: v.id, name: v.name,
     description: v.description ?? "", group: v.group || null, secret: !!v.secret,
     consumers: v.consumers ?? [], example: v.example || undefined,
   }));

@@ -45,6 +45,7 @@ export async function detectApps(root: string): Promise<AppTarget[]> {
 }
 
 import { parseDotenv } from "./dotenv.ts";
+import { freeVarId } from "../core/model.ts";
 import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
 
 function envIdForFile(filename: string): string {
@@ -59,13 +60,23 @@ const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL/i.test
 export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const apps = await detectApps(root);
 
+  // The repo root itself is always a wireable target: variables wired to "root"
+  // are materialized into a top-level ./.env. Its envFile is always ".env" — a
+  // stray empty file is avoided by generation skipping zero-wired consumers. If a
+  // workspace glob already matched the root package.json, reuse that consumer
+  // rather than adding a duplicate at the same path.
+  const rootConsumer: AppTarget | null = apps.some((a) => a.path === ".")
+    ? null
+    : { kind: "app", id: "root", name: "root", path: ".", envFile: ".env" };
+  const scanTargets = rootConsumer ? [...apps, rootConsumer] : apps;
+
   // Phase 1: real env files -> occurrences (name -> appId -> env -> value)
   const occ = new Map<string, Map<string, Map<string, string>>>();
   const descByName = new Map<string, string>();
   const envIds = new Set<string>();
   const exampleFiles: Array<{ app: AppTarget; file: string }> = [];
 
-  for (const app of apps) {
+  for (const app of scanTargets) {
     const glob = new Bun.Glob(".env*");
     for await (const file of glob.scan({ cwd: join(root, app.path), onlyFiles: true, dot: true })) {
       if (file.endsWith(".example")) {
@@ -95,40 +106,42 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const remember = (appId: string, name: string, id: string) => {
     (varForAppName.get(appId) ?? varForAppName.set(appId, new Map()).get(appId)!).set(name, id);
   };
+  // Ids are minted via the shared allocator: `var:<NAME>` for the first value
+  // group of a name, then `var:<NAME>#2`, `#3`, … for additional groups. Names
+  // are `[A-Za-z0-9_]+` so `#` never collides.
+  const usedIds = new Set<string>();
+  const mintId = (name: string) => {
+    const id = freeVarId(usedIds, name);
+    usedIds.add(id);
+    return id;
+  };
 
-  // Ids: `var:<NAME>` for a global or a single-app local; `var:<appId>:<NAME>`
-  // for conflicted/example-only locals. Variable names are `[A-Za-z0-9_]+`
-  // (enforced by parseDotenv) and never contain ':', so the id segments stay
-  // unambiguous and same-named per-app locals never collide.
-  for (const [name, byApp] of occ) {
-    const appIds = [...byApp.keys()];
-    // conflict: in any env, two or more defining apps assign different values
-    const distinctByEnv = new Map<string, Set<string>>();
-    for (const [, byEnv] of byApp) {
-      for (const [env, val] of byEnv) {
-        (distinctByEnv.get(env) ?? distinctByEnv.set(env, new Set()).get(env)!).add(val);
-      }
+  // Group the consumers that define each name by VALUE: a consumer's signature is
+  // the canonical serialization of its env→value map (over the union of envs it
+  // declares). Consumers with identical signatures collapse into one variable
+  // wired to all of them; each distinct signature yields its own variable. The
+  // majority (largest) group keeps the bare `var:NAME` id for stability.
+  for (const [name, byConsumer] of occ) {
+    const sigOf = (cid: string) =>
+      JSON.stringify([...byConsumer.get(cid)!.entries()].sort(([a], [b]) => a.localeCompare(b)));
+    const groups = new Map<string, string[]>();
+    for (const cid of byConsumer.keys()) {
+      const sig = sigOf(cid);
+      (groups.get(sig) ?? groups.set(sig, []).get(sig)!).push(cid);
     }
-    const conflict = [...distinctByEnv.values()].some((vals) => vals.size > 1);
-
-    if (appIds.length >= 2 && !conflict) {
-      const id = `var:${name}`;
+    const ordered = [...groups.values()].sort((a, b) =>
+      b.length - a.length || [...a].sort()[0]!.localeCompare([...b].sort()[0]!),
+    );
+    for (const members of ordered) {
+      const consumers = [...members].sort();
+      const id = mintId(name);
       variables.push({
-        id, name, tier: "global", description: descByName.get(name) ?? "",
-        group: null, secret: isSecretName(name), consumers: appIds,
+        id, name, description: descByName.get(name) ?? "",
+        group: null, secret: isSecretName(name), consumers,
       });
-      for (const [env, vals] of distinctByEnv) (values[id] ??= {})[env] = [...vals][0];
-      for (const appId of appIds) remember(appId, name, id);
-    } else {
-      for (const appId of appIds) {
-        const id = appIds.length === 1 ? `var:${name}` : `var:${appId}:${name}`;
-        variables.push({
-          id, name, tier: "local", ownerApp: appId, description: descByName.get(name) ?? "",
-          group: null, secret: isSecretName(name), consumers: [appId],
-        });
-        for (const [env, val] of byApp.get(appId)!) (values[id] ??= {})[env] = val;
-        remember(appId, name, id);
-      }
+      // Every member shares the same env→value map by construction.
+      for (const [env, val] of byConsumer.get(consumers[0]!)!) (values[id] ??= {})[env] = val;
+      for (const cid of consumers) remember(cid, name, id);
     }
   }
 
@@ -142,11 +155,12 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
         if (!v.example) v.example = e.value;
         if (!v.description && e.description) v.description = e.description;
       } else {
-        // Example-only key: no real env file declared it. The owning app keeps
-        // envFile undefined, so writeGeneratedFiles intentionally skips it.
-        const id = `var:${app.id}:${e.key}`;
+        // Example-only key: no real env file declared it. For a workspace app
+        // this is harmless because its envFile stays undefined (generation skips
+        // it); it surfaces only via `.env.example` once a value is added.
+        const id = mintId(e.key);
         variables.push({
-          id, name: e.key, tier: "local", ownerApp: app.id,
+          id, name: e.key,
           description: e.description ?? "", group: null,
           secret: isSecretName(e.key), consumers: [app.id], example: e.value,
         });
@@ -158,7 +172,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const environments = [...envIds].sort().map((id, i) => ({
     id, isDefault: id === "dev" || (i === 0 && !envIds.has("dev")),
   }));
-  const consumers: Consumer[] = [...apps];
+  const consumers: Consumer[] = [...scanTargets];
 
   return { model: { root, environments, variables, consumers, values, recipients: [] } };
 }

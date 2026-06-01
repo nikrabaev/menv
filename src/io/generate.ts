@@ -56,6 +56,9 @@ export async function writeGeneratedFiles(model: RepoModel, env: string, stamp: 
   const written: string[] = [];
   for (const c of model.consumers) {
     if (c.kind !== "app" || !c.envFile) continue;
+    // Skip consumers with nothing wired to them — keeps `init` from leaving a
+    // stray empty `./.env` at the always-present root target (and empty app envs).
+    if (varsForConsumer(model, c.id).length === 0) continue;
     written.push(await writeFile(model.root, join(c.path, c.envFile), renderAppEnv(model, c.id, env), stamp));
     written.push(await writeFile(model.root, join(c.path, ".env.example"), renderAppExample(model, c.id), stamp));
   }

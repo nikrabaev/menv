@@ -3,7 +3,7 @@ import { groupedRows, orderedVariables, groupStarts, jumpGroup, groupNames } fro
 import type { Variable } from "../../src/core/types.ts";
 
 const mk = (name: string, group: string | null): Variable => ({
-  id: `var:${name}`, name, tier: "global", description: "", group, secret: false, consumers: [],
+  id: `var:${name}`, name, description: "", group, secret: false, consumers: [],
 });
 
 // A deliberately unordered set spanning two groups and some ungrouped vars.

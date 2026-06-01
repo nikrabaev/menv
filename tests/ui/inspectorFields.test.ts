@@ -3,7 +3,7 @@ import { inspectorFields, copyableText } from "../../src/ui/inspectorFields.ts";
 import type { RepoModel, Variable } from "../../src/core/types.ts";
 
 const variable: Variable = {
-  id: "v1", name: "DATABASE_URL", tier: "global",
+  id: "v1", name: "DATABASE_URL",
   description: "db conn", group: "DB", secret: true,
   consumers: ["app:api"], example: "pg://example",
 };

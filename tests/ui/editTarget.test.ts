@@ -6,7 +6,7 @@ import type { RepoModel } from "../../src/core/types.ts";
 function model(): RepoModel {
   return {
     root: "/r", environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "PORT", tier: "global", description: "d", group: "G", secret: false, consumers: [], example: "ex" }],
+    variables: [{ id: "v1", name: "PORT", description: "d", group: "G", secret: false, consumers: [], example: "ex" }],
     consumers: [], values: { v1: { dev: "3000" } }, recipients: [],
   };
 }

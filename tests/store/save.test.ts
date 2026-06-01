@@ -17,7 +17,7 @@ test("save writes config, manifest, encrypted vault, and .env files", async () =
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { v1: { dev: "3000" } },
     recipients: [recipient],
@@ -41,8 +41,8 @@ test("save+load keep two same-named per-app locals with different values", async
     root,
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "var:app:api:NODE_ENV", name: "NODE_ENV", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "var:app:web:NODE_ENV", name: "NODE_ENV", tier: "local", ownerApp: "app:web", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "var:app:api:NODE_ENV", name: "NODE_ENV", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "var:app:web:NODE_ENV", name: "NODE_ENV", description: "", group: null, secret: false, consumers: ["app:web"] },
     ],
     consumers: [
       { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" },

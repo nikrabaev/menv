@@ -6,8 +6,8 @@ const model: RepoModel = {
   root: "/r",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", tier: "global", description: "db url", group: "DB", secret: true, consumers: ["app:api"] },
-    { id: "v2", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
+    { id: "v1", name: "DATABASE_URL", description: "db url", group: "DB", secret: true, consumers: ["app:api"] },
+    { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
   ],
   consumers: [],
   values: { v1: { dev: "pg://x" }, v2: { dev: "3000" } },
@@ -33,8 +33,8 @@ test("renderAppExample emits example values, empty when unset", () => {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "var:REDIS_URL", name: "REDIS_URL", tier: "local", ownerApp: "app:api", description: "cache", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
-      { id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "var:REDIS_URL", name: "REDIS_URL", description: "cache", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
     ],
     consumers: [],
     values: {},

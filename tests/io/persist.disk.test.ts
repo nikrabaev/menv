@@ -10,7 +10,7 @@ test("writes and reads config + manifest files", async () => {
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "FOO", tier: "global", description: "", group: null, secret: false, consumers: [] }],
+    variables: [{ id: "v1", name: "FOO", description: "", group: null, secret: false, consumers: [] }],
     consumers: [],
     values: {},
     recipients: ["age1x"],

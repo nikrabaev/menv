@@ -96,6 +96,16 @@ function CreatePassphrase({ onDone }: { onDone: (value: string) => void }) {
   return <PassphraseField key={nonce} label={label} error={error} onSubmit={submit} />;
 }
 
+// Masked single-value prompt for the headless `set` command when run on a TTY
+// with no value given as an arg or piped on stdin. Input is masked because the
+// value may well be a secret; pipe it on stdin to avoid the prompt entirely.
+export async function promptValue(label: string): Promise<string> {
+  return inlinePrompt<string>(
+    (resolve) => <PassphraseField label={label} onSubmit={resolve} />,
+    "",
+  );
+}
+
 async function askUnlock(): Promise<string> {
   return inlinePrompt<string>(
     (resolve) => <PassphraseField label="Enter the menv passphrase:" onSubmit={resolve} />,

@@ -7,9 +7,9 @@ function model(): RepoModel {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: "DB", secret: true, consumers: ["app:api"] },
-      { id: "v2", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "v3", name: "WEB_FLAG", tier: "local", ownerApp: "app:web", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, consumers: ["app:api"] },
+      { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "v3", name: "WEB_FLAG", description: "", group: null, secret: false, consumers: ["app:web"] },
     ],
     consumers: [
       { kind: "app", id: "app:api", name: "api", path: "apps/api" },
@@ -21,28 +21,25 @@ function model(): RepoModel {
 }
 
 describe("buildScopes", () => {
-  test("starts with All, Global, then Root", () => {
-    const s = buildScopes(model());
-    expect(s[0]).toEqual({ id: "all", label: "All", kind: "all" });
-    expect(s[1]).toEqual({ id: "global", label: "Global", kind: "global" });
-    expect(s[2]).toEqual({ id: "root", label: "Root", kind: "root" });
+  test("starts with All", () => {
+    expect(buildScopes(model())[0]).toEqual({ id: "all", label: "All", kind: "all" });
   });
 
   test("emits section headers followed by their members", () => {
     const labels = buildScopes(model()).map((x) => x.label);
-    expect(labels).toEqual(["All", "Global", "Root", "APPS", "api", "web", "GROUPS", "DB"]);
-    expect(buildScopes(model()).find((x) => x.label === "APPS")!.kind).toBe("header");
+    expect(labels).toEqual(["All", "TARGETS", "api", "web", "GROUPS", "DB"]);
+    expect(buildScopes(model()).find((x) => x.label === "TARGETS")!.kind).toBe("header");
   });
 
   test("omits a section header when it has no members", () => {
     const m = model();
     for (const v of m.variables) v.group = null; // no grouped variables left
     const labels = buildScopes(m).map((x) => x.label);
-    expect(labels).toContain("APPS");
+    expect(labels).toContain("TARGETS");
     expect(labels).not.toContain("GROUPS");
   });
 
-  test("omits apps that have no wired variables", () => {
+  test("omits consumers that have no wired variables", () => {
     const m = model();
     m.consumers.push({ kind: "app", id: "app:worker", name: "worker", path: "apps/worker" });
     // worker has no wired variables, so it does not appear
@@ -57,12 +54,6 @@ describe("varsForScope", () => {
   test("all returns every variable", () => {
     expect(varsForScope(model(), "all").map((v) => v.name).sort()).toEqual(["DATABASE_URL", "PORT", "WEB_FLAG"]);
   });
-  test("global returns only global-tier variables", () => {
-    expect(varsForScope(model(), "global").map((v) => v.name)).toEqual(["DATABASE_URL"]);
-  });
-  test("root returns only global-tier variables", () => {
-    expect(varsForScope(model(), "root").map((v) => v.name)).toEqual(["DATABASE_URL"]);
-  });
   test("group returns members of that group", () => {
     expect(varsForScope(model(), "group:DB").map((v) => v.name)).toEqual(["DATABASE_URL"]);
   });
@@ -73,12 +64,12 @@ describe("varsForScope", () => {
 
 describe("stepScope", () => {
   test("skips a header row when moving down", () => {
-    const s = buildScopes(model()); // idx2=Root, idx3=APPS(header), idx4=api
-    expect(stepScope(s, 2, 1)).toBe(4);
+    const s = buildScopes(model()); // idx0=All, idx1=TARGETS(header), idx2=api
+    expect(stepScope(s, 0, 1)).toBe(2);
   });
   test("skips a header row when moving up", () => {
-    const s = buildScopes(model()); // idx4=api, idx3=APPS(header), idx2=Root
-    expect(stepScope(s, 4, -1)).toBe(2);
+    const s = buildScopes(model()); // idx2=api, idx1=TARGETS(header), idx0=All
+    expect(stepScope(s, 2, -1)).toBe(0);
   });
   test("clamps at the end", () => {
     const s = buildScopes(model());
@@ -101,7 +92,7 @@ describe("stepScope", () => {
 
 describe("isSelectable", () => {
   test("headers are not selectable, everything else is", () => {
-    expect(isSelectable({ id: "header:apps", label: "APPS", kind: "header" })).toBe(false);
+    expect(isSelectable({ id: "header:apps", label: "TARGETS", kind: "header" })).toBe(false);
     expect(isSelectable({ id: "all", label: "All", kind: "all" })).toBe(true);
     expect(isSelectable({ id: "app:api", label: "api", kind: "app" })).toBe(true);
   });

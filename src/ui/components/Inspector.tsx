@@ -54,7 +54,7 @@ export function Inspector({ model, variable, env, active = false, cursor = 0, he
   const windowed = listWindow(fields, cursor, maxItems);
   return (
     <Box flexDirection="column" width={60} height={height} borderStyle="round" borderColor="gray" paddingX={1}>
-      <Text bold>{variable.name} {variable.tier !== 'local' ? (<Text color="cyan">· {variable.tier}</Text>) : null}</Text>
+      <Text bold>{variable.name}</Text>
       <MoreIndicator direction="up" count={windowed.offset} />
       {windowed.items.map((f, i) => {
         const idx = windowed.offset + i;

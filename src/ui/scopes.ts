@@ -1,6 +1,6 @@
 import type { RepoModel, Variable } from "../core/types.ts";
 
-export type ScopeKind = "all" | "global" | "root" | "app" | "group" | "header";
+export type ScopeKind = "all" | "app" | "group" | "header";
 
 export interface Scope {
   id: string;
@@ -13,17 +13,13 @@ export function isSelectable(scope: Scope): boolean {
 }
 
 export function buildScopes(model: RepoModel): Scope[] {
-  const scopes: Scope[] = [
-    { id: "all", label: "All", kind: "all" },
-    { id: "global", label: "Global", kind: "global" },
-    { id: "root", label: "Root", kind: "root" },
-  ];
+  const scopes: Scope[] = [{ id: "all", label: "All", kind: "all" }];
 
   const hasVars = (id: string) => model.variables.some((v) => v.consumers.includes(id));
 
   const apps = model.consumers.filter((c) => c.kind === "app" && hasVars(c.id));
   if (apps.length) {
-    scopes.push({ id: "header:apps", label: "APPS", kind: "header" });
+    scopes.push({ id: "header:apps", label: "TARGETS", kind: "header" });
     for (const c of apps) scopes.push({ id: c.id, label: c.name, kind: "app" });
   }
 
@@ -36,13 +32,11 @@ export function buildScopes(model: RepoModel): Scope[] {
   return scopes;
 }
 
-// Precondition: `scopeId` identifies a SELECTABLE scope (all/root/group/consumer).
+// Precondition: `scopeId` identifies a SELECTABLE scope (all/group/consumer).
 // Header ids (e.g. "header:apps") should never reach this function — navigation
 // skips header rows — and would fall through to the consumer branch returning [].
 export function varsForScope(model: RepoModel, scopeId: string): Variable[] {
   if (scopeId === "all") return model.variables;
-  if (scopeId === "global") return model.variables.filter((v) => v.tier === "global");
-  if (scopeId === "root") return model.variables.filter((v) => v.tier === "global");
   if (scopeId.startsWith("group:")) {
     const g = scopeId.slice("group:".length);
     return model.variables.filter((v) => v.group === g);

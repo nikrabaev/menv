@@ -10,7 +10,7 @@ import { ScopeTree } from "../../src/ui/components/ScopeTree.tsx";
 import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
 import type { Scope } from "../../src/ui/scopes.ts";
 
-const v: Variable = { id: "v1", name: "DATABASE_URL", tier: "global", description: "db", group: "DB", secret: true, consumers: ["app:api"] };
+const v: Variable = { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, consumers: ["app:api"] };
 const model: RepoModel = {
   root: "/repo/acme", environments: [{ id: "dev", isDefault: true }],
   variables: [v], consumers: [], values: { v1: { dev: "pg://x" } }, recipients: [],
@@ -170,15 +170,15 @@ test("VariableList pads rows to the full pane width so the highlight spans the r
   expect(rows.find((l) => l.includes(" X "))).toMatch(/ {2,}│$/);
 });
 
-test("VariableList labels global variables in the scopes column", () => {
+test("VariableList shows each variable's wiring in the scopes column", () => {
   const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
-  const globalVar: Variable = { ...v, id: "g", name: "NODE_ENV", tier: "global", secret: false, consumers: [] };
-  const localVar: Variable = { ...v, id: "l", name: "IMAP_HOST", tier: "local", ownerApp: "app:api", secret: false, consumers: ["app:api"] };
-  const { lastFrame } = render(<VariableList variables={[globalVar, localVar]} cursor={0} consumers={consumers} showScopes />);
+  const wired: Variable = { ...v, id: "g", name: "NODE_ENV", secret: false, consumers: ["app:api"] };
+  const unwired: Variable = { ...v, id: "l", name: "IMAP_HOST", secret: false, consumers: [] };
+  const { lastFrame } = render(<VariableList variables={[wired, unwired]} cursor={0} consumers={consumers} showScopes />);
   const lines = (lastFrame() ?? "").split("\n");
-  // The global variable's scopes cell starts with "global"; the local one does not.
-  expect(lines.find((l) => l.includes("NODE_ENV"))).toContain("global");
-  expect(lines.find((l) => l.includes("IMAP_HOST"))).not.toContain("global");
+  // The wired variable's scopes cell names its consumer; the unwired one doesn't.
+  expect(lines.find((l) => l.includes("NODE_ENV"))).toContain("api");
+  expect(lines.find((l) => l.includes("IMAP_HOST"))).not.toContain("api");
 });
 
 test("VariableList truncates wiring hint beyond 3 consumers", () => {

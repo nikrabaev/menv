@@ -15,7 +15,7 @@ test("loadRepo reconstructs the model including decrypted values", async () => {
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "var:PORT", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { "var:PORT": { dev: "3000" } },
     recipients: [recipient],

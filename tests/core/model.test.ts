@@ -6,9 +6,9 @@ const model: RepoModel = {
   root: "/r",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", tier: "global", description: "", group: "DB", secret: true, consumers: ["app:api"] },
-    { id: "v2", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] },
-    { id: "v3", name: "OTHER", tier: "global", description: "", group: null, secret: false, consumers: ["app:web"] },
+    { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, consumers: ["app:api"] },
+    { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
+    { id: "v3", name: "OTHER", description: "", group: null, secret: false, consumers: ["app:web"] },
   ],
   consumers: [],
   values: { v1: { dev: "pg://x" }, v2: { dev: "3000" } },

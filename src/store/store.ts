@@ -9,10 +9,13 @@ export interface Store {
   addVariable(v: Variable): void;
   deleteVariable(varId: string): void;
   toggleSecret(varId: string): void;
+  setSecret(varId: string, on: boolean): void;
   setGroup(varId: string, group: string | null): void;
   setDescription(varId: string, description: string): void;
   setExample(varId: string, example: string): void;
   wire(varId: string, consumerId: string, on: boolean): void;
+  setConsumers(varId: string, consumers: string[]): void;
+  ensureEnvFile(consumerId: string): void;
 }
 
 export function createStore(initial: RepoModel): Store {
@@ -39,6 +42,7 @@ export function createStore(initial: RepoModel): Store {
       change({ ...model, variables: model.variables.filter((v) => v.id !== varId), values: rest });
     },
     toggleSecret(varId) { mapVar(varId, (v) => ({ ...v, secret: !v.secret })); },
+    setSecret(varId, on) { mapVar(varId, (v) => ({ ...v, secret: on })); },
     setGroup(varId, group) { mapVar(varId, (v) => ({ ...v, group })); },
     setDescription(varId, description) { mapVar(varId, (v) => ({ ...v, description })); },
     setExample(varId, example) { mapVar(varId, (v) => ({ ...v, example: example || undefined })); },
@@ -49,6 +53,18 @@ export function createStore(initial: RepoModel): Store {
           ? [...new Set([...v.consumers, consumerId])]
           : v.consumers.filter((c) => c !== consumerId),
       }));
+    },
+    setConsumers(varId, consumers) { mapVar(varId, (v) => ({ ...v, consumers: [...new Set(consumers)] })); },
+    ensureEnvFile(consumerId) {
+      // Wiring is an explicit intent to materialize: give the target an `.env`
+      // output if it lacks one (e.g. an app that had no `.env` at init). The
+      // zero-wired skip in generation keeps this from creating stray empty files.
+      change({
+        ...model,
+        consumers: model.consumers.map((c) =>
+          c.id === consumerId && c.kind === "app" && !c.envFile ? { ...c, envFile: ".env" } : c,
+        ),
+      });
     },
   };
 }

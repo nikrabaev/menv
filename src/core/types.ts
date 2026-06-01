@@ -2,7 +2,6 @@ export type EnvId = string;
 export type AppId = string;
 export type ConsumerId = string;
 export type VarId = string;
-export type Tier = "global" | "local";
 
 // How the secret age identity is stored. The public recipient always lives in
 // menv.toml and values are always encrypted to it; only the location of the
@@ -18,12 +17,13 @@ export interface KeyBackendConfig {
 export interface Variable {
   id: VarId;
   name: string;
-  tier: Tier;
-  ownerApp?: AppId; // required iff tier === "local"
   description: string;
   group: string | null;
   secret: boolean;
-  consumers: ConsumerId[]; // wiring; for local, includes owner app
+  // Wiring: which consumers (workspace apps and/or the synthetic "root" target)
+  // receive this variable in their generated `.env`. A variable with no consumers
+  // is defined in the manifest but materialized nowhere until it is wired.
+  consumers: ConsumerId[];
   example?: string; // optional placeholder emitted into .env.example; one per variable, not per-env
 }
 

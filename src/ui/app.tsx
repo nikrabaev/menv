@@ -17,7 +17,7 @@ import { TextInput } from "./components/TextInput.tsx";
 import { inspectorFields, copyableText } from "./inspectorFields.ts";
 import { type EditTarget, editLabel, editInitial, applyEdit } from "./editTarget.ts";
 import { copyToClipboard } from "../io/clipboard.ts";
-import { valueOf } from "../core/model.ts";
+import { valueOf, freeVarId } from "../core/model.ts";
 import { saveModel } from "../store/save.ts";
 import { createStore } from "../store/store.ts";
 import { loadRepo } from "../store/load.ts";
@@ -257,7 +257,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
       <TopBar root={model.root} env={env} environments={model.environments.map((e) => e.id)} dirty={dirty} unsaved={dirty ? 1 : 0} />
       <Box height={paneHeight}>
         <ScopeTree scopes={scopes} cursor={scopeCursor} active={pane === "scopes"} height={paneHeight} />
-        <VariableList variables={filtered} cursor={varCursor} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all" || scope?.kind === "global"} filter={filter} model={model} env={env} grouped={grouped} />
+        <VariableList variables={filtered} cursor={varCursor} height={paneHeight} scopeLabel={scope?.label} consumers={model.consumers} showScopes={scope?.kind === "all"} filter={filter} model={model} env={env} grouped={grouped} />
         <Inspector model={model} variable={current} env={env} active={pane === "inspector"} cursor={inspCursor} height={paneHeight} />
       </Box>
       {mode === "edit" && current && editTarget ? (
@@ -299,9 +299,12 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
         <NewVariableModal
           width={columns}
           onSubmit={(name) => {
-            const tier = scope?.kind === "app" ? "local" : "global";
-            const ownerApp = tier === "local" ? scope!.id : undefined;
-            store.addVariable({ id: `var:${name}`, name, tier, ownerApp, description: "", group: null, secret: false, consumers: ownerApp ? [ownerApp] : [] });
+            // Wire the new variable to the focused consumer (if a target scope is
+            // selected); otherwise it starts unwired. The id is allocated so a
+            // same-named variable can't collide.
+            const consumers = scope?.kind === "app" ? [scope.id] : [];
+            const id = freeVarId(new Set(model.variables.map((v) => v.id)), name);
+            store.addVariable({ id, name, description: "", group: null, secret: false, consumers });
             setMode("browse");
           }}
           onCancel={() => setMode("browse")}

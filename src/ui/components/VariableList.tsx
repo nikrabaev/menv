@@ -68,12 +68,11 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
   };
   const isEmptyValue = (v: Variable) => valueFor(v) === "";
   const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(v.consumers, consumers) : null);
-  // The scopes column reads, for a global variable, "global" followed by any
-  // wiring; for a local one, just the wiring. Plain text, used for width/fill.
+  // The scopes column shows the variable's wiring (which consumers receive it).
+  // Plain text, used for width/fill.
   const scopeTextFor = (v: Variable): string => {
     if (!showScopes) return "";
-    const hint = hintFor(v);
-    return [v.tier === "global" ? "global" : "", hint ?? ""].filter(Boolean).join(" ");
+    return hintFor(v) ?? "";
   };
 
   // Fixed columns, computed over the whole list so they stay put as the window
@@ -126,7 +125,6 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
           );
         }
         const v = row.variable;
-        const isGlobal = showScopes && v.tier === "global";
         const hint = hintFor(v);
         const nameSeg = GUTTER + v.name.padEnd(nameWidth) + GUTTER;
         const empty = isEmptyValue(v);
@@ -143,8 +141,6 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
             {nameSeg}
             {valueWidth > 0 ? <Text italic={empty} color={empty ? "gray" : v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
-            {isGlobal ? <Text italic color="cyan">global</Text> : null}
-            {isGlobal && hint ? " " : null}
             {hint ? <Text color="blackBright">{hint}</Text> : null}
             {scopeLen > 0 ? GUTTER : null}
             {fill > 0 ? " ".repeat(fill) : null}

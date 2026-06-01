@@ -6,7 +6,7 @@ function baseModel(): RepoModel {
   return {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: {},
     recipients: [],
@@ -26,7 +26,7 @@ test("setValue marks dirty and notifies", () => {
 
 test("addVariable and toggleSecret mutate the model", () => {
   const store = createStore(baseModel());
-  store.addVariable({ id: "v2", name: "API_KEY", tier: "global", description: "", group: null, secret: false, consumers: [] });
+  store.addVariable({ id: "v2", name: "API_KEY", description: "", group: null, secret: false, consumers: [] });
   expect(store.getModel().variables.some((v) => v.name === "API_KEY")).toBe(true);
   store.toggleSecret("v2");
   expect(store.getModel().variables.find((v) => v.id === "v2")!.secret).toBe(true);
@@ -46,4 +46,22 @@ test("setExample sets and clears the example", () => {
   store.setExample("v1", "");
   expect(store.getModel().variables.find((v) => v.id === "v1")!.example).toBeUndefined();
   expect(store.isDirty()).toBe(true);
+});
+
+test("setSecret sets the flag explicitly (not a toggle)", () => {
+  const store = createStore(baseModel());
+  store.setSecret("v1", true);
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.secret).toBe(true);
+  store.setSecret("v1", true); // idempotent, unlike toggleSecret
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.secret).toBe(true);
+  store.setSecret("v1", false);
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.secret).toBe(false);
+});
+
+test("setConsumers replaces the wiring set and de-dupes", () => {
+  const store = createStore(baseModel());
+  store.setConsumers("v1", ["app:web", "root", "app:web"]);
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.consumers).toEqual(["app:web", "root"]);
+  store.setConsumers("v1", []);
+  expect(store.getModel().variables.find((v) => v.id === "v1")!.consumers).toEqual([]);
 });

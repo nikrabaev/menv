@@ -29,7 +29,7 @@ test("writes .env + .env.example and backs up overwritten files", async () => {
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { v1: { dev: "3000" } },
     recipients: [],
@@ -41,13 +41,43 @@ test("writes .env + .env.example and backs up overwritten files", async () => {
   expect(written.length).toBeGreaterThan(0);
 });
 
+test("materializes a repo-root .env for variables wired to the root target", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [{ id: "v1", name: "SHARED", description: "", group: null, secret: false, consumers: ["root"] }],
+    consumers: [{ kind: "app", id: "root", name: "root", path: ".", envFile: ".env" }],
+    values: { v1: { dev: "rootval" } },
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "dev", "ts1");
+  expect(await Bun.file(join(root, ".env")).text()).toContain("SHARED=rootval");
+});
+
+test("skips a consumer with no wired variables (no stray empty file)", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [],
+    // root has envFile set but nothing is wired to it.
+    consumers: [{ kind: "app", id: "root", name: "root", path: ".", envFile: ".env" }],
+    values: {},
+    recipients: [],
+  };
+  const written = await writeGeneratedFiles(model, "dev", "ts1");
+  expect(written).toEqual([]);
+  expect(existsSync(join(root, ".env"))).toBe(false);
+});
+
 test("writes only .env for the active env across multiple environments", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await mkdir(join(root, "apps", "api"), { recursive: true });
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
-    variables: [{ id: "v1", name: "PORT", tier: "local", ownerApp: "app:api", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { v1: { dev: "3000", prod: "8080" } },
     recipients: [],
