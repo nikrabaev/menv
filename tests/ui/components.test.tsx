@@ -35,6 +35,14 @@ test("VariableList renders the name and masks a secret's value", () => {
   expect(lastFrame()).not.toContain("pg://x");
 });
 
+test("VariableList tags a local-override variable with a (local) suffix", () => {
+  const base: Variable = { ...v, id: "b", name: "PORT", secret: false, consumers: [] };
+  const local: Variable = { ...v, id: "l", name: "PORT", secret: false, consumers: [], local: true };
+  const m: RepoModel = { ...model, variables: [base, local], values: { b: { dev: "3000" }, l: { dev: "3001" } } };
+  const { lastFrame } = render(<VariableList variables={[base, local]} cursor={0} model={m} env="dev" />);
+  expect(lastFrame()).toContain("(local)");
+});
+
 test("VariableList shows a plain value and masks a secret in the value column", () => {
   const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, consumers: [] };
   const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };

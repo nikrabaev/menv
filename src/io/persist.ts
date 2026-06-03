@@ -18,7 +18,7 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
     variables: m.variables.map((v) => ({
       id: v.id, name: v.name,
       description: v.description, group: v.group ?? "", secret: v.secret, consumers: v.consumers,
-      example: v.example ?? "",
+      example: v.example ?? "", local: v.local ?? false,
     })),
   });
 
@@ -67,6 +67,7 @@ export function tomlToModelParts(config: string, manifest: string): {
     id: v.id, name: v.name,
     description: v.description ?? "", group: v.group || null, secret: !!v.secret,
     consumers: v.consumers ?? [], example: v.example || undefined,
+    local: v.local ? true : undefined,
   }));
 
   return {

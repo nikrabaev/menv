@@ -11,6 +11,7 @@ export interface ListOpts {
   backend?: KeyBackend;
   scope?: string; // filter to variables wired to this consumer
   group?: string; // filter to this group ("" = ungrouped)
+  local?: boolean; // filter to local overrides only
   env?: string;
   json?: boolean;
 }
@@ -29,6 +30,9 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
   if (opts.group !== undefined) {
     vars = vars.filter((v) => (v.group ?? "") === opts.group);
   }
+  if (opts.local) {
+    vars = vars.filter((v) => v.local === true);
+  }
   vars = [...vars].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
   if (opts.json) {
@@ -36,6 +40,7 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
       vars.map((v) => ({
         id: v.id,
         name: v.name,
+        local: v.local ?? false,
         secret: v.secret,
         group: v.group,
         description: v.description,
@@ -53,12 +58,14 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
     const raw = valueOf(model, v.id, env);
     return raw === "" ? EMPTY_LABEL : v.secret ? SECRET_MASK : raw;
   };
-  const nameW = Math.max(4, ...vars.map((v) => v.name.length));
+  // Local overrides carry a " (local)" tag in the name column (mirrors the TUI).
+  const shownName = (v: Variable) => (v.local ? `${v.name} (local)` : v.name);
+  const nameW = Math.max(4, ...vars.map((v) => shownName(v).length));
   const valW = Math.max(5, ...vars.map((v) => shownValue(v).length));
   const row = (a: string, b: string, c: string) => `${a.padEnd(nameW)}  ${b.padEnd(valW)}  ${c}`;
   const lines = [row("NAME", "VALUE", `WIRING (${env})`)];
   for (const v of vars) {
-    lines.push(row(v.name, shownValue(v), v.consumers.length ? v.consumers.join(", ") : "(unwired)"));
+    lines.push(row(shownName(v), shownValue(v), v.consumers.length ? v.consumers.join(", ") : "(unwired)"));
   }
   return lines.join("\n");
 }

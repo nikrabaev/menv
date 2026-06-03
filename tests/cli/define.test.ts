@@ -45,3 +45,30 @@ test("define rejects an unknown scope", async () => {
   const { root, backend } = await scaffold();
   expect(runDefine(root, "API_KEY", { backend, scope: ["nope"], stamp: "s" })).rejects.toThrow(/unknown scope/);
 });
+
+test("define --local creates a separate local-override variable", async () => {
+  const { root, backend } = await scaffold();
+  await runDefine(root, "API_URL", { backend, scope: ["api"], stamp: "s1" });
+  await runDefine(root, "API_URL", { backend, local: true, scope: ["api"], stamp: "s2" });
+
+  const { model } = await loadModel(root, { backend });
+  const vars = model.variables.filter((v) => v.name === "API_URL");
+  expect(vars.length).toBe(2);
+  const base = vars.find((v) => !v.local)!;
+  const local = vars.find((v) => v.local)!;
+  expect(base.id).toBe("var:API_URL");
+  expect(local.id).toBe("var:API_URL.local");
+  expect(local.local).toBe(true);
+});
+
+test("define (no flag) updates the base in place even when a local sibling exists", async () => {
+  const { root, backend } = await scaffold();
+  await runDefine(root, "API_URL", { backend, scope: ["api"], stamp: "s1" });
+  await runDefine(root, "API_URL", { backend, local: true, scope: ["api"], stamp: "s2" });
+  // A flagless redefine targets the base sibling — no ambiguity error.
+  await runDefine(root, "API_URL", { backend, description: "base only", stamp: "s3" });
+
+  const { model } = await loadModel(root, { backend });
+  expect(model.variables.find((v) => v.name === "API_URL" && !v.local)!.description).toBe("base only");
+  expect(model.variables.find((v) => v.name === "API_URL" && v.local)!.description).toBe("");
+});

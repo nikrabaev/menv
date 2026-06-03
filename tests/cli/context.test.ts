@@ -48,6 +48,30 @@ describe("resolveVar", () => {
   });
 });
 
+describe("resolveVar with --local", () => {
+  // PORT exists as both a base and a local override; TOKEN only as a local one.
+  function withLocal(): RepoModel {
+    const m = model();
+    m.variables.push(
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
+      { id: "var:TOKEN.local", name: "TOKEN", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
+    );
+    return m;
+  }
+  test("defaults to the base variant when both exist", () => {
+    expect(resolveVar(withLocal(), "PORT").id).toBe("var:PORT");
+  });
+  test("--local selects the override", () => {
+    expect(resolveVar(withLocal(), "PORT", { local: true }).id).toBe("var:PORT.local");
+  });
+  test("a local-only name resolves with no flag", () => {
+    expect(resolveVar(withLocal(), "TOKEN").id).toBe("var:TOKEN.local");
+  });
+  test("--local with only a base variant errors with a hint", () => {
+    expect(() => resolveVar(withLocal(), "NODE_ENV", { local: true })).toThrow(/drop --local/);
+  });
+});
+
 describe("defaultEnv", () => {
   test("falls back to the default environment", () => {
     expect(defaultEnv(model())).toBe("dev");

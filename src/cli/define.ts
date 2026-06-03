@@ -11,6 +11,7 @@ export interface DefineOpts {
   example?: string;
   group?: string; // "" clears the group
   scope?: string[]; // replaces the consumer set (tokens incl. "root")
+  local?: boolean; // create/address the `.env.local` override of NAME rather than the base
   env?: string;
   stamp?: string;
 }
@@ -22,11 +23,15 @@ export async function runDefine(root: string, name: string, opts: DefineOpts = {
   const { model } = await loadModel(root, { backend: opts.backend });
   const store = createStore(model);
 
-  const existing = model.variables.filter((v) => v.name === name);
+  // Base and local overrides of a name are separate variables; `--local` scopes
+  // both the lookup and the create so each namespace is addressed on its own (and
+  // the base-vs-base ambiguity guard below is unaffected).
+  const local = opts.local ?? false;
+  const existing = model.variables.filter((v) => v.name === name && (v.local ?? false) === local);
   let id: string;
   if (existing.length === 0) {
-    id = freeVarId(new Set(model.variables.map((v) => v.id)), name);
-    store.addVariable({ id, name, description: "", group: null, secret: false, consumers: [] });
+    id = freeVarId(new Set(model.variables.map((v) => v.id)), name, { local });
+    store.addVariable({ id, name, description: "", group: null, secret: false, consumers: [], ...(local ? { local: true } : {}) });
   } else if (existing.length === 1) {
     id = existing[0]!.id;
   } else {

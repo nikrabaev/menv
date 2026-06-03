@@ -109,6 +109,61 @@ test("perenv mode skips an environment the consumer has no values in", async () 
   expect(existsSync(join(root, "apps", "api", ".env.dev"))).toBe(false);
 });
 
+test("single mode writes .env (base) and .env.local (override) side by side", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "web"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"], local: true },
+    ],
+    consumers: [{ kind: "app", id: "app:web", name: "web", path: "apps/web", envFile: ".env" }],
+    values: { "var:PORT": { dev: "3000" }, "var:PORT.local": { dev: "3001" } },
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "dev", "ts1");
+  expect(await Bun.file(join(root, "apps", "web", ".env")).text()).toContain("PORT=3000");
+  expect(await Bun.file(join(root, "apps", "web", ".env.local")).text()).toContain("PORT=3001");
+  // The override never bleeds into the shared example template.
+  expect(await Bun.file(join(root, "apps", "web", ".env.example")).text()).not.toContain("3001");
+});
+
+test("perenv mode writes .env.<env>.local for an override", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "production", isDefault: false }],
+    variables: [
+      { id: "var:API_URL", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "var:API_URL.local", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
+    ],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
+    values: { "var:API_URL": { production: "https://prod" }, "var:API_URL.local": { production: "https://override" } },
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "production", "ts1");
+  expect(await Bun.file(join(root, "apps", "api", ".env.production")).text()).toContain("API_URL=https://prod");
+  expect(await Bun.file(join(root, "apps", "api", ".env.production.local")).text()).toContain("API_URL=https://override");
+});
+
+test("a consumer with only base vars writes no stray .env.local", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [{ id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
+    values: { "var:PORT": { dev: "3000" } },
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "dev", "ts1");
+  expect(existsSync(join(root, "apps", "api", ".env.local"))).toBe(false);
+});
+
 test("writes only .env for the active env across multiple environments", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await mkdir(join(root, "apps", "api"), { recursive: true });

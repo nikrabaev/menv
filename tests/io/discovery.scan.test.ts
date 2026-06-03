@@ -104,6 +104,36 @@ test("a consumer with .env.<env> files is detected as per-env; plain .env stays 
   const web = model.consumers.find((c) => c.id === "app:web")!;
   expect(api.envMode).toBe("perenv");
   expect(web.envMode).toBe("single");
+
+  // `.env.local` keeps the app single, but its key becomes a separate `local`
+  // variable alongside the base one (different value, different file on write).
+  const ports = model.variables.filter((v) => v.name === "PORT" && v.consumers.includes("app:web"));
+  const base = ports.find((v) => !v.local)!;
+  const local = ports.find((v) => v.local)!;
+  expect(local.id).toBe("var:PORT.local");
+  expect(local.id.endsWith(".local")).toBe(true);
+  expect(model.values[base.id]!.dev).toBe("3000");
+  expect(model.values[local.id]!.dev).toBe("3001");
+});
+
+test(".env.<env>.local becomes a local variable on that env and flips the app to perenv", async () => {
+  const root = await setup(["api"]);
+  await Bun.write(join(root, "apps", "api", ".env.production"), "API_URL=https://prod\n");
+  await Bun.write(join(root, "apps", "api", ".env.production.local"), "API_URL=https://prod-override\n");
+
+  const { model } = await scanRepo(root);
+
+  const api = model.consumers.find((c) => c.id === "app:api")!;
+  expect(api.envMode).toBe("perenv");
+  expect(model.environments.some((e) => e.id === "production")).toBe(true);
+
+  const vars = model.variables.filter((v) => v.name === "API_URL");
+  const base = vars.find((v) => !v.local)!;
+  const local = vars.find((v) => v.local)!;
+  expect(local.id).toBe("var:API_URL.local");
+  expect(local.local).toBe(true);
+  expect(model.values[base.id]!.production).toBe("https://prod");
+  expect(model.values[local.id]!.production).toBe("https://prod-override");
 });
 
 test("imports example values and creates example-only variables", async () => {

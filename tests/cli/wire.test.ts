@@ -3,6 +3,7 @@ import { scaffold } from "./helpers.ts";
 import { runWire, runUnwire } from "../../src/cli/wire.ts";
 import { runRm } from "../../src/cli/rm.ts";
 import { runGet } from "../../src/cli/get.ts";
+import { runDefine } from "../../src/cli/define.ts";
 import { loadModel } from "../../src/cli/context.ts";
 import type { KeyBackend } from "../../src/crypto/identity.ts";
 
@@ -38,4 +39,28 @@ test("rm deletes a variable and its value", async () => {
   const { model } = await loadModel(root, { backend });
   expect(model.variables.find((v) => v.name === "PORT")).toBeUndefined();
   expect(runGet(root, "PORT", { backend })).rejects.toThrow(/no variable named/);
+});
+
+test("wire --local (un)wires the override, not its base sibling", async () => {
+  const { root, backend } = await scaffold({ apps: { api: { API_URL: "https://prod" }, web: undefined } });
+  await runDefine(root, "API_URL", { backend, local: true, scope: ["api"], stamp: "s1" });
+  await runWire(root, "API_URL", ["web"], { backend, local: true, stamp: "s2" });
+
+  const { model } = await loadModel(root, { backend });
+  const base = model.variables.find((v) => v.name === "API_URL" && !v.local)!;
+  const local = model.variables.find((v) => v.name === "API_URL" && v.local)!;
+  expect(local.consumers.slice().sort()).toEqual(["app:api", "app:web"]);
+  expect(base.consumers).toEqual(["app:api"]); // base untouched
+});
+
+test("rm --local deletes only the override, leaving the base intact", async () => {
+  const { root, backend } = await scaffold({ apps: { api: { API_URL: "https://prod" } } });
+  await runDefine(root, "API_URL", { backend, local: true, scope: ["api"], stamp: "s1" });
+  await runRm(root, "API_URL", { backend, local: true, stamp: "s2" });
+
+  const { model } = await loadModel(root, { backend });
+  const named = model.variables.filter((v) => v.name === "API_URL");
+  expect(named.length).toBe(1);
+  expect(named[0]!.local).toBeUndefined();
+  expect(await runGet(root, "API_URL", { backend })).toBe("https://prod");
 });

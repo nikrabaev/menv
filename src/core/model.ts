@@ -14,11 +14,13 @@ export function appById(model: RepoModel, id: string) {
 
 // Mint an unused variable id for `name`. Since the same NAME can map to several
 // variables (distinct value groups), the first gets `var:NAME` and subsequent
-// ones get `var:NAME#2`, `var:NAME#3`, … Names are `[A-Za-z0-9_]+`, so `#` never
+// ones get `var:NAME#2`, `var:NAME#3`, … A local override carries a `.local`
+// segment (`var:NAME.local`, then `var:NAME.local#2`, …) so it never collides
+// with its base sibling. Names are `[A-Za-z0-9_]+`, so neither `.` nor `#`
 // collides with a name. Callers building several ids must add each returned id to
 // `usedIds` before the next call.
-export function freeVarId(usedIds: Set<string>, name: string): string {
-  const base = `var:${name}`;
+export function freeVarId(usedIds: Set<string>, name: string, opts?: { local?: boolean }): string {
+  const base = `var:${name}${opts?.local ? ".local" : ""}`;
   if (!usedIds.has(base)) return base;
   let n = 2;
   while (usedIds.has(`${base}#${n}`)) n++;

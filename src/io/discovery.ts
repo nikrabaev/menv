@@ -48,22 +48,71 @@ import { parseDotenv } from "./dotenv.ts";
 import { freeVarId } from "../core/model.ts";
 import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
 
-function envIdForFile(filename: string): string {
-  if (filename === ".env" || filename === ".env.local") return "dev";
+// What a `.env*` filename means: the `.env.example` template, or a values file
+// carrying an environment id and a base/local flag. A `.local` suffix marks an
+// override file (`.env.local`, `.env.<env>.local`) whose keys become `local`
+// variables generated back into the matching `.local` file rather than the base.
+type EnvFileClass =
+  | { kind: "example" }
+  | { kind: "env"; env: string; local: boolean };
+
+function classifyEnvFile(filename: string): EnvFileClass | null {
+  if (filename === ".env") return { kind: "env", env: "dev", local: false };
+  if (filename === ".env.example") return { kind: "example" };
+  if (filename === ".env.local") return { kind: "env", env: "dev", local: true };
   const m = /^\.env\.(.+)$/.exec(filename);
-  if (!m || m[1] === "example") return "dev";
-  return m[1];
+  if (!m) return null;
+  let rest = m[1]!;
+  let local = false;
+  if (rest.endsWith(".local")) { local = true; rest = rest.slice(0, -".local".length); }
+  if (rest === "" || rest === "example") return { kind: "example" };
+  return { kind: "env", env: rest, local };
 }
 
-// A per-environment file is `.env.<env>` for a real environment — i.e. not the
-// plain `.env`, the `.env.local` dev override, or the `.env.example` template.
-// Its presence in a consumer dir flips that consumer to "perenv" mode.
-function isPerEnvFile(filename: string): boolean {
-  const m = /^\.env\.(.+)$/.exec(filename);
-  return m !== null && m[1] !== "example" && m[1] !== "local";
-}
+export const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL/i.test(name);
 
-const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL/i.test(name);
+// occ: name -> consumerId -> env -> value. Groups the consumers that define each
+// name by value signature into variables (the majority group keeps the bare id),
+// minting ids via the shared allocator. The base and local passes share one
+// `usedIds` set so `var:NAME` and `var:NAME.local` never collide. `remember` is a
+// no-op for the local pass — `.env.example` reconciliation matches base keys only.
+function buildVarsFromOcc(
+  occ: Map<string, Map<string, Map<string, string>>>,
+  local: boolean,
+  ctx: {
+    variables: Variable[];
+    values: Values;
+    descByName: Map<string, string>;
+    usedIds: Set<string>;
+    remember: (appId: string, name: string, id: string) => void;
+  },
+): void {
+  for (const [name, byConsumer] of occ) {
+    const sigOf = (cid: string) =>
+      JSON.stringify([...byConsumer.get(cid)!.entries()].sort(([a], [b]) => a.localeCompare(b)));
+    const groups = new Map<string, string[]>();
+    for (const cid of byConsumer.keys()) {
+      const sig = sigOf(cid);
+      (groups.get(sig) ?? groups.set(sig, []).get(sig)!).push(cid);
+    }
+    const ordered = [...groups.values()].sort((a, b) =>
+      b.length - a.length || [...a].sort()[0]!.localeCompare([...b].sort()[0]!),
+    );
+    for (const members of ordered) {
+      const consumers = [...members].sort();
+      const id = freeVarId(ctx.usedIds, name, { local });
+      ctx.usedIds.add(id);
+      ctx.variables.push({
+        id, name, description: ctx.descByName.get(name) ?? "",
+        group: null, secret: isSecretName(name), consumers,
+        ...(local ? { local: true } : {}),
+      });
+      // Every member shares the same env→value map by construction.
+      for (const [env, val] of byConsumer.get(consumers[0]!)!) (ctx.values[id] ??= {})[env] = val;
+      for (const cid of consumers) ctx.remember(cid, name, id);
+    }
+  }
+}
 
 export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   const apps = await detectApps(root);
@@ -78,32 +127,41 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
     : { kind: "app", id: "root", name: "root", path: ".", envFile: ".env" };
   const scanTargets = rootConsumer ? [...apps, rootConsumer] : apps;
 
-  // Phase 1: real env files -> occurrences (name -> appId -> env -> value)
-  const occ = new Map<string, Map<string, Map<string, string>>>();
+  // Phase 1: real env files -> occurrences (name -> appId -> env -> value). Base
+  // (`.env`/`.env.<env>`) and local (`.env.local`/`.env.<env>.local`) keys are
+  // kept apart so a name appearing in both yields two variables (one flagged
+  // `local`) generated into separate files.
+  const occBase = new Map<string, Map<string, Map<string, string>>>();
+  const occLocal = new Map<string, Map<string, Map<string, string>>>();
   const descByName = new Map<string, string>();
   const envIds = new Set<string>();
   const exampleFiles: Array<{ app: AppTarget; file: string }> = [];
-  // Consumers that already keep `.env.<env>` files default to "perenv" mode.
+  // Consumers that already keep an explicit `.env.<env>` file default to "perenv"
+  // mode. The plain `.env` and its `.env.local` override stay "single".
   const perenvIds = new Set<string>();
 
   for (const app of scanTargets) {
     const glob = new Bun.Glob(".env*");
     for await (const file of glob.scan({ cwd: join(root, app.path), onlyFiles: true, dot: true })) {
-      if (file.endsWith(".example")) {
+      const cls = classifyEnvFile(file);
+      if (!cls) continue;
+      if (cls.kind === "example") {
         exampleFiles.push({ app, file });
         continue;
       }
-      const env = envIdForFile(file);
-      envIds.add(env);
-      if (isPerEnvFile(file)) perenvIds.add(app.id);
+      envIds.add(cls.env);
+      // An explicit env suffix (anything but `.env` / `.env.local`) means the app
+      // keeps per-env files → "perenv" mode.
+      if (file !== ".env" && file !== ".env.local") perenvIds.add(app.id);
       // Existing env files seed the vault and mark the app for generation. Layout
       // (single ".env" vs per-env ".env.<env>") is decided by envMode below.
       app.envFile = ".env";
+      const occ = cls.local ? occLocal : occBase;
       const text = await Bun.file(join(root, app.path, file)).text();
       for (const e of parseDotenv(text)) {
         const byApp = occ.get(e.key) ?? occ.set(e.key, new Map()).get(e.key)!;
         const byEnv = byApp.get(app.id) ?? byApp.set(app.id, new Map()).get(app.id)!;
-        byEnv.set(env, e.value);
+        byEnv.set(cls.env, e.value);
         if (e.description && !descByName.has(e.key)) descByName.set(e.key, e.description);
       }
     }
@@ -127,34 +185,12 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
     return id;
   };
 
-  // Group the consumers that define each name by VALUE: a consumer's signature is
-  // the canonical serialization of its env→value map (over the union of envs it
-  // declares). Consumers with identical signatures collapse into one variable
-  // wired to all of them; each distinct signature yields its own variable. The
-  // majority (largest) group keeps the bare `var:NAME` id for stability.
-  for (const [name, byConsumer] of occ) {
-    const sigOf = (cid: string) =>
-      JSON.stringify([...byConsumer.get(cid)!.entries()].sort(([a], [b]) => a.localeCompare(b)));
-    const groups = new Map<string, string[]>();
-    for (const cid of byConsumer.keys()) {
-      const sig = sigOf(cid);
-      (groups.get(sig) ?? groups.set(sig, []).get(sig)!).push(cid);
-    }
-    const ordered = [...groups.values()].sort((a, b) =>
-      b.length - a.length || [...a].sort()[0]!.localeCompare([...b].sort()[0]!),
-    );
-    for (const members of ordered) {
-      const consumers = [...members].sort();
-      const id = mintId(name);
-      variables.push({
-        id, name, description: descByName.get(name) ?? "",
-        group: null, secret: isSecretName(name), consumers,
-      });
-      // Every member shares the same env→value map by construction.
-      for (const [env, val] of byConsumer.get(consumers[0]!)!) (values[id] ??= {})[env] = val;
-      for (const cid of consumers) remember(cid, name, id);
-    }
-  }
+  // Group the consumers that define each name by VALUE into variables (see
+  // buildVarsFromOcc). The base pass feeds `varForAppName` so `.env.example`
+  // reconciliation can find a base variable by name; the local pass does not.
+  const buildCtx = { variables, values, descByName, usedIds, remember };
+  buildVarsFromOcc(occBase, false, buildCtx);
+  buildVarsFromOcc(occLocal, true, { ...buildCtx, remember: () => {} });
 
   // Phase 2: example files -> example values + example-only locals
   for (const { app, file } of exampleFiles) {

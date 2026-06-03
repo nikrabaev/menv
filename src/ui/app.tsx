@@ -22,6 +22,9 @@ import { valueOf, freeVarId } from "../core/model.ts";
 import { saveModel } from "../store/save.ts";
 import { createStore } from "../store/store.ts";
 import { loadRepo } from "../store/load.ts";
+import { detectDrift } from "../io/drift.ts";
+import { applyFileDrift } from "../io/importEnv.ts";
+import { reconcileDrift } from "./driftReconcile.tsx";
 import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { readKeyBackendConfig } from "../io/persist.ts";
 import { interactivePassphraseProvider } from "./initPrompts.tsx";
@@ -422,6 +425,23 @@ export async function launchTui(root: string): Promise<void> {
   const model = await loadRepo(root, identity);
   const store = createStore(model);
   const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
+
+  // Before fullscreen, reconcile any hand-edits to generated files. Single-mode
+  // `.env` is compared against the default environment (we can't know which env a
+  // single `.env` last held). Importing pulls the edits back into the vault and
+  // regenerates so disk and vault reconverge; the prompts render in the normal
+  // terminal like the passphrase prompt above.
+  const defaultEnv = model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev";
+  const drifts = await detectDrift(model, defaultEnv);
+  if (drifts.length > 0) {
+    const toImport = await reconcileDrift(drifts);
+    if (toImport && toImport.size > 0) {
+      for (const d of drifts) if (toImport.has(d.rel)) applyFileDrift(store, d);
+      await saveModel(store.getModel(), defaultEnv, stamp());
+      store.markClean();
+    }
+  }
+
   let instance: ReturnType<typeof render> | undefined;
   enterFullscreen();
   try {

@@ -82,6 +82,24 @@ test("a config without key_backend defaults to keychain", () => {
   expect(tomlToModelParts(config, `variables = []\n`).keyBackend).toEqual({ kind: "keychain" });
 });
 
+test("round-trips the local-override flag", () => {
+  const m: RepoModel = {
+    root: "/r",
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"], local: true },
+    ],
+    consumers: [{ kind: "app", id: "app:web", name: "web", path: "apps/web", envFile: ".env" }],
+    values: {},
+    recipients: [],
+  };
+  const { config, manifest } = modelToToml(m);
+  const parts = tomlToModelParts(config, manifest);
+  expect(parts.variables[0]!.local).toBeUndefined();
+  expect(parts.variables[1]!.local).toBe(true);
+});
+
 test("round-trips the optional example value", () => {
   const m: RepoModel = {
     root: "/r",

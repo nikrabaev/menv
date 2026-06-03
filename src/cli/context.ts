@@ -54,15 +54,30 @@ export function resolveConsumer(model: RepoModel, token: string): string {
 
 // Resolve a NAME to exactly one variable. `scope` (a consumer token) disambiguates
 // when several variables share the name — which can happen because `init` splits a
-// name into one variable per distinct value across consumers.
-export function resolveVar(model: RepoModel, name: string, opts: { scope?: string } = {}): Variable {
+// name into one variable per distinct value across consumers. `local` targets the
+// `.env.local` override of a name: when set, only the local sibling matches; when
+// absent, base variables win (`.env` is canonical) but a name that exists *only* as
+// a local still resolves.
+export function resolveVar(model: RepoModel, name: string, opts: { scope?: string; local?: boolean } = {}): Variable {
   let cands = model.variables.filter((v) => v.name === name);
   if (opts.scope) {
     const cid = resolveConsumer(model, opts.scope);
     cands = cands.filter((v) => v.consumers.includes(cid));
   }
+  if (opts.local) {
+    cands = cands.filter((v) => v.local === true);
+  } else {
+    // Default to base: if any base variant exists, ignore the local siblings so a
+    // flagless command never has to choose between them.
+    const base = cands.filter((v) => !v.local);
+    if (base.length) cands = base;
+  }
   if (cands.length === 0) {
-    throw new Error(`menv: no variable named "${name}"${opts.scope ? ` wired to "${opts.scope}"` : ""}`);
+    // With --local but only a base sibling present, point at the likely fix.
+    const hint = opts.local && model.variables.some((v) => v.name === name && !v.local)
+      ? ` (only a base variable exists — drop --local)`
+      : "";
+    throw new Error(`menv: no variable named "${name}"${opts.scope ? ` wired to "${opts.scope}"` : ""}${hint}`);
   }
   if (cands.length > 1) {
     const variants = cands.map((v) => `${v.id} (→ ${v.consumers.join(", ") || "unwired"})`).join("; ");

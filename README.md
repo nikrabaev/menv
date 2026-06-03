@@ -113,9 +113,22 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   into a single variable wired to all of them; where the values differ, each value
   becomes its own variable of the same name (disambiguate the duplicates with
   `--scope`). There is no global/local distinction to track.
+- **Local overrides** — A key found in a `.env.local` (or `.env.<env>.local`) file
+  becomes its own variable tagged `(local)` in the TUI. It edits and wires like any
+  other, but generates back into the matching `.local` file rather than the base
+  `.env` — and is kept out of the shared `.env.example` template. An app with both
+  `.env` and `.env.local` stays **single** mode; only an explicit `.env.<env>` flips
+  it to per-env.
 - **Wiring** — Which **consumers** actually receive a variable: any number of apps,
   plus the synthetic `root` target (the repo's top-level `.env`). On save, `menv`
   writes each variable into exactly the `.env` files of its wired consumers.
+- **Drift reconciliation** — Generated `.env` files are meant to be rewritten from
+  the vault, but people edit them by hand. When you open the TUI, `menv` first
+  compares every generated file against the vault and, if any diverge, walks you
+  through them one at a time: import the on-disk edits back into the vault (changed
+  values update in place; brand-new keys become new variables) or keep the vault and
+  let the next save overwrite the file. (`menv generate` stays a one-way
+  vault→disk regenerate for CI.)
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
   auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
   `DSN`, `URL`) and toggleable per variable.
@@ -147,6 +160,12 @@ menv rm OLD_FLAG                                 # remove a variable entirely
 
 menv mode api perenv                             # api emits .env.<env> files
 menv mode web single                             # web emits a single .env
+
+# Local overrides: --local creates/addresses the .env.local variant of a name
+menv define API_URL --local --scope web          # a separate override variable
+menv set    API_URL --local http://localhost     # set the override's value
+menv get    API_URL                              # the base value (.env)
+menv get    API_URL --local                      # the override value (.env.local)
 ```
 
 A few things worth knowing:
@@ -161,6 +180,11 @@ A few things worth knowing:
   `.env` / `.env.example` files** — exactly like pressing `s` in the TUI.
 - **Repeated names** (same variable name, different values) are addressed with
   `--scope <consumer>`; without it, an ambiguous name is reported rather than guessed.
+- **Local overrides** are a separate variable behind `--local` (on `define`, `set`,
+  `get`, `rm`, `wire`/`unwire`, and as a `list` filter). Without the flag a command
+  addresses the base variable (`.env` is canonical); `--local` targets the
+  `.env.local` override, which generates into the matching `.local` file and is kept
+  out of `.env.example`.
 
 The full grammar is in the [CLI reference](#cli-reference).
 
@@ -200,17 +224,24 @@ menv [command] [options]
       --example <text>         Set the .env.example placeholder
       --group <name>           Set the group ("" clears it)
       --scope <c1,c2,…>        Replace its wiring; "root" = the repo-root .env
+      --local                  Create/address the .env.local override of NAME
   set NAME [value]        Set a value — from the arg, stdin, or a hidden prompt
       --env <env>              Target environment (default: the default env)
       --scope <consumer>       Disambiguate a name shared by several variables
+      --local                  Target the .env.local override
   get NAME [options]      Print a value to stdout (raw; secrets included)
-      --env <env>, --scope <consumer>
-  list [options]          List variables (secrets shown as ***, unset as empty)
-      --scope <consumer>, --group <name>, --env <env>, --json
+      --env <env>, --scope <consumer>, --local
+  list [options]          List variables (secrets shown as ***, unset as empty;
+                          overrides tagged "(local)")
+      --scope <consumer>, --group <name>, --env <env>, --local, --json
   wire   NAME <c1,c2,…>   Wire a variable to consumers (apps and/or "root")
-  unwire NAME <c1,c2,…>   Unwire a variable from consumers
-  rm NAME [--scope <c>]   Delete a variable
+      --local                  Wire the .env.local override
+  unwire NAME <c1,c2,…>   Unwire a variable from consumers (--local for the override)
+  rm NAME [options]       Delete a variable (--scope <c>, --local)
   mode <consumer> <m>     Set a consumer's .env layout: single | perenv
+
+  Without --local, variable commands address the base variable; --local targets
+  its .env.local override (a separate variable generated into the .local file).
 
   Materialize & back up:
 
@@ -244,6 +275,7 @@ your-repo/
 │  └─ backups/               # git-ignored — timestamped .env snapshots
 ├─ apps/web/                 # single mode (default)
 │  ├─ .env                   # git-ignored — generated for the active environment
+│  ├─ .env.local             # git-ignored — local overrides, if any (kept out of .env.example)
 │  └─ .env.example           # committed — values-free template
 └─ apps/api/                 # per-env mode
    ├─ .env.dev               # git-ignored — one file per environment it has values in
@@ -264,6 +296,10 @@ your-repo/
 
 The encrypted vault (`menv.toml`, `.menv/manifest.toml`, `.menv/values/*.age`) is
 safe to commit; the plaintext `.env` files are not, and are regenerated on demand.
+
+> **Note:** values are treated as single-line. A multi-line value (e.g. a PEM key
+> spanning several lines) isn't supported yet — keep such values on one line
+> (escaped `\n`) or out of the vault.
 
 ## Headless / CI
 
