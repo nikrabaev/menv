@@ -1,12 +1,12 @@
+import type { KeyBackendConfig } from "../core/types.ts";
 import {
-  keychainBackend,
-  passwordBackend,
-  onePasswordBackend,
   envPassphraseProvider,
   type KeyBackend,
+  keychainBackend,
+  onePasswordBackend,
   type PassphraseProvider,
+  passwordBackend,
 } from "./identity.ts";
-import type { KeyBackendConfig } from "../core/types.ts";
 
 export interface BackendContext {
   root: string;

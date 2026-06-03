@@ -1,6 +1,6 @@
-import { expect, test, describe } from "bun:test";
-import { modelToToml, tomlToModelParts } from "../../src/io/persist.ts";
+import { describe, expect, test } from "bun:test";
 import type { RepoModel } from "../../src/core/types.ts";
+import { modelToToml, tomlToModelParts } from "../../src/io/persist.ts";
 
 const model: RepoModel = {
   root: "/repo",

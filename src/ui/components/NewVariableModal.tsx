@@ -1,5 +1,5 @@
-import React, { useState } from "react";
 import { Box, Text } from "ink";
+import { useState } from "react";
 import { TextInput } from "./TextInput.tsx";
 
 export function NewVariableModal({ onSubmit, onCancel, width }: {

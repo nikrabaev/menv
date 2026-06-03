@@ -24,7 +24,7 @@ export function createStore(initial: RepoModel): Store {
   let model = initial;
   let dirty = false;
   const subs = new Set<() => void>();
-  const notify = () => subs.forEach((f) => f());
+  const notify = () => subs.forEach((f) => { f(); });
   const change = (next: RepoModel) => { model = next; dirty = true; notify(); };
 
   const mapVar = (varId: string, fn: (v: Variable) => Variable) =>

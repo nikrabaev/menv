@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
+import { Decrypter, Encrypter, generateIdentity, identityToRecipient } from "age-encryption";
 
 test("age round-trips a string", async () => {
   const id = await generateIdentity();

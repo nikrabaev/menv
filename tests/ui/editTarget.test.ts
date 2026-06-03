@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { editLabel, editInitial, applyEdit } from "../../src/ui/editTarget.ts";
-import { createStore } from "../../src/store/store.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { createStore } from "../../src/store/store.ts";
+import { applyEdit, editInitial, editLabel } from "../../src/ui/editTarget.ts";
 
 function model(): RepoModel {
   return {

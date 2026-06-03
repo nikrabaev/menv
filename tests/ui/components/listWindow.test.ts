@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { listWindow } from "../../../src/ui/components/listWindow.ts";
 
 const seq = (n: number) => Array.from({ length: n }, (_, i) => i);

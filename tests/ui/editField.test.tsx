@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import React from "react";
 import { render } from "ink-testing-library";
 import { EditFieldModal } from "../../src/ui/components/EditFieldModal.tsx";
 

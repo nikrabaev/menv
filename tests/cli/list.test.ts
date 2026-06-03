@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { scaffold } from "./helpers.ts";
 import { runDefine } from "../../src/cli/define.ts";
-import { runSet } from "../../src/cli/set.ts";
 import { runList } from "../../src/cli/list.ts";
+import { runSet } from "../../src/cli/set.ts";
+import { scaffold } from "./helpers.ts";
 
 test("list shows variables and masks secret values", async () => {
   const { root, backend } = await scaffold({ apps: { api: { PORT: "3000" } } });

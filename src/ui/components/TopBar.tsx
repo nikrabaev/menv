@@ -1,6 +1,5 @@
-import React from "react";
-import { Box, Text } from "ink";
 import { basename } from "node:path";
+import { Box, Text } from "ink";
 
 export function TopBar({ root, env, environments, dirty, unsaved }: {
   root: string;

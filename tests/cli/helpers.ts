@@ -7,7 +7,7 @@ import { generateKeypair } from "../../src/crypto/age.ts";
 import type { KeyBackend } from "../../src/crypto/identity.ts";
 
 const envBody = (env: Record<string, string>) =>
-  Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
+  `${Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n")}\n`;
 
 export interface ScaffoldOpts {
   // app name -> its `.env` contents (undefined = the app exists but has no .env)

@@ -1,21 +1,22 @@
 #!/usr/bin/env bun
-import { findRepoRoot } from "./cli/root.ts";
-import { runInit } from "./cli/init.ts";
-import { runGenerate } from "./cli/generate.ts";
 import { runBackup } from "./cli/backup.ts";
-import { runRestore } from "./cli/restore.ts";
-import { runDefine } from "./cli/define.ts";
-import { runSet } from "./cli/set.ts";
-import { runGet } from "./cli/get.ts";
-import { runList } from "./cli/list.ts";
-import { runWire, runUnwire } from "./cli/wire.ts";
-import { runMode } from "./cli/mode.ts";
-import { runRm } from "./cli/rm.ts";
 import { readValue } from "./cli/context.ts";
-import { backupKey } from "./io/backup.ts";
+import { runDefine } from "./cli/define.ts";
+import { runGenerate } from "./cli/generate.ts";
+import { runGet } from "./cli/get.ts";
 import { HELP_TEXT } from "./cli/help.ts";
-import { isMenvRepo } from "./store/load.ts";
+import { runInit } from "./cli/init.ts";
+import { runList } from "./cli/list.ts";
+import { runMode } from "./cli/mode.ts";
+import { runRestore } from "./cli/restore.ts";
+import { runRm } from "./cli/rm.ts";
+import { findRepoRoot } from "./cli/root.ts";
+import { runSet } from "./cli/set.ts";
+import { runUnwire, runWire } from "./cli/wire.ts";
 import type { KeyBackendKind } from "./core/types.ts";
+import type { PassphraseProvider } from "./crypto/identity.ts";
+import { backupKey } from "./io/backup.ts";
+import { isMenvRepo } from "./store/load.ts";
 
 const VERSION = "0.1.0";
 
@@ -84,7 +85,7 @@ try {
     // of non-interactive runs. With no TTY, runInit defaults to keychain (or uses
     // --backend) and the password backend reads MENV_PASSPHRASE.
     let promptKind: (() => Promise<KeyBackendKind>) | undefined;
-    let pass;
+    let pass: PassphraseProvider | undefined;
     if (process.stdout.isTTY) {
       const ui = await import("./ui/initPrompts.tsx");
       promptKind = ui.promptBackendKind;
@@ -119,21 +120,21 @@ try {
     // Lazy-load Ink only for the interactive flow, mirroring the TUI import.
     const { inkPrompts } = await import("./ui/restore.tsx");
     const result = await runRestore(root, { key: positional, force }, inkPrompts);
-    switch (result.kind) {
-      case "not-found": {
-        const have = result.available?.length ? ` (have: ${result.available.join(", ")})` : "";
-        console.error(`menv: backup "${positional}" not found${have}`);
-        process.exit(1);
-      }
-      case "no-backups":
-        console.log("menv: no backups found");
-        process.exit(0);
-      case "cancelled":
-        console.log("menv: restore cancelled");
-        process.exit(0);
-      case "done":
-        console.log(`menv: restored ${result.restored?.length ?? 0} files (${result.skipped?.length ?? 0} skipped)`);
-        process.exit(0);
+    // Each branch exits; an if/else chain (rather than a switch whose cases all
+    // end in the never-returning process.exit) keeps the control flow explicit.
+    if (result.kind === "not-found") {
+      const have = result.available?.length ? ` (have: ${result.available.join(", ")})` : "";
+      console.error(`menv: backup "${positional}" not found${have}`);
+      process.exit(1);
+    } else if (result.kind === "no-backups") {
+      console.log("menv: no backups found");
+      process.exit(0);
+    } else if (result.kind === "cancelled") {
+      console.log("menv: restore cancelled");
+      process.exit(0);
+    } else {
+      console.log(`menv: restored ${result.restored?.length ?? 0} files (${result.skipped?.length ?? 0} skipped)`);
+      process.exit(0);
     }
   } else if (cmd === "define") {
     const { positionals, flags, bools } = parseArgs(["description", "example", "group", "scope"]);

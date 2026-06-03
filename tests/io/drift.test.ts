@@ -3,9 +3,9 @@ import { mkdtempSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeGeneratedFiles } from "../../src/io/generate.ts";
-import { detectDrift } from "../../src/io/drift.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { detectDrift } from "../../src/io/drift.ts";
+import { writeGeneratedFiles } from "../../src/io/generate.ts";
 
 async function fixture(): Promise<RepoModel> {
   const root = mkdtempSync(join(tmpdir(), "menv-"));

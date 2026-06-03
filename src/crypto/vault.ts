@@ -1,6 +1,6 @@
-import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { encryptToRecipients, decryptWithIdentity } from "./age.ts";
+import { join } from "node:path";
+import { decryptWithIdentity, encryptToRecipients } from "./age.ts";
 
 function vaultPath(root: string, env: string): string {
   return join(root, ".menv", "values", `${env}.env.age`);

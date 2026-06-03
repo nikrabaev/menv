@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type RestorePrompts, runRestore } from "../../src/cli/restore.ts";
 import { createBackup } from "../../src/io/backup.ts";
-import { runRestore, type RestorePrompts } from "../../src/cli/restore.ts";
 
 // Prompts that fail loudly: used when a code path must not prompt at all.
 const noPrompts: RestorePrompts = {

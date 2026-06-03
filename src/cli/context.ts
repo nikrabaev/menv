@@ -1,8 +1,8 @@
-import { loadRepo } from "../store/load.ts";
+import type { RepoModel, Variable } from "../core/types.ts";
+import type { KeyBackend } from "../crypto/identity.ts";
 import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { readKeyBackendConfig } from "../io/persist.ts";
-import type { KeyBackend } from "../crypto/identity.ts";
-import type { RepoModel, Variable } from "../core/types.ts";
+import { loadRepo } from "../store/load.ts";
 
 export interface LoadedRepo {
   model: RepoModel;

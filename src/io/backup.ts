@@ -1,5 +1,6 @@
-import { join, dirname } from "node:path";
-import { mkdir, copyFile, readdir, stat } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 // Strict scope: only files named exactly `.env` and `.env.example` (not
 // `.env.local`/`.env.production`/…). These are the files menv itself materializes.
@@ -56,7 +57,7 @@ export async function createBackup(root: string, key: string): Promise<string[]>
 
 // Backup keys, newest first. Empty when no backups have been taken.
 export async function listBackups(root: string): Promise<string[]> {
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(backupsDir(root), { withFileTypes: true });
   } catch {

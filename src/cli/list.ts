@@ -1,7 +1,7 @@
-import { valueOf } from "../core/model.ts";
-import { loadModel, defaultEnv, resolveConsumer } from "./context.ts";
-import type { KeyBackend } from "../crypto/identity.ts";
+import { resolveValue } from "../core/model.ts";
 import type { Variable } from "../core/types.ts";
+import type { KeyBackend } from "../crypto/identity.ts";
+import { defaultEnv, loadModel, resolveConsumer } from "./context.ts";
 
 // Mirrors the TUI: secret values are masked, an absent value reads "empty".
 const SECRET_MASK = "***";
@@ -46,7 +46,7 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
         description: v.description,
         example: v.example ?? null,
         consumers: v.consumers,
-        value: valueOf(model, v.id, env),
+        value: resolveValue(model, v.id, env),
       })),
       null,
       2,
@@ -55,7 +55,7 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
 
   if (vars.length === 0) return "";
   const shownValue = (v: Variable) => {
-    const raw = valueOf(model, v.id, env);
+    const raw = resolveValue(model, v.id, env);
     return raw === "" ? EMPTY_LABEL : v.secret ? SECRET_MASK : raw;
   };
   // Local overrides carry a " (local)" tag in the name column (mirrors the TUI).

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { passwordBackend, WrongPassphraseError, type PassphraseProvider } from "../../src/crypto/identity.ts";
-import { generateKeypair, encryptWithPassphrase } from "../../src/crypto/age.ts";
+import { encryptWithPassphrase, generateKeypair } from "../../src/crypto/age.ts";
+import { type PassphraseProvider, passwordBackend, WrongPassphraseError } from "../../src/crypto/identity.ts";
 
 function stubPass(pw: string, interactive = false): PassphraseProvider {
   return { interactive, async unlock() { return pw; }, async create() { return pw; } };

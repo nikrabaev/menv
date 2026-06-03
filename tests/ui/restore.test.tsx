@@ -1,5 +1,4 @@
-import { expect, test, describe } from "bun:test";
-import React from "react";
+import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { BackupSelectModal, ConflictResolver } from "../../src/ui/restore.tsx";
 

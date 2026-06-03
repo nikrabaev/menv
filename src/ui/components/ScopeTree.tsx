@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text } from "ink";
 import type { Scope } from "../scopes.ts";
 import { listWindow } from "./listWindow.ts";
@@ -24,7 +23,7 @@ export function ScopeTree({ scopes, cursor, active = true, height }: { scopes: S
         return (
           <Text key={`${s.id}:${idx}`} wrap="truncate-end">
             <Text inverse={active && selected} color={!active && selected ? "cyan" : undefined}>
-              {"  " + s.label + "  "}
+              {`  ${s.label}  `}
             </Text>
             {s.tag ? <Text color="gray">{s.tag}</Text> : null}
           </Text>

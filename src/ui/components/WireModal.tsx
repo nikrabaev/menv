@@ -1,5 +1,5 @@
-import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useState } from "react";
 import type { Consumer } from "../../core/types.ts";
 import { listWindow } from "./listWindow.ts";
 import { MoreIndicator } from "./MoreIndicator.tsx";

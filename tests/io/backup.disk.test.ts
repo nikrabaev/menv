@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, existsSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBackup, listBackups, backupExists, backupFiles, restoreBackup } from "../../src/io/backup.ts";
+import { backupExists, backupFiles, createBackup, listBackups, restoreBackup } from "../../src/io/backup.ts";
 
 async function setupRepo(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), "menv-"));

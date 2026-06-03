@@ -1,4 +1,3 @@
-import React from "react";
 import { Box, Text } from "ink";
 
 // A static yes/no prompt shown after editing a value that several environments

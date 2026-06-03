@@ -3,10 +3,10 @@ import { mkdtempSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveModel } from "../../src/store/save.ts";
-import { loadRepo } from "../../src/store/load.ts";
-import { generateKeypair } from "../../src/crypto/age.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { generateKeypair } from "../../src/crypto/age.ts";
+import { loadRepo } from "../../src/store/load.ts";
+import { saveModel } from "../../src/store/save.ts";
 
 test("loadRepo reconstructs the model including decrypted values", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));

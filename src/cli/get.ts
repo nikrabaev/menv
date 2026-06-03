@@ -1,6 +1,6 @@
-import { valueOf } from "../core/model.ts";
-import { loadModel, defaultEnv, resolveVar } from "./context.ts";
+import { resolveValue } from "../core/model.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
+import { defaultEnv, loadModel, resolveVar } from "./context.ts";
 
 export interface GetOpts {
   backend?: KeyBackend;
@@ -14,5 +14,5 @@ export interface GetOpts {
 export async function runGet(root: string, name: string, opts: GetOpts = {}): Promise<string> {
   const { model } = await loadModel(root, { backend: opts.backend });
   const v = resolveVar(model, name, { scope: opts.scope, local: opts.local });
-  return valueOf(model, v.id, defaultEnv(model, opts.env));
+  return resolveValue(model, v.id, defaultEnv(model, opts.env));
 }

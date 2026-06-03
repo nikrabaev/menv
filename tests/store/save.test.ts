@@ -3,12 +3,12 @@ import { mkdtempSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveModel } from "../../src/store/save.ts";
-import { readModelFiles } from "../../src/io/persist.ts";
-import { loadEnvValues } from "../../src/crypto/vault.ts";
-import { generateKeypair } from "../../src/crypto/age.ts";
-import { loadRepo } from "../../src/store/load.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { generateKeypair } from "../../src/crypto/age.ts";
+import { loadEnvValues } from "../../src/crypto/vault.ts";
+import { readModelFiles } from "../../src/io/persist.ts";
+import { loadRepo } from "../../src/store/load.ts";
+import { saveModel } from "../../src/store/save.ts";
 
 test("save writes config, manifest, encrypted vault, and .env files", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
@@ -28,7 +28,7 @@ test("save writes config, manifest, encrypted vault, and .env files", async () =
   const parts = await readModelFiles(root);
   expect(parts.variables[0].name).toBe("PORT");
   const vals = await loadEnvValues(root, "dev", identity);
-  expect(vals["v1"]).toBe("3000");
+  expect(vals.v1).toBe("3000");
   expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toContain("PORT=3000");
 });
 

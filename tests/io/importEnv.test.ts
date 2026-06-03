@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { createStore } from "../../src/store/store.ts";
-import { applyFileDrift } from "../../src/io/importEnv.ts";
-import type { FileDrift } from "../../src/io/drift.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import type { FileDrift } from "../../src/io/drift.ts";
+import { applyFileDrift } from "../../src/io/importEnv.ts";
+import { createStore } from "../../src/store/store.ts";
 
 function store() {
   const model: RepoModel = {

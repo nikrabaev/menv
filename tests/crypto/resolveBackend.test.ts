@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveBackend } from "../../src/crypto/resolveBackend.ts";
-import { keychainBackend } from "../../src/crypto/identity.ts";
 import { generateKeypair } from "../../src/crypto/age.ts";
+import { keychainBackend } from "../../src/crypto/identity.ts";
+import { resolveBackend } from "../../src/crypto/resolveBackend.ts";
 
 test("keychain resolves to the keychain backend (on macOS)", () => {
   // The suite runs on darwin; the non-darwin guard is exercised separately below.

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { scaffold } from "./helpers.ts";
-import { runDefine } from "../../src/cli/define.ts";
 import { loadModel } from "../../src/cli/context.ts";
+import { runDefine } from "../../src/cli/define.ts";
+import { scaffold } from "./helpers.ts";
 
 test("define creates a variable with metadata and wiring", async () => {
   const { root, backend } = await scaffold();

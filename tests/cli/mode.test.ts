@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { scaffold } from "./helpers.ts";
-import { runMode } from "../../src/cli/mode.ts";
 import { loadModel } from "../../src/cli/context.ts";
+import { runMode } from "../../src/cli/mode.ts";
+import { scaffold } from "./helpers.ts";
 
 test("mode flips a consumer to per-env and persists it", async () => {
   const { root, backend } = await scaffold({ apps: { api: { PORT: "3000" } } });

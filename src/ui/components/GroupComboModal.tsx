@@ -1,7 +1,7 @@
-import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import { TextInput } from "./TextInput.tsx";
+import { useState } from "react";
 import { listWindow } from "./listWindow.ts";
+import { TextInput } from "./TextInput.tsx";
 
 // Default cap on visible suggestion rows; the caller (app.tsx) passes the same
 // value it budgets the modal's height with so the two never disagree.

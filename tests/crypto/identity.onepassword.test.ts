@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { onePasswordBackend, type OpExec, type OpResult } from "../../src/crypto/identity.ts";
+import { type OpExec, type OpResult, onePasswordBackend } from "../../src/crypto/identity.ts";
 
 const IDENTITY = "AGE-SECRET-KEY-1EXAMPLE";
 

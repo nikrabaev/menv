@@ -1,7 +1,7 @@
-import { createStore } from "../store/store.ts";
-import { saveModel } from "../store/save.ts";
-import { loadModel, defaultEnv, resolveVar, resolveConsumer } from "./context.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
+import { saveModel } from "../store/save.ts";
+import { createStore } from "../store/store.ts";
+import { defaultEnv, loadModel, resolveConsumer, resolveVar } from "./context.ts";
 
 export interface WireOpts {
   backend?: KeyBackend;

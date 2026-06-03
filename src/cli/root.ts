@@ -1,5 +1,5 @@
-import { dirname, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 
 async function exists(path: string): Promise<boolean> {
   try {

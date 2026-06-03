@@ -1,14 +1,13 @@
 import { expect, test } from "bun:test";
-import React from "react";
 import { render } from "ink-testing-library";
+import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
+import { Inspector } from "../../src/ui/components/Inspector.tsx";
+import { MoreIndicator } from "../../src/ui/components/MoreIndicator.tsx";
+import { PropagateModal } from "../../src/ui/components/PropagateModal.tsx";
+import { ScopeTree } from "../../src/ui/components/ScopeTree.tsx";
 import { TopBar } from "../../src/ui/components/TopBar.tsx";
 import { VariableList } from "../../src/ui/components/VariableList.tsx";
-import { Inspector } from "../../src/ui/components/Inspector.tsx";
 import { WireModal } from "../../src/ui/components/WireModal.tsx";
-import { PropagateModal } from "../../src/ui/components/PropagateModal.tsx";
-import { MoreIndicator } from "../../src/ui/components/MoreIndicator.tsx";
-import { ScopeTree } from "../../src/ui/components/ScopeTree.tsx";
-import type { Consumer, RepoModel, Variable } from "../../src/core/types.ts";
 import type { Scope } from "../../src/ui/scopes.ts";
 
 const v: Variable = { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, consumers: ["app:api"] };

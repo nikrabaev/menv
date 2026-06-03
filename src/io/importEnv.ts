@@ -1,5 +1,5 @@
-import type { Store } from "../store/store.ts";
 import { freeVarId } from "../core/model.ts";
+import type { Store } from "../store/store.ts";
 import { isSecretName } from "./discovery.ts";
 import type { FileDrift } from "./drift.ts";
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { encryptWithPassphrase, decryptWithPassphrase } from "../../src/crypto/age.ts";
+import { decryptWithPassphrase, encryptWithPassphrase } from "../../src/crypto/age.ts";
 
 test("encrypts and decrypts a value with a passphrase", async () => {
   const ct = await encryptWithPassphrase("AGE-SECRET-KEY-1EXAMPLE", "correct horse battery staple");

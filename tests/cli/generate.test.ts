@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runInit } from "../../src/cli/init.ts";
 import { runGenerate } from "../../src/cli/generate.ts";
+import { runInit } from "../../src/cli/init.ts";
 import { generateKeypair } from "../../src/crypto/age.ts";
 import type { PassphraseProvider } from "../../src/crypto/identity.ts";
 

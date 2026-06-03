@@ -4,7 +4,7 @@ export function varsForConsumer(model: RepoModel, consumerId: string): Variable[
   return model.variables.filter((v) => v.consumers.includes(consumerId));
 }
 
-export function valueOf(model: RepoModel, varId: string, env: string): string {
+export function resolveValue(model: RepoModel, varId: string, env: string): string {
   return model.values[varId]?.[env] ?? "";
 }
 

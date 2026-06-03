@@ -1,6 +1,6 @@
-import { expect, test, describe } from "bun:test";
-import { buildScopes, varsForScope, stepScope, isSelectable } from "../../src/ui/scopes.ts";
+import { describe, expect, test } from "bun:test";
 import type { RepoModel } from "../../src/core/types.ts";
+import { buildScopes, isSelectable, stepScope, varsForScope } from "../../src/ui/scopes.ts";
 
 function model(): RepoModel {
   return {

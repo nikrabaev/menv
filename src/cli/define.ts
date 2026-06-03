@@ -1,8 +1,8 @@
-import { createStore } from "../store/store.ts";
-import { saveModel } from "../store/save.ts";
 import { freeVarId } from "../core/model.ts";
-import { loadModel, defaultEnv, resolveConsumer } from "./context.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
+import { saveModel } from "../store/save.ts";
+import { createStore } from "../store/store.ts";
+import { defaultEnv, loadModel, resolveConsumer } from "./context.ts";
 
 export interface DefineOpts {
   backend?: KeyBackend;

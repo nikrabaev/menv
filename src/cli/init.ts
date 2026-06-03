@@ -1,10 +1,10 @@
 import { join } from "node:path";
-import { scanRepo } from "../io/discovery.ts";
-import { saveModel } from "../store/save.ts";
-import { resolveBackend } from "../crypto/resolveBackend.ts";
+import { DEFAULT_KEY_BACKEND, type KeyBackendConfig, type KeyBackendKind } from "../core/types.ts";
 import { generateKeypair, recipientFromIdentity } from "../crypto/age.ts";
 import type { KeyBackend, PassphraseProvider } from "../crypto/identity.ts";
-import { DEFAULT_KEY_BACKEND, type KeyBackendConfig, type KeyBackendKind } from "../core/types.ts";
+import { resolveBackend } from "../crypto/resolveBackend.ts";
+import { scanRepo } from "../io/discovery.ts";
+import { saveModel } from "../store/save.ts";
 
 const GITIGNORE_BLOCK = [
   "# menv",
@@ -21,7 +21,7 @@ async function ensureGitignore(root: string): Promise<void> {
   const path = join(root, ".gitignore");
   const existing = (await Bun.file(path).exists()) ? await Bun.file(path).text() : "";
   if (existing.includes(".menv/values/")) return;
-  await Bun.write(path, existing + (existing.endsWith("\n") || existing === "" ? "" : "\n") + GITIGNORE_BLOCK + "\n");
+  await Bun.write(path, `${existing + (existing.endsWith("\n") || existing === "" ? "" : "\n") + GITIGNORE_BLOCK}\n`);
 }
 
 export interface InitOpts {

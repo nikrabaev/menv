@@ -1,6 +1,6 @@
-import { expect, test, describe } from "bun:test";
-import React, { useState } from "react";
+import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
+import { useState } from "react";
 import { TextInput } from "../../../src/ui/components/TextInput.tsx";
 
 // Escape sequences understood by Ink's input parser.

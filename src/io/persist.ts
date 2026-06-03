@@ -1,6 +1,6 @@
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
-import { DEFAULT_KEY_BACKEND } from "../core/types.ts";
 import type { Consumer, Environment, KeyBackendConfig, RepoModel, Variable } from "../core/types.ts";
+import { DEFAULT_KEY_BACKEND } from "../core/types.ts";
 
 export function modelToToml(m: RepoModel): { config: string; manifest: string } {
   const config = stringifyToml({
@@ -9,8 +9,8 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
     recipients: m.recipients,
     key_backend: keyBackendToToml(m.keyBackend ?? DEFAULT_KEY_BACKEND),
     apps: m.consumers.filter((c) => c.kind === "app").map((c) => ({
-      id: c.id, name: c.name, path: (c as any).path, env_file: (c as any).envFile ?? "",
-      env_mode: (c as any).envMode ?? "single",
+      id: c.id, name: c.name, path: c.path, env_file: c.envFile ?? "",
+      env_mode: c.envMode ?? "single",
     })),
   });
 
@@ -39,6 +39,38 @@ function parseKeyBackend(raw: unknown): KeyBackendConfig {
   return DEFAULT_KEY_BACKEND; // absent or unknown ⇒ the pre-backends default
 }
 
+// On-disk shapes of the parsed TOML, asserted from the dynamic parser output.
+// Optional/legacy fields are modelled in their on-disk (snake_case) form before
+// being mapped onto the camelCase domain types below.
+interface RawApp {
+  id: string;
+  name: string;
+  path: string;
+  env_file?: string;
+  env_files?: Record<string, unknown>;
+  env_mode?: string;
+}
+interface RawConfig {
+  default_environment: string;
+  environments: string[];
+  recipients?: string[];
+  key_backend?: unknown;
+  apps?: RawApp[];
+}
+interface RawVar {
+  id: string;
+  name: string;
+  description?: string;
+  group?: string;
+  secret?: unknown;
+  consumers?: string[];
+  example?: string;
+  local?: unknown;
+}
+interface RawManifest {
+  variables?: RawVar[];
+}
+
 export function tomlToModelParts(config: string, manifest: string): {
   environments: Environment[];
   recipients: string[];
@@ -46,15 +78,15 @@ export function tomlToModelParts(config: string, manifest: string): {
   variables: Variable[];
   keyBackend: KeyBackendConfig;
 } {
-  const c = parseToml(config) as any;
-  const man = parseToml(manifest) as any;
+  const c = parseToml(config) as unknown as RawConfig;
+  const man = parseToml(manifest) as unknown as RawManifest;
 
-  const defaultEnv = c.default_environment as string;
-  const environments: Environment[] = (c.environments as string[]).map((id) => ({
+  const defaultEnv = c.default_environment;
+  const environments: Environment[] = c.environments.map((id) => ({
     id, isDefault: id === defaultEnv,
   }));
 
-  const apps: Consumer[] = ((c.apps ?? []) as any[]).map((a) => ({
+  const apps: Consumer[] = (c.apps ?? []).map((a) => ({
     kind: "app", id: a.id, name: a.name, path: a.path,
     // Prefer the new single env_file; fall back to legacy env_files (any entry ⇒ ".env").
     envFile: a.env_file || (a.env_files && Object.keys(a.env_files).length ? ".env" : undefined),
@@ -63,7 +95,7 @@ export function tomlToModelParts(config: string, manifest: string): {
   }));
   // Legacy manifests may still carry `tier` / `owner_app` keys; smol-toml parses
   // them and we simply don't read them — the next save drops them.
-  const variables: Variable[] = ((man.variables ?? []) as any[]).map((v) => ({
+  const variables: Variable[] = (man.variables ?? []).map((v) => ({
     id: v.id, name: v.name,
     description: v.description ?? "", group: v.group || null, secret: !!v.secret,
     consumers: v.consumers ?? [], example: v.example || undefined,
@@ -72,15 +104,15 @@ export function tomlToModelParts(config: string, manifest: string): {
 
   return {
     environments,
-    recipients: (c.recipients ?? []) as string[],
+    recipients: c.recipients ?? [],
     consumers: [...apps],
     variables,
     keyBackend: parseKeyBackend(c.key_backend),
   };
 }
 
-import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 export const CONFIG_FILE = "menv.toml";
 export const MANIFEST_FILE = ".menv/manifest.toml";
@@ -101,6 +133,6 @@ export async function readModelFiles(root: string) {
 // Light read of just the backend config from menv.toml. The generate and TUI
 // paths need to construct the backend *before* loading/decrypting the vault.
 export async function readKeyBackendConfig(root: string): Promise<KeyBackendConfig> {
-  const c = parseToml(await Bun.file(join(root, CONFIG_FILE)).text()) as any;
+  const c = parseToml(await Bun.file(join(root, CONFIG_FILE)).text()) as unknown as RawConfig;
   return parseKeyBackend(c.key_backend);
 }

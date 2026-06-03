@@ -1,8 +1,14 @@
-import { join, relative, dirname } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { AppTarget } from "../core/types.ts";
 
-async function readJson(path: string): Promise<any | null> {
+// Only the fields menv reads off a package.json; everything else is ignored.
+interface PackageJson {
+  name?: string;
+  workspaces?: string[] | { packages?: string[] };
+}
+
+async function readJson(path: string): Promise<PackageJson | null> {
   const f = Bun.file(path);
   if (!(await f.exists())) return null;
   try { return JSON.parse(await f.text()); } catch { return null; }
@@ -14,9 +20,9 @@ async function workspaceGlobs(root: string): Promise<string[]> {
     const doc = parseYaml(await pnpm.text());
     if (Array.isArray(doc?.packages)) return doc.packages as string[];
   }
-  const pkg = await readJson(join(root, "package.json"));
-  if (Array.isArray(pkg?.workspaces)) return pkg.workspaces as string[];
-  if (Array.isArray(pkg?.workspaces?.packages)) return pkg.workspaces.packages as string[];
+  const ws = (await readJson(join(root, "package.json")))?.workspaces;
+  if (Array.isArray(ws)) return ws;
+  if (ws && Array.isArray(ws.packages)) return ws.packages;
   return [];
 }
 
@@ -44,9 +50,9 @@ export async function detectApps(root: string): Promise<AppTarget[]> {
   return apps.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-import { parseDotenv } from "./dotenv.ts";
 import { freeVarId } from "../core/model.ts";
 import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
+import { parseDotenv } from "./dotenv.ts";
 
 // What a `.env*` filename means: the `.env.example` template, or a values file
 // carrying an environment id and a base/local flag. A `.local` suffix marks an
@@ -108,7 +114,10 @@ function buildVarsFromOcc(
         ...(local ? { local: true } : {}),
       });
       // Every member shares the same env→value map by construction.
-      for (const [env, val] of byConsumer.get(consumers[0]!)!) (ctx.values[id] ??= {})[env] = val;
+      for (const [env, val] of byConsumer.get(consumers[0]!)!) {
+        ctx.values[id] ??= {};
+        ctx.values[id][env] = val;
+      }
       for (const cid of consumers) ctx.remember(cid, name, id);
     }
   }

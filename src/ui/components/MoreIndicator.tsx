@@ -1,4 +1,3 @@
-import React from "react";
 import { Text } from "ink";
 
 // Replaces the bare "..." overflow marker with a count of how many list items

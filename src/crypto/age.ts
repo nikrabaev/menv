@@ -1,4 +1,4 @@
-import { Encrypter, Decrypter, generateIdentity, identityToRecipient } from "age-encryption";
+import { Decrypter, Encrypter, generateIdentity, identityToRecipient } from "age-encryption";
 
 export interface Keypair {
   identity: string; // AGE-SECRET-KEY-1...

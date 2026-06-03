@@ -1,9 +1,9 @@
-import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import { TextInput } from "./components/TextInput.tsx";
-import { inlinePrompt } from "./components/inlinePrompt.tsx";
+import { useState } from "react";
 import type { KeyBackendKind } from "../core/types.ts";
 import type { PassphraseProvider } from "../crypto/identity.ts";
+import { inlinePrompt } from "./components/inlinePrompt.tsx";
+import { TextInput } from "./components/TextInput.tsx";
 
 // ── backend picker ────────────────────────────────────────────────────────────
 

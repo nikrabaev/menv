@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { createStore } from "../../src/store/store.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { createStore } from "../../src/store/store.ts";
 
 function baseModel(): RepoModel {
   return {

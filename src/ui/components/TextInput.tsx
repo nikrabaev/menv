@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
 import { Text, useInput } from "ink";
+import { useEffect, useState } from "react";
 
 // A single-line text input with a block caret, full editing key-bindings, paste
 // support, and horizontal windowing so the caret stays visible when the text is

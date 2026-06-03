@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import React from "react";
 import { render } from "ink-testing-library";
 import { NewVariableModal } from "../../src/ui/components/NewVariableModal.tsx";
 

@@ -1,6 +1,6 @@
 import { join } from "node:path";
+import { resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
-import { varsForConsumer, valueOf } from "../core/model.ts";
 import { parseDotenv } from "./dotenv.ts";
 
 // One generated file menv would write, paired with the variable slice that feeds
@@ -70,7 +70,7 @@ export async function detectDrift(model: RepoModel, env: string): Promise<FileDr
     for (const e of parseDotenv(await file.text())) onDisk.set(e.key, { value: e.value, description: e.description });
 
     const expected = new Map<string, { varId: string; value: string }>();
-    for (const v of t.vars) expected.set(v.name, { varId: v.id, value: valueOf(model, v.id, t.env) });
+    for (const v of t.vars) expected.set(v.name, { varId: v.id, value: resolveValue(model, v.id, t.env) });
 
     const added: FileDrift["added"] = [];
     const changed: FileDrift["changed"] = [];

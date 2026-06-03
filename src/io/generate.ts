@@ -1,8 +1,8 @@
-import { join, dirname } from "node:path";
-import { mkdir, copyFile, rename } from "node:fs/promises";
+import { copyFile, mkdir, rename } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel } from "../core/types.ts";
-import { varsForConsumer, valueOf } from "../core/model.ts";
-import { serializeDotenv, type SerializeEntry } from "./dotenv.ts";
+import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
 // `local` selects which slice of the consumer's variables to emit: base vars go
 // into `.env`/`.env.<env>`, local overrides into the matching `.local` file. The
@@ -21,7 +21,7 @@ function sortedVars(model: RepoModel, consumerId: string, local: boolean) {
 export function renderAppEnv(model: RepoModel, consumerId: string, env: string, local = false): string {
   const entries: SerializeEntry[] = sortedVars(model, consumerId, local).map((v) => ({
     key: v.name,
-    value: valueOf(model, v.id, env),
+    value: resolveValue(model, v.id, env),
     description: v.description,
     group: v.group,
   }));
@@ -51,7 +51,7 @@ async function writeFile(root: string, rel: string, content: string, stamp: stri
   await backupIfExists(root, rel, stamp);
   const abs = join(root, rel);
   await mkdir(dirname(abs), { recursive: true });
-  const tmp = abs + ".menv-tmp";
+  const tmp = `${abs}.menv-tmp`;
   await Bun.write(tmp, content);
   await rename(tmp, abs);
   return rel;

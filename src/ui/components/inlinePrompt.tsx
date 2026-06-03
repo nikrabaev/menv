@@ -1,5 +1,5 @@
-import React from "react";
-import { useApp, render } from "ink";
+import { render, useApp } from "ink";
+import type React from "react";
 
 // Render an inline (non-fullscreen) Ink prompt: mount it, resolve via
 // useApp().exit() from a callback, then fully unmount before the next prompt

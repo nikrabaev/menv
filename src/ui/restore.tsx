@@ -1,9 +1,9 @@
-import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useState } from "react";
+import type { RestorePrompts } from "../cli/restore.ts";
+import { inlinePrompt } from "./components/inlinePrompt.tsx";
 import { listWindow } from "./components/listWindow.ts";
 import { MoreIndicator } from "./components/MoreIndicator.tsx";
-import { inlinePrompt } from "./components/inlinePrompt.tsx";
-import type { RestorePrompts } from "../cli/restore.ts";
 
 // "20260112223049" -> "2026-01-12 22:30:49" for a readable hint next to the key.
 function readableKey(key: string): string {

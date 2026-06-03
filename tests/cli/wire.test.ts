@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { scaffold } from "./helpers.ts";
-import { runWire, runUnwire } from "../../src/cli/wire.ts";
-import { runRm } from "../../src/cli/rm.ts";
-import { runGet } from "../../src/cli/get.ts";
-import { runDefine } from "../../src/cli/define.ts";
 import { loadModel } from "../../src/cli/context.ts";
+import { runDefine } from "../../src/cli/define.ts";
+import { runGet } from "../../src/cli/get.ts";
+import { runRm } from "../../src/cli/rm.ts";
+import { runUnwire, runWire } from "../../src/cli/wire.ts";
 import type { KeyBackend } from "../../src/crypto/identity.ts";
+import { scaffold } from "./helpers.ts";
 
 const consumersOf = async (root: string, backend: KeyBackend, name: string) => {
   const { model } = await loadModel(root, { backend });

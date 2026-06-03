@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   classifyFindExitCode,
-  loadOrCreateIdentity,
   type KeyBackend,
+  loadOrCreateIdentity,
 } from "../../src/crypto/identity.ts";
 
 function memBackend(): KeyBackend {

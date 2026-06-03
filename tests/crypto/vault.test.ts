@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeypair } from "../../src/crypto/age.ts";
-import { saveEnvValues, loadEnvValues } from "../../src/crypto/vault.ts";
+import { loadEnvValues, saveEnvValues } from "../../src/crypto/vault.ts";
 
 test("saves and loads encrypted values for an env by var name", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));

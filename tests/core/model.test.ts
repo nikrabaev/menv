@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { varsForConsumer, valueOf } from "../../src/core/model.ts";
+import { resolveValue, varsForConsumer } from "../../src/core/model.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
 const model: RepoModel = {
@@ -20,7 +20,7 @@ test("varsForConsumer returns only wired vars", () => {
   expect(names).toEqual(["DATABASE_URL", "PORT"]);
 });
 
-test("valueOf returns the env value or empty string", () => {
-  expect(valueOf(model, "v1", "dev")).toBe("pg://x");
-  expect(valueOf(model, "v1", "prod")).toBe("");
+test("resolveValue returns the env value or empty string", () => {
+  expect(resolveValue(model, "v1", "dev")).toBe("pg://x");
+  expect(resolveValue(model, "v1", "prod")).toBe("");
 });

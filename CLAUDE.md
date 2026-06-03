@@ -34,6 +34,8 @@ bun run menv init      # scan the repo, set up the vault, update .gitignore
 bun run menv generate  # regenerate .env files from the vault (headless/CI)
 bun test               # run the test suite
 bun run build          # compile a standalone ./menv binary
+bun run lint           # Biome: lint + import-sort check (read-only)
+bun run lint:fix       # Biome: apply safe fixes (use --unsafe for the rest)
 ```
 
 In a checkout that's already been `bun link`ed, the `menv` binary on `PATH` is

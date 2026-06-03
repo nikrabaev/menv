@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { inspectorFields, copyableText } from "../../src/ui/inspectorFields.ts";
 import type { RepoModel, Variable } from "../../src/core/types.ts";
+import { copyableText, inspectorFields } from "../../src/ui/inspectorFields.ts";
 
 const variable: Variable = {
   id: "v1", name: "DATABASE_URL",

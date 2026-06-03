@@ -1,33 +1,34 @@
-import React, { useState } from "react";
-import { Box, Text, useApp, useInput, useStdout, render } from "ink";
-import type { Store } from "../store/store.ts";
-import { useModel, useDirty } from "./useStore.ts";
-import { useTerminalSize } from "./useTerminalSize.ts";
-import { TopBar } from "./components/TopBar.tsx";
-import { ScopeTree } from "./components/ScopeTree.tsx";
-import { buildScopes, varsForScope, stepScope } from "./scopes.ts";
-import { orderedVariables, groupStarts, jumpGroup, groupNames } from "./grouping.ts";
-import { VariableList } from "./components/VariableList.tsx";
-import { Inspector } from "./components/Inspector.tsx";
-import { EditFieldModal } from "./components/EditFieldModal.tsx";
-import { NewVariableModal } from "./components/NewVariableModal.tsx";
-import { GroupComboModal } from "./components/GroupComboModal.tsx";
-import { WireModal } from "./components/WireModal.tsx";
-import { PropagateModal } from "./components/PropagateModal.tsx";
-import { TextInput } from "./components/TextInput.tsx";
-import { inspectorFields, copyableText } from "./inspectorFields.ts";
-import { type EditTarget, editLabel, editInitial, applyEdit } from "./editTarget.ts";
+import { Box, render, Text, useApp, useInput, useStdout } from "ink";
+import type React from "react";
+import { useState } from "react";
+import { freeVarId, resolveValue } from "../core/model.ts";
+import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { copyToClipboard } from "../io/clipboard.ts";
-import { valueOf, freeVarId } from "../core/model.ts";
-import { saveModel } from "../store/save.ts";
-import { createStore } from "../store/store.ts";
-import { loadRepo } from "../store/load.ts";
 import { detectDrift } from "../io/drift.ts";
 import { applyFileDrift } from "../io/importEnv.ts";
-import { reconcileDrift } from "./driftReconcile.tsx";
-import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { readKeyBackendConfig } from "../io/persist.ts";
+import { loadRepo } from "../store/load.ts";
+import { saveModel } from "../store/save.ts";
+import type { Store } from "../store/store.ts";
+import { createStore } from "../store/store.ts";
+import { EditFieldModal } from "./components/EditFieldModal.tsx";
+import { GroupComboModal } from "./components/GroupComboModal.tsx";
+import { Inspector } from "./components/Inspector.tsx";
+import { NewVariableModal } from "./components/NewVariableModal.tsx";
+import { PropagateModal } from "./components/PropagateModal.tsx";
+import { ScopeTree } from "./components/ScopeTree.tsx";
+import { TextInput } from "./components/TextInput.tsx";
+import { TopBar } from "./components/TopBar.tsx";
+import { VariableList } from "./components/VariableList.tsx";
+import { WireModal } from "./components/WireModal.tsx";
+import { reconcileDrift } from "./driftReconcile.tsx";
+import { applyEdit, type EditTarget, editInitial, editLabel } from "./editTarget.ts";
+import { groupNames, groupStarts, jumpGroup, orderedVariables } from "./grouping.ts";
 import { interactivePassphraseProvider } from "./initPrompts.tsx";
+import { copyableText, inspectorFields } from "./inspectorFields.ts";
+import { buildScopes, stepScope, varsForScope } from "./scopes.ts";
+import { useDirty, useModel } from "./useStore.ts";
+import { useTerminalSize } from "./useTerminalSize.ts";
 
 type Pane = "scopes" | "vars" | "inspector";
 type Mode = "browse" | "edit" | "new" | "wire" | "filter" | "quit" | "propagate";
@@ -253,7 +254,7 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
     }
     if (input === "c" && current) {
       const field = pane === "inspector" ? fields[inspCursor] : undefined;
-      const text = field ? copyableText(field) : valueOf(model, current.id, env);
+      const text = field ? copyableText(field) : resolveValue(model, current.id, env);
       const label = field ? (field.kind === "value" ? `(${field.env})` : field.label) : `(${env})`;
       if (!text) {
         // null = a non-text field (secret/wiring); "" = an unset value/empty field.

@@ -1,9 +1,8 @@
-import { join, dirname } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { generateKeypair, type Keypair } from "./age.ts";
-import { encryptWithPassphrase, decryptWithPassphrase } from "./age.ts";
+import { dirname, join } from "node:path";
 import { identityToRecipient } from "age-encryption";
 import type { KeyBackendConfig } from "../core/types.ts";
+import { decryptWithPassphrase, encryptWithPassphrase, generateKeypair, type Keypair } from "./age.ts";
 
 // A place the secret age identity can be stored. `get` returns the identity
 // string (or null if none is stored yet); `set` persists a newly generated

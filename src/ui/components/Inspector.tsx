@@ -1,7 +1,6 @@
-import React from "react";
 import { Box, Text } from "ink";
 import type { RepoModel, Variable } from "../../core/types.ts";
-import { inspectorFields, type InspectorField } from "../inspectorFields.ts";
+import { type InspectorField, inspectorFields } from "../inspectorFields.ts";
 import { listWindow } from "./listWindow.ts";
 import { MoreIndicator } from "./MoreIndicator.tsx";
 
@@ -12,7 +11,7 @@ function truncate(text: string, width: number): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
   if (width === 1) return "…";
-  return text.slice(0, width - 1) + "…";
+  return `${text.slice(0, width - 1)}…`;
 }
 
 function displayText(f: InspectorField): string {

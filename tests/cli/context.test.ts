@@ -1,5 +1,5 @@
-import { expect, test, describe } from "bun:test";
-import { resolveVar, resolveConsumer, defaultEnv, readValue } from "../../src/cli/context.ts";
+import { describe, expect, test } from "bun:test";
+import { defaultEnv, readValue, resolveConsumer, resolveVar } from "../../src/cli/context.ts";
 import type { RepoModel } from "../../src/core/types.ts";
 
 function model(): RepoModel {

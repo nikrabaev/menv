@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test";
-import React from "react";
 import { render } from "ink-testing-library";
+import type { RepoModel } from "../../src/core/types.ts";
+import { createStore } from "../../src/store/store.ts";
 import {
   ENTER_FULLSCREEN,
   EXIT_FULLSCREEN,
-  MenvApp,
   enterFullscreen,
   exitFullscreen,
+  MenvApp,
 } from "../../src/ui/app.tsx";
-import { createStore } from "../../src/store/store.ts";
-import type { RepoModel } from "../../src/core/types.ts";
 
 const model: RepoModel = {
   root: "/repo/acme",

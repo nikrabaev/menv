@@ -1,11 +1,11 @@
-import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import { inlinePrompt } from "./components/inlinePrompt.tsx";
+import { useState } from "react";
 import type { FileDrift } from "../io/drift.ts";
+import { inlinePrompt } from "./components/inlinePrompt.tsx";
 
 function clip(v: string, width = 40): string {
   if (v.length <= width) return v;
-  return v.slice(0, width - 1) + "…";
+  return `${v.slice(0, width - 1)}…`;
 }
 
 // Walks the drifted files one at a time (mirroring restore.tsx's ConflictResolver

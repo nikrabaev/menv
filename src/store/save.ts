@@ -1,7 +1,7 @@
-import { writeModelFiles } from "../io/persist.ts";
+import type { RepoModel } from "../core/types.ts";
 import { saveEnvValues } from "../crypto/vault.ts";
 import { writeGeneratedFiles } from "../io/generate.ts";
-import type { RepoModel } from "../core/types.ts";
+import { writeModelFiles } from "../io/persist.ts";
 
 export interface SaveSummary {
   files: string[];

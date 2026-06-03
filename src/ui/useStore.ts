@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
-import type { Store } from "../store/store.ts";
 import type { RepoModel } from "../core/types.ts";
+import type { Store } from "../store/store.ts";
 
 export function useModel(store: Store): RepoModel {
   return useSyncExternalStore(

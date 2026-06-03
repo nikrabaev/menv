@@ -58,12 +58,12 @@ function needsQuote(v: string): boolean {
 
 function quote(v: string): string {
   if (!needsQuote(v)) return v;
-  return '"' + v.replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"';
+  return `"${v.replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r")}"`;
 }
 
 export function serializeDotenv(entries: SerializeEntry[], opts: SerializeOpts = {}): string {
   const lines: string[] = [];
-  let lastGroup: string | null | undefined = undefined;
+  let lastGroup: string | null | undefined ;
   for (const e of entries) {
     if (opts.groupHeaders && e.group !== lastGroup) {
       if (e.group) lines.push(`# ─── ${e.group} ───`);

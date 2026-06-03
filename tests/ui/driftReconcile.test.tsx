@@ -1,8 +1,7 @@
-import { expect, test, describe } from "bun:test";
-import React from "react";
+import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import { DriftReconciler } from "../../src/ui/driftReconcile.tsx";
 import type { FileDrift } from "../../src/io/drift.ts";
+import { DriftReconciler } from "../../src/ui/driftReconcile.tsx";
 
 const ESC = "\x1B";
 const tick = () => new Promise((r) => setTimeout(r, 20));

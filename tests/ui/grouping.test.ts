@@ -1,6 +1,6 @@
-import { expect, test, describe } from "bun:test";
-import { groupedRows, orderedVariables, groupStarts, jumpGroup, groupNames } from "../../src/ui/grouping.ts";
+import { describe, expect, test } from "bun:test";
 import type { Variable } from "../../src/core/types.ts";
+import { groupedRows, groupNames, groupStarts, jumpGroup, orderedVariables } from "../../src/ui/grouping.ts";
 
 const mk = (name: string, group: string | null): Variable => ({
   id: `var:${name}`, name, description: "", group, secret: false, consumers: [],

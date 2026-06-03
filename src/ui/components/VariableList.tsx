@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, measureElement, type DOMElement } from "ink";
+import { Box, type DOMElement, measureElement, Text } from "ink";
+import { useEffect, useRef, useState } from "react";
+import { resolveValue } from "../../core/model.ts";
 import type { Consumer, RepoModel, Variable } from "../../core/types.ts";
-import { valueOf } from "../../core/model.ts";
+import { groupedRows } from "../grouping.ts";
 import { listWindow } from "./listWindow.ts";
 import { MoreIndicator } from "./MoreIndicator.tsx";
-import { groupedRows } from "../grouping.ts";
 
 const MAX_SCOPE_SHOWN = 3;
 // Secret values are never shown; the value column renders this (in yellow) instead.
@@ -36,7 +36,7 @@ function truncate(text: string, width: number): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
   if (width === 1) return "…";
-  return text.slice(0, width - 1) + "…";
+  return `${text.slice(0, width - 1)}…`;
 }
 
 export function VariableList({ variables, cursor, height, scopeLabel, consumers, showScopes, filter, model, env, grouped = false }: {
@@ -60,7 +60,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
   const maxItems = height ? Math.max(0, height - 5) : rows.length;
   const windowed = listWindow(rows, selectedRow, maxItems);
 
-  const valueFor = (v: Variable) => (model && env ? valueOf(model, v.id, env) : "");
+  const valueFor = (v: Variable) => (model && env ? resolveValue(model, v.id, env) : "");
   // The text shown in the value column: the placeholder for an unset value (a secret
   // with no value has nothing to mask), the mask for a secret with a value, otherwise
   // the value itself.

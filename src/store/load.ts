@@ -1,7 +1,7 @@
 import { join } from "node:path";
-import { readModelFiles } from "../io/persist.ts";
-import { loadEnvValues } from "../crypto/vault.ts";
 import type { RepoModel, Values } from "../core/types.ts";
+import { loadEnvValues } from "../crypto/vault.ts";
+import { readModelFiles } from "../io/persist.ts";
 
 export async function loadRepo(root: string, identity: string): Promise<RepoModel> {
   const parts = await readModelFiles(root);
@@ -11,7 +11,8 @@ export async function loadRepo(root: string, identity: string): Promise<RepoMode
     const byId = await loadEnvValues(root, env.id, identity);
     for (const [id, val] of Object.entries(byId)) {
       if (!ids.has(id)) continue;
-      (values[id] ??= {})[env.id] = val;
+      values[id] ??= {};
+      values[id][env.id] = val;
     }
   }
   return {

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { scaffold } from "./helpers.ts";
 import { runDefine } from "../../src/cli/define.ts";
-import { runSet } from "../../src/cli/set.ts";
 import { runGet } from "../../src/cli/get.ts";
+import { runSet } from "../../src/cli/set.ts";
+import { scaffold } from "./helpers.ts";
 
 test("get prints a secret's real value (so it can be piped)", async () => {
   const { root, backend } = await scaffold();

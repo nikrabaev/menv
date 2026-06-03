@@ -1,7 +1,7 @@
-import { createStore } from "../store/store.ts";
-import { saveModel } from "../store/save.ts";
-import { loadModel, defaultEnv, resolveVar } from "./context.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
+import { saveModel } from "../store/save.ts";
+import { createStore } from "../store/store.ts";
+import { defaultEnv, loadModel, resolveVar } from "./context.ts";
 
 export interface RmOpts {
   backend?: KeyBackend;

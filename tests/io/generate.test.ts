@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { renderAppEnv, renderAppExample } from "../../src/io/generate.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { renderAppEnv, renderAppExample } from "../../src/io/generate.ts";
 
 const model: RepoModel = {
   root: "/r",

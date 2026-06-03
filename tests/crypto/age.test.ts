@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { generateKeypair, encryptToRecipients, decryptWithIdentity } from "../../src/crypto/age.ts";
+import { decryptWithIdentity, encryptToRecipients, generateKeypair } from "../../src/crypto/age.ts";
 
 test("encrypts to recipient and decrypts with identity", async () => {
   const { identity, recipient } = await generateKeypair();

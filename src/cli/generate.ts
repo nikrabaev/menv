@@ -1,6 +1,6 @@
-import { writeGeneratedFiles } from "../io/generate.ts";
-import { loadModel, defaultEnv } from "./context.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
+import { writeGeneratedFiles } from "../io/generate.ts";
+import { defaultEnv, loadModel } from "./context.ts";
 
 export interface GenerateOpts {
   backend?: KeyBackend;

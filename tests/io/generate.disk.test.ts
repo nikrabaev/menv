@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeGeneratedFiles } from "../../src/io/generate.ts";
 import type { RepoModel } from "../../src/core/types.ts";
+import { writeGeneratedFiles } from "../../src/io/generate.ts";
 
 test("does not write .env.example for an app with no real env file", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));

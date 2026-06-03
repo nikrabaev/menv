@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import React from "react";
 import { EventEmitter } from "node:events";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
