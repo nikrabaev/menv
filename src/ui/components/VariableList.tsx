@@ -13,6 +13,9 @@ const SECRET_MASK = "***";
 // value set for the current environment.
 const EMPTY_LABEL = "empty";
 const GUTTER = " ";
+// Suffix marking a local-override variable (a `.env.local` key); shown in colour.
+const LOCAL_SUFFIX = " (local)";
+const dispNameLen = (v: Variable) => v.name.length + (v.local ? LOCAL_SUFFIX.length : 0);
 // Value-column width used before the pane width is known (first render). Once the
 // pane is measured the column is sized to the room actually left on the line.
 const VALUE_FALLBACK_WIDTH = 40;
@@ -78,7 +81,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
   // Fixed columns, computed over the whole list so they stay put as the window
   // scrolls: the widest name, and the widest scope cell (so the value column can
   // leave room for it and the scopes line up).
-  const nameWidth = variables.length ? Math.max(...variables.map((v) => v.name.length)) : 0;
+  const nameWidth = variables.length ? Math.max(...variables.map(dispNameLen)) : 0;
   const scopesWidth = variables.length ? Math.max(0, ...variables.map((v) => scopeTextFor(v).length)) : 0;
 
   // The pane flexes to fill the columns left over by the scope tree and inspector,
@@ -126,11 +129,13 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
         }
         const v = row.variable;
         const hint = hintFor(v);
-        const nameSeg = GUTTER + v.name.padEnd(nameWidth) + GUTTER;
+        // Name column: name (+ coloured " (local)" suffix), padded to nameWidth
+        // between the two gutters. nameSeg width is constant (nameWidth + 2).
+        const namePad = Math.max(0, nameWidth - dispNameLen(v));
         const empty = isEmptyValue(v);
         const valueCell = valueWidth > 0 ? truncate(displayValueOf(v), valueWidth).padEnd(valueWidth) : "";
         const scopeLen = scopeTextFor(v).length;
-        const contentLen = nameSeg.length + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
+        const contentLen = (nameWidth + 2) + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
         // Trailing fill so a selected row's highlight reaches the pane's right edge.
         const fill = Math.max(0, rowWidth - contentLen);
         // The cursor row is the variable shown in the inspector, so it stays
@@ -138,7 +143,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
         const isCurrent = row.index === cursor;
         return (
           <Text key={`${v.id}:${row.index}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
-            {nameSeg}
+            {GUTTER}{v.name}{v.local ? <Text color="magenta">{LOCAL_SUFFIX}</Text> : null}{" ".repeat(namePad)}{GUTTER}
             {valueWidth > 0 ? <Text italic={empty} color={empty ? "gray" : v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
             {hint ? <Text color="blackBright">{hint}</Text> : null}

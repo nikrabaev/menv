@@ -113,9 +113,22 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   into a single variable wired to all of them; where the values differ, each value
   becomes its own variable of the same name (disambiguate the duplicates with
   `--scope`). There is no global/local distinction to track.
+- **Local overrides** — A key found in a `.env.local` (or `.env.<env>.local`) file
+  becomes its own variable tagged `(local)` in the TUI. It edits and wires like any
+  other, but generates back into the matching `.local` file rather than the base
+  `.env` — and is kept out of the shared `.env.example` template. An app with both
+  `.env` and `.env.local` stays **single** mode; only an explicit `.env.<env>` flips
+  it to per-env.
 - **Wiring** — Which **consumers** actually receive a variable: any number of apps,
   plus the synthetic `root` target (the repo's top-level `.env`). On save, `menv`
   writes each variable into exactly the `.env` files of its wired consumers.
+- **Drift reconciliation** — Generated `.env` files are meant to be rewritten from
+  the vault, but people edit them by hand. When you open the TUI, `menv` first
+  compares every generated file against the vault and, if any diverge, walks you
+  through them one at a time: import the on-disk edits back into the vault (changed
+  values update in place; brand-new keys become new variables) or keep the vault and
+  let the next save overwrite the file. (`menv generate` stays a one-way
+  vault→disk regenerate for CI.)
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
   auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
   `DSN`, `URL`) and toggleable per variable.
@@ -244,6 +257,7 @@ your-repo/
 │  └─ backups/               # git-ignored — timestamped .env snapshots
 ├─ apps/web/                 # single mode (default)
 │  ├─ .env                   # git-ignored — generated for the active environment
+│  ├─ .env.local             # git-ignored — local overrides, if any (kept out of .env.example)
 │  └─ .env.example           # committed — values-free template
 └─ apps/api/                 # per-env mode
    ├─ .env.dev               # git-ignored — one file per environment it has values in
@@ -264,6 +278,10 @@ your-repo/
 
 The encrypted vault (`menv.toml`, `.menv/manifest.toml`, `.menv/values/*.age`) is
 safe to commit; the plaintext `.env` files are not, and are regenerated on demand.
+
+> **Note:** values are treated as single-line. A multi-line value (e.g. a PEM key
+> spanning several lines) isn't supported yet — keep such values on one line
+> (escaped `\n`) or out of the vault.
 
 ## Headless / CI
 

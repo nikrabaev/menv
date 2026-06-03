@@ -25,6 +25,11 @@ export interface Variable {
   // is defined in the manifest but materialized nowhere until it is wired.
   consumers: ConsumerId[];
   example?: string; // optional placeholder emitted into .env.example; one per variable, not per-env
+  // A local override: discovered from / generated back into a `.local` file
+  // (`.env.local`, `.env.<env>.local`) rather than the base `.env`/`.env.<env>`.
+  // Absent ⇒ a base variable. The flag only changes which file the value lands in
+  // and the TUI label; everything else (values, wiring, secret) behaves the same.
+  local?: boolean;
 }
 
 export interface Environment {
