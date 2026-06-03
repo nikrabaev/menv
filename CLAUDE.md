@@ -1,117 +1,129 @@
-# menv
+# menv — agent guide
 
-A TUI (Ink + React) for managing environment variables across a monorepo. Values
-are stored age-encrypted under `.menv/values/`; structure lives in `menv.toml` and
-`.menv/manifest.toml`. The runtime is **Bun** (not Node) — TS/TSX runs directly, no
-build step for development.
+A keyboard-driven TUI **and** full CLI for managing environment variables across a
+monorepo. Runtime is **Bun** (not Node) — `.ts`/`.tsx` run directly, no build step
+for development. UI is **Ink 7 + React 19**; values are **age-encrypted** in one
+committed vault and `.env` files are *generated* from it on demand.
 
-The secret age identity is held by a **key backend**, chosen at `menv init`
-(`--backend keychain|1password|password`) and recorded under `[key_backend]` in
-`menv.toml` — see `src/crypto/identity.ts` and `src/crypto/resolveBackend.ts`.
-`keychain` (macOS only) and `1password` (`op` CLI) keep the identity in an external
-secret store; `password` writes it passphrase-encrypted to a **committed**
-`.menv/identity.age` (portable across machines — but anyone with repo access plus
-the passphrase can decrypt the vault, so the passphrase is the whole barrier).
-Headless `menv generate` takes the password-backend passphrase from
-`MENV_PASSPHRASE`.
+The mental model: the vault is the single source of truth. Plaintext `.env` files
+are disposable outputs (git-ignored, regenerated). Editing happens in the vault via
+the TUI or the CLI — never by hand-editing a generated file.
 
-## Layout
-
-- `src/cli/` — command handlers (`init`, `generate`, `root`)
-- `src/core/` — domain model and types
-- `src/crypto/` — age encryption, identity, vault
-- `src/io/` — discovery, dotenv parsing, file persistence, generation
-- `src/store/` — in-memory store, load/save
-- `src/ui/` — Ink components, `app.tsx` (the main layout), `scopes.ts`
-- `tests/` — mirrors `src/` one-to-one
-
-## Common commands
+## Commands
 
 ```bash
 bun install            # install deps
-bun run menv           # run the CLI from source (src/index.ts)
-bun run menv init      # scan the repo, set up the vault, update .gitignore
-bun run menv generate  # regenerate .env files from the vault (headless/CI)
-bun test               # run the test suite
-bun run build          # compile a standalone ./menv binary
+bun run menv           # run the CLI/TUI from source (src/index.ts)
+bun run menv init      # scan repo, create vault, choose key backend, edit .gitignore
+bun run menv generate  # one-way vault → .env regenerate (headless/CI)
+bun test               # whole suite
+bun test tests/io/dotenv.parse.test.ts   # a single test file
 bun run lint           # Biome: lint + import-sort check (read-only)
-bun run lint:fix       # Biome: apply safe fixes (use --unsafe for the rest)
+bun run lint:fix       # Biome: apply safe fixes (--unsafe for the rest)
+bun run build          # compile a standalone ./menv binary
 ```
 
-In a checkout that's already been `bun link`ed, the `menv` binary on `PATH` is
-equivalent to `bun run menv`.
+Full CLI grammar, keybindings, and the feature tour live in `README.md` — the
+source of truth for user-facing behavior. The full command set (`init`, `generate`,
+`define`, `set`, `get`, `list`, `wire`/`unwire`, `mode`, `rm`, `backup`, `restore`,
+plus the no-arg TUI launch) is dispatched from `src/index.ts`; each handler lives in
+`src/cli/`. In a `bun link`ed checkout, the `menv` binary on `PATH` equals
+`bun run menv`.
 
-## Documentation
+## Structure
 
-`README.md` is the user-facing front door — keep it in step with the code. When a
-change alters something the README describes (a command or flag, a keybinding, the
-on-disk layout, a key backend, the discovery rules, the feature set), update the
-README in the **same** change rather than leaving it to drift.
+- `src/cli/` — one command handler per file; dispatch + arg parsing in `src/index.ts`
+- `src/core/` — domain model (`src/core/model.ts`) and types (`src/core/types.ts`); pure, no I/O
+- `src/crypto/` — age encryption (`src/crypto/age.ts`), the key backends (`src/crypto/identity.ts`, `src/crypto/resolveBackend.ts`), vault read/write (`src/crypto/vault.ts`)
+- `src/io/` — filesystem effects: discovery (`src/io/discovery.ts`), dotenv parse/serialize (`src/io/dotenv.ts`), generation (`src/io/generate.ts`), persistence (`src/io/persist.ts`), drift detection (`src/io/drift.ts`)
+- `src/store/` — in-memory store (`src/store/store.ts`) plus load/save
+- `src/ui/` — Ink components under `src/ui/components/`, the main layout in `src/ui/app.tsx`, scope model in `src/ui/scopes.ts`
+- `tests/` — mirrors `src/` one-to-one
 
-That includes the hero screenshot at `assets/screenshot.png`. Whenever the TUI's
-appearance changes in a way a reader would notice — panes, the top bar, scopes,
-the inspector fields, colours, the footer hints — regenerate it with the
-`screenshot-tui` skill (`.claude/skills/screenshot-tui/`), which renders the real
-`MenvApp` rather than a mock-up. The skill also keeps the editable
-`assets/screenshot.svg` source alongside the PNG.
+The on-disk layout `menv init` creates and `menv` manages (paths are defined as
+constants in `src/io/persist.ts` and `src/crypto/identity.ts`):
 
-## Coding style
+```text
+menv.toml             # config: targets, recipients, [key_backend]   — committed
+.menv/manifest.toml   # variable structure: metadata + wiring        — committed
+.menv/values/         # age-encrypted values (ciphertext)            — committed
+.menv/identity.age    # password backend ONLY: passphrase-encrypted  — committed
+.menv/backups/        # vault snapshots (menv backup / restore)
+.env, .env.<env>      # GENERATED from the vault — git-ignored, never hand-edited
+.env.example          # GENERATED values-free template               — committed
+```
 
-- **Bun-first.** Use Bun APIs (`Bun.file`, `Bun.argv`, `Bun.write`) over Node
-  equivalents. Top-level `await` is fine.
-- **ESM with explicit extensions.** Relative imports include the `.ts`/`.tsx`
-  suffix (`./cli/root.ts`) — required by `allowImportingTsExtensions`.
-- **Named exports**, no default exports. `type`-only imports for types.
-- **`strict` TypeScript.** No `any` escape hatches; model nullability honestly.
-- Match the surrounding file's idiom, naming, and comment density. Comments
-  explain *why* (e.g. the layout-budget note in `app.tsx`), not *what*.
-- Keep functions small and pure where practical; the `io/` and `store/` split
-  keeps filesystem effects out of the domain logic.
+## Security model
+
+The vault is encrypted to an **age** recipient; decryption needs the matching
+**identity** (private key), held by a **key backend** chosen at `menv init`
+(`--backend keychain|1password|password`, recorded under `[key_backend]`):
+
+- `keychain` (macOS only) and `1password` (`op` CLI) keep the identity in an
+  external secret store — it never enters the repo.
+- `password` writes the identity passphrase-encrypted to a **committed**
+  `identity.age` file (see the layout above), portable across machines. The
+  passphrase is then the whole barrier: anyone with repo access **plus** the
+  passphrase can decrypt the vault.
+  Headless `menv generate` reads that passphrase from `MENV_PASSPHRASE`.
+
+Because the vault ciphertext is committed but the identity backing varies, treat
+anything that touches `src/crypto/` as security-sensitive (see Boundaries).
+
+## Code style
+
+- **Bun-first** — use `Bun.file`, `Bun.write`, `Bun.argv`, not the Node equivalents. Top-level `await` is fine.
+- **ESM with explicit extensions** — ✅ `import { runInit } from "./cli/init.ts"`  🚫 `from "./cli/init"` (required by `allowImportingTsExtensions`).
+- **Named exports only** — ✅ `export function MenvApp(...)`  🚫 `export default`. `type`-only imports for types.
+- **`strict` TypeScript** — no `any` escape hatches; model nullability honestly. Linter/format config is the source of truth: see `biome.json`.
+- Keep `src/io/` and `src/store/` effects out of `src/core/` domain logic. Comments explain *why*, not *what* (e.g. the layout-budget note in `src/ui/app.tsx`).
 
 ## Testing
 
-The test framework is **`bun:test`** (not Vitest/Jest — `npx vitest` will fail
-because `import ... from "bun:test"` only resolves under Bun).
+Framework is **`bun:test`** (not Vitest/Jest — `import ... from "bun:test"` only
+resolves under Bun, so `npx vitest` fails). Run one file with
+`bun test <path>` (e.g. `bun test tests/io/persist.test.ts`).
 
-```bash
-bun test                       # whole suite
-bun test tests/ui/             # one directory
-bun test tests/ui/scopes.test.ts   # one file
-```
-
-Conventions:
-
-- Tests live in `tests/`, mirroring the `src/` path of what they cover. Name them
-  `<unit>.test.ts` (or `.tsx` for components). Descriptive suffixes are used for
-  variants of one unit, e.g. `dotenv.parse.test.ts` / `dotenv.serialize.test.ts`,
-  `persist.disk.test.ts` (touches the filesystem) vs `persist.test.ts`.
-- Import from `bun:test`: `import { expect, test, describe } from "bun:test";`
-- **Always run the suite after changing code and before reporting done.** New
-  behavior needs a test; fixed bugs get a regression test.
+- Tests live in `tests/`, mirroring the `src/` path they cover, named `<unit>.test.ts` (`.tsx` for components). Variant suffixes split one unit: `tests/io/dotenv.parse.test.ts` vs `tests/io/dotenv.serialize.test.ts`; `tests/io/persist.disk.test.ts` (touches the filesystem) vs `tests/io/persist.test.ts`.
+- New behavior needs a test; a fixed bug gets a regression test.
 
 ### Testing the TUI (Ink)
 
-Render components with `ink-testing-library` and assert on `lastFrame()`:
+Render with `ink-testing-library` and assert on `lastFrame()`:
 
 ```tsx
 import { render } from "ink-testing-library";
-const { lastFrame, stdin } = render(<MenvApp store={store} onSaveStamp={() => "s"} viewportRows={24} viewportColumns={100} />);
+const { lastFrame, stdin } = render(
+  <MenvApp store={store} onSaveStamp={() => "s"} viewportRows={24} viewportColumns={100} />,
+);
 expect(lastFrame()).toContain("VARIABLES");
 ```
 
-- Pass `viewportRows` / `viewportColumns` to `MenvApp` for a deterministic size
-  instead of relying on the terminal.
-- To drive keyboard input, `stdin.write("w")` (or `"\r"` for Enter), then `await`
-  a short `setTimeout` so the re-render flushes before reading `lastFrame()`.
-- `ink-testing-library` runs in debug mode and concatenates frames, so a frame
-  taller than the viewport shows diff/overlap artifacts that do **not** appear in a
-  real terminal's alternate screen. Judge correctness by line count and box borders
-  closing, not by stray bleed-through text.
+- Pass `viewportRows` / `viewportColumns` to `MenvApp` for a deterministic size instead of relying on the terminal.
+- To drive input, `stdin.write("w")` (or `"\r"` for Enter), then `await` a short `setTimeout` so the re-render flushes before reading `lastFrame()`.
+- `ink-testing-library` runs in debug mode and concatenates frames, so a frame taller than the viewport shows diff/overlap artifacts that do **not** appear in a real terminal's alternate screen. Judge correctness by line count and box borders closing, not by stray bleed-through text.
 
 ### TUI layout invariant
 
-`app.tsx` lays panes out to an exact budget: `topBar(3) + paneHeight + bottomHeight
-= rows`. Any modal rendered in the bottom region must have `bottomHeight` set to its
-**actual** rendered height (border + content), or it overflows and overlaps the
+`src/ui/app.tsx` lays panes out to an exact budget: `topBar(3) + paneHeight +
+bottomHeight = rows`. Any modal in the bottom region must set `bottomHeight` to its
+**actual** rendered height (border + content) or it overflows and overlaps the
 panes. Modals taller than the viewport (e.g. the wire modal) must window their list
-with `listWindow` rather than render every item.
+with `src/ui/components/listWindow.ts`, not render every item.
+
+## Boundaries
+
+- ✅ **Always:** run `bun test` (whole suite) before claiming done. Keep explicit `.ts`/`.tsx` import extensions and named exports. When a change alters a command/flag, keybinding, on-disk layout, key backend, or discovery rule, update `README.md` in the **same** change; when the TUI's appearance changes, regenerate `assets/screenshot.png` via the `screenshot-tui` skill (`.claude/skills/screenshot-tui/`).
+- ⚠️ **Ask first:** changing the on-disk vault/manifest schema or file naming (existing repos need a migration path). Bumping core deps (`bun`, `ink`, `react`, `age-encryption`) — Ink/React majors ripple through `src/ui/`. Anything in `src/crypto/` that changes the age recipient or key-backend behavior.
+- 🚫 **Never:** commit a plaintext `.env`/`.env.*`, or print a real secret value in code, tests, logs, or a PR — secrets render as `***` for a reason; the committed vault must stay ciphertext. Treat a generated `.env` as an output, not a source — edit the vault instead; stray on-disk edits are imported by drift reconciliation at TUI launch (`src/io/drift.ts`, `src/ui/driftReconcile.tsx`). Reference line numbers in docs, or duplicate `package.json`/config bodies — reference the file. Reach for a Node API where a Bun one exists, or add a default export.
+
+## Deep docs
+
+- User-facing front door, full CLI reference, keybindings, concepts → `README.md`.
+- Screenshot regeneration skill → `.claude/skills/screenshot-tui/`.
+
+---
+Source of truth: `src/` (behavior), `package.json` (commands/deps), `biome.json`
+(style), `README.md` (user-facing). Update when: a command/flag, keybinding,
+on-disk layout, key backend, or discovery rule changes; a core dependency is
+bumped; or a directory moves.
