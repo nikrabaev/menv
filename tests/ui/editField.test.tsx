@@ -24,6 +24,9 @@ test("esc cancels", async () => {
   );
   await new Promise((r) => setTimeout(r, 0));
   stdin.write("\x1b");
-  await new Promise((r) => setTimeout(r, 10));
+  // Ink 7 buffers a lone ESC for ~20ms to let chunked escape sequences (e.g. an
+  // arrow key arriving as a separate \x1b then "[A" read) reassemble before it
+  // flushes the bare ESC as key.escape — so wait past that debounce window.
+  await new Promise((r) => setTimeout(r, 40));
   expect(cancelled).toBe(true);
 });
