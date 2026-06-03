@@ -21,16 +21,26 @@ Commands:
                             --group <name>           Set the group ("" clears it)
                             --scope <c1,c2,...>      Replace its wiring; use "root"
                                                      for the repo-root .env target
+                            --local                  Create/address the .env.local
+                                                     override of NAME (own variable)
   set NAME [value]        Set a value (value from arg, stdin, or hidden prompt)
                             --env <env>       Target environment (default: default)
                             --scope <c>       Disambiguate a repeated name
+                            --local           Target the .env.local override
   get NAME [options]      Print a value to stdout (raw; secrets included)
-                            --env <env>, --scope <c>
-  list [options]          List variables (secrets shown as ***)
-                            --scope <c>, --group <name>, --env <env>, --json
+                            --env <env>, --scope <c>, --local
+  list [options]          List variables (secrets shown as ***; overrides tagged
+                          "(local)")
+                            --scope <c>, --group <name>, --env <env>, --local,
+                            --json
   wire NAME <c1,c2,...>   Wire a variable to consumers (apps and/or "root")
-  unwire NAME <c1,c2,...> Unwire a variable from consumers
-  rm NAME [--scope <c>]   Delete a variable
+                            --local           Wire the .env.local override
+  unwire NAME <c1,c2,...> Unwire a variable from consumers (--local for the override)
+  rm NAME [options]       Delete a variable
+                            --scope <c>, --local
+
+  Without --local these commands address the base variable; --local targets its
+  .env.local override (a separate variable generated into the .local file).
   mode <consumer> <m>     Set a consumer's .env file layout: single (one .env) or
                           perenv (one .env.<env> per environment)
 

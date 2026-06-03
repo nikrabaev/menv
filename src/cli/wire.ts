@@ -5,6 +5,7 @@ import type { KeyBackend } from "../crypto/identity.ts";
 
 export interface WireOpts {
   backend?: KeyBackend;
+  local?: boolean; // target the `.env.local` override of NAME rather than the base
   env?: string;
   stamp?: string;
 }
@@ -17,7 +18,7 @@ async function applyWire(
   opts: WireOpts,
 ): Promise<void> {
   const { model } = await loadModel(root, { backend: opts.backend });
-  const v = resolveVar(model, name);
+  const v = resolveVar(model, name, { local: opts.local });
   const store = createStore(model);
   for (const s of scopes) {
     const cid = resolveConsumer(model, s);

@@ -37,3 +37,18 @@ test("list marks an unset value as empty", async () => {
   const out = await runList(root, { backend });
   expect(out.split("\n").find((l) => l.includes("BLANK"))).toContain("empty");
 });
+
+test("list tags overrides, carries the local field in --json, and --local filters", async () => {
+  const { root, backend } = await scaffold({ apps: { api: { API_URL: "https://prod" } } });
+  await runDefine(root, "API_URL", { backend, local: true, scope: ["api"], stamp: "s1" });
+
+  const out = await runList(root, { backend });
+  expect(out).toMatch(/API_URL \(local\)/); // override tagged in the name column
+
+  const arr = JSON.parse(await runList(root, { backend, json: true }));
+  expect(arr.find((x: { id: string }) => x.id === "var:API_URL.local").local).toBe(true);
+  expect(arr.find((x: { id: string }) => x.id === "var:API_URL").local).toBe(false);
+
+  const onlyLocal = JSON.parse(await runList(root, { backend, local: true, json: true }));
+  expect(onlyLocal.map((x: { id: string }) => x.id)).toEqual(["var:API_URL.local"]);
+});

@@ -160,6 +160,12 @@ menv rm OLD_FLAG                                 # remove a variable entirely
 
 menv mode api perenv                             # api emits .env.<env> files
 menv mode web single                             # web emits a single .env
+
+# Local overrides: --local creates/addresses the .env.local variant of a name
+menv define API_URL --local --scope web          # a separate override variable
+menv set    API_URL --local http://localhost     # set the override's value
+menv get    API_URL                              # the base value (.env)
+menv get    API_URL --local                      # the override value (.env.local)
 ```
 
 A few things worth knowing:
@@ -174,6 +180,11 @@ A few things worth knowing:
   `.env` / `.env.example` files** — exactly like pressing `s` in the TUI.
 - **Repeated names** (same variable name, different values) are addressed with
   `--scope <consumer>`; without it, an ambiguous name is reported rather than guessed.
+- **Local overrides** are a separate variable behind `--local` (on `define`, `set`,
+  `get`, `rm`, `wire`/`unwire`, and as a `list` filter). Without the flag a command
+  addresses the base variable (`.env` is canonical); `--local` targets the
+  `.env.local` override, which generates into the matching `.local` file and is kept
+  out of `.env.example`.
 
 The full grammar is in the [CLI reference](#cli-reference).
 
@@ -213,17 +224,24 @@ menv [command] [options]
       --example <text>         Set the .env.example placeholder
       --group <name>           Set the group ("" clears it)
       --scope <c1,c2,…>        Replace its wiring; "root" = the repo-root .env
+      --local                  Create/address the .env.local override of NAME
   set NAME [value]        Set a value — from the arg, stdin, or a hidden prompt
       --env <env>              Target environment (default: the default env)
       --scope <consumer>       Disambiguate a name shared by several variables
+      --local                  Target the .env.local override
   get NAME [options]      Print a value to stdout (raw; secrets included)
-      --env <env>, --scope <consumer>
-  list [options]          List variables (secrets shown as ***, unset as empty)
-      --scope <consumer>, --group <name>, --env <env>, --json
+      --env <env>, --scope <consumer>, --local
+  list [options]          List variables (secrets shown as ***, unset as empty;
+                          overrides tagged "(local)")
+      --scope <consumer>, --group <name>, --env <env>, --local, --json
   wire   NAME <c1,c2,…>   Wire a variable to consumers (apps and/or "root")
-  unwire NAME <c1,c2,…>   Unwire a variable from consumers
-  rm NAME [--scope <c>]   Delete a variable
+      --local                  Wire the .env.local override
+  unwire NAME <c1,c2,…>   Unwire a variable from consumers (--local for the override)
+  rm NAME [options]       Delete a variable (--scope <c>, --local)
   mode <consumer> <m>     Set a consumer's .env layout: single | perenv
+
+  Without --local, variable commands address the base variable; --local targets
+  its .env.local override (a separate variable generated into the .local file).
 
   Materialize & back up:
 

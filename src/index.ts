@@ -146,23 +146,24 @@ try {
       example: "example" in flags ? flags.example : undefined,
       group: "group" in flags ? flags.group : undefined,
       scope: "scope" in flags ? splitScopes([flags.scope!]) : undefined,
+      local: bools.has("local"),
       stamp: stamp(),
     });
     console.log(`menv: defined ${name}`);
     process.exit(0);
   } else if (cmd === "set") {
-    const { positionals, flags } = parseArgs(["env", "scope"]);
+    const { positionals, flags, bools } = parseArgs(["env", "scope"]);
     const name = positionals[0];
     if (!name) throw new Error("menv: set requires a variable name");
     const value = await readValue(positionals[1], `Value for ${name}:`);
-    await runSet(root, name, { env: flags.env, scope: flags.scope, value, stamp: stamp() });
+    await runSet(root, name, { env: flags.env, scope: flags.scope, local: bools.has("local") || undefined, value, stamp: stamp() });
     console.log(`menv: set ${name}`);
     process.exit(0);
   } else if (cmd === "get") {
-    const { positionals, flags } = parseArgs(["env", "scope"]);
+    const { positionals, flags, bools } = parseArgs(["env", "scope"]);
     const name = positionals[0];
     if (!name) throw new Error("menv: get requires a variable name");
-    const value = await runGet(root, name, { env: flags.env, scope: flags.scope });
+    const value = await runGet(root, name, { env: flags.env, scope: flags.scope, local: bools.has("local") || undefined });
     // Raw, no trailing newline, so `$(menv get X)` and pipes stay clean.
     process.stdout.write(value);
     process.exit(0);
@@ -172,17 +173,18 @@ try {
       env: flags.env,
       scope: "scope" in flags ? flags.scope : undefined,
       group: "group" in flags ? flags.group : undefined,
+      local: bools.has("local") || undefined,
       json: bools.has("json"),
     });
     console.log(out);
     process.exit(0);
   } else if (cmd === "wire" || cmd === "unwire") {
-    const { positionals, flags } = parseArgs(["env"]);
+    const { positionals, flags, bools } = parseArgs(["env"]);
     const name = positionals[0];
     if (!name) throw new Error(`menv: ${cmd} requires a variable name`);
     const scopes = splitScopes(positionals.slice(1));
     if (scopes.length === 0) throw new Error(`menv: ${cmd} requires at least one scope (e.g. an app name or "root")`);
-    await (cmd === "wire" ? runWire : runUnwire)(root, name, scopes, { env: flags.env, stamp: stamp() });
+    await (cmd === "wire" ? runWire : runUnwire)(root, name, scopes, { env: flags.env, local: bools.has("local") || undefined, stamp: stamp() });
     console.log(`menv: ${cmd}d ${name} ${cmd === "wire" ? "to" : "from"} ${scopes.join(", ")}`);
     process.exit(0);
   } else if (cmd === "mode") {
@@ -197,10 +199,10 @@ try {
     console.log(`menv: set ${consumer} to ${mode}`);
     process.exit(0);
   } else if (cmd === "rm") {
-    const { positionals, flags } = parseArgs(["env", "scope"]);
+    const { positionals, flags, bools } = parseArgs(["env", "scope"]);
     const name = positionals[0];
     if (!name) throw new Error("menv: rm requires a variable name");
-    await runRm(root, name, { scope: flags.scope, env: flags.env, stamp: stamp() });
+    await runRm(root, name, { scope: flags.scope, local: bools.has("local") || undefined, env: flags.env, stamp: stamp() });
     console.log(`menv: removed ${name}`);
     process.exit(0);
   } else {
