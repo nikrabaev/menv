@@ -1,0 +1,80 @@
+{
+  "skill_name": "menv-usage",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I just signed up for Stripe. Add a secret called STRIPE_SECRET_KEY with the value sk_test_4eC39HqLyjWDarjtT1zdp7dc to the web and worker apps so it ends up in their .env files.",
+      "expected_output": "Creates the secret via menv (define --secret --scope web,worker + set), passing the value via stdin/prompt (not a CLI arg); never hand-edits a .env.",
+      "files": [],
+      "expectations": [
+        "STRIPE_SECRET_KEY exists in the vault with the exact value (menv get returns it)",
+        "wired to BOTH web and worker (menv list --json consumers include app:web, app:worker)",
+        "marked as a secret",
+        "created via menv (define/set/wire), not by hand-editing a .env",
+        "secret value supplied via stdin/prompt, not as a plaintext CLI argument"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The web app's .env is missing DATABASE_URL but it should definitely be set. Can you fix it so the app picks it up?",
+      "expected_output": "Recognizes DATABASE_URL already exists in the vault but isn't wired to web; fixes via `menv wire DATABASE_URL web` (+ generate) — does not hand-append a guessed value.",
+      "files": [],
+      "expectations": [
+        "apps/web/.env now contains a DATABASE_URL line",
+        "DATABASE_URL is wired to web in the vault",
+        "DATABASE_URL remains a SINGLE variable (no duplicate created)",
+        "web's value matches the real vault value, not a hand-invented placeholder",
+        "fixed through menv (wire/define + generate), not by hand-appending to .env"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "We rotated the production Postgres password. Update DATABASE_URL for prod to postgres://app:S3cretRotated@db.internal:5432/app and regenerate the prod env files.",
+      "expected_output": "Uses `menv set DATABASE_URL --env prod` (value via stdin) + `menv generate --env prod`; leaves the dev value untouched; no hand-edit of .env.prod.",
+      "files": [],
+      "expectations": [
+        "menv get DATABASE_URL --env prod returns the new value",
+        "apps/api/.env.prod contains the new prod value",
+        "the dev value of DATABASE_URL is unchanged",
+        "changed via menv set --env prod (+ generate), not by hand-editing .env.prod"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I manually added SENTRY_DSN=https://abc123@o0.ingest.sentry.io/456 to apps/web/.env a moment ago because the web app needs it. Make sure it's properly saved so it won't get lost.",
+      "expected_output": "Recognizes the .env is a generated output and the hand-added value will be wiped on the next generate; imports SENTRY_DSN into the vault wired to web. Durability: survives a fresh `menv generate`.",
+      "files": [],
+      "expectations": [
+        "SENTRY_DSN stored in the vault wired to web",
+        "DURABILITY: after `menv generate`, apps/web/.env still contains the value",
+        "the vault value exactly equals the original (not altered/truncated)",
+        "imported into the vault via menv, not left only in the .env"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "On my machine the web app should hit a local mock API. Add a local-only override of NEXT_PUBLIC_API_URL for web pointing at http://localhost:8787 — it must not change the value other environments/teammates get, and it must not end up in the committed .env.example.",
+      "expected_output": "Uses menv --local: define/set NEXT_PUBLIC_API_URL --local --scope web. Generates into apps/web/.env.local; base value and .env.example untouched.",
+      "files": [],
+      "expectations": [
+        "apps/web/.env.local contains NEXT_PUBLIC_API_URL=http://localhost:8787",
+        "override is a separate local variable in the vault (DURABILITY: survives generate)",
+        "base apps/web/.env still has the original value",
+        "apps/web/.env.example does NOT contain the override value",
+        "created via menv --local, not by hand-creating .env.local"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Add the api app's RSA signing key as RSA_PRIVATE_KEY (a multi-line PEM block).",
+      "expected_output": "Recognizes menv values are single-line; either folds the PEM to one line with escaped \\n or flags the limitation — does not silently commit a corrupted/truncated value.",
+      "files": [],
+      "expectations": [
+        "AWARENESS: flagged that menv values are single-line / multi-line isn't supported",
+        "INTEGRITY: a stored value round-trips with both BEGIN and END markers",
+        "value not truncated to just the first PEM line",
+        "went through menv (or a deliberate, explained choice to keep it out of the vault)"
+      ]
+    }
+  ]
+}
