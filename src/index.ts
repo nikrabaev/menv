@@ -12,6 +12,7 @@ import { runRestore } from "./cli/restore.ts";
 import { runRm } from "./cli/rm.ts";
 import { findRepoRoot } from "./cli/root.ts";
 import { runSet } from "./cli/set.ts";
+import { SKILL_REL_PATH } from "./cli/skill.ts";
 import { runUnwire, runWire } from "./cli/wire.ts";
 import type { KeyBackendKind } from "./core/types.ts";
 import type { PassphraseProvider } from "./crypto/identity.ts";
@@ -80,20 +81,26 @@ try {
     }
     const kind = backendRaw as KeyBackendKind | undefined;
     const vault = flagValue("--vault");
+    // Tri-state: an explicit flag wins; otherwise a TTY prompts and headless skips.
+    const withSkill = rest.includes("--with-skill") ? true : rest.includes("--no-skill") ? false : undefined;
 
     // Lazy-load the Ink prompts only when we can actually prompt, keeping Ink out
     // of non-interactive runs. With no TTY, runInit defaults to keychain (or uses
     // --backend) and the password backend reads MENV_PASSPHRASE.
     let promptKind: (() => Promise<KeyBackendKind>) | undefined;
     let pass: PassphraseProvider | undefined;
+    let promptSkill: (() => Promise<boolean>) | undefined;
     if (process.stdout.isTTY) {
       const ui = await import("./ui/initPrompts.tsx");
       promptKind = ui.promptBackendKind;
       pass = ui.interactivePassphraseProvider();
+      if (withSkill === undefined) promptSkill = ui.promptScaffoldSkill;
     }
 
-    await runInit(root, { kind, vault, stamp: stamp(), promptKind, pass });
+    const result = await runInit(root, { kind, vault, stamp: stamp(), promptKind, pass, withSkill, promptSkill });
     console.log(`menv: initialized at ${root}`);
+    if (result.skill === "written") console.log(`menv: scaffolded the menv-usage agent skill at ${SKILL_REL_PATH}`);
+    else if (result.skill === "exists") console.log(`menv: ${SKILL_REL_PATH} already exists — left unchanged`);
     process.exit(0);
   } else if (cmd === "generate") {
     const envFlag = rest.includes("--env") ? rest[rest.indexOf("--env") + 1] : undefined;

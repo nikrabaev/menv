@@ -5,6 +5,7 @@ import type { KeyBackend, PassphraseProvider } from "../crypto/identity.ts";
 import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { scanRepo } from "../io/discovery.ts";
 import { saveModel } from "../store/save.ts";
+import { SKILL_CONTENT, SKILL_REL_PATH } from "./skill.ts";
 
 const GITIGNORE_BLOCK = [
   "# menv",
@@ -35,9 +36,19 @@ export interface InitOpts {
   // Injected by the CLI layer so this module never imports Ink.
   promptKind?: () => Promise<KeyBackendKind>;
   pass?: PassphraseProvider;
+  // Scaffold the menv-usage agent skill into the consumer repo. Tri-state: `true`
+  // writes it, `false` skips; when omitted, `promptSkill` (a TTY) decides, else skip.
+  withSkill?: boolean;
+  promptSkill?: () => Promise<boolean>;
 }
 
-export async function runInit(root: string, opts: InitOpts = {}): Promise<void> {
+export interface InitResult {
+  // What init did with the menv-usage skill: wrote a fresh copy, found one already
+  // present (left untouched), or wasn't asked to scaffold it.
+  skill: "written" | "exists" | "skipped";
+}
+
+export async function runInit(root: string, opts: InitOpts = {}): Promise<InitResult> {
   const { model } = await scanRepo(root);
 
   let backend: KeyBackend;
@@ -69,4 +80,18 @@ export async function runInit(root: string, opts: InitOpts = {}): Promise<void> 
   const env = model.environments.find((e) => e.isDefault)?.id ?? model.environments[0]?.id ?? "dev";
   await saveModel(model, env, opts.stamp ?? `init-${env}`);
   await ensureGitignore(root);
+
+  return { skill: await scaffoldSkill(root, opts) };
+}
+
+// Optionally drop the menv-usage skill into the consumer repo. Never clobber an
+// existing one — a consumer may have customized it. Bun.write creates the
+// .claude/skills/menv-usage/ parents.
+async function scaffoldSkill(root: string, opts: InitOpts): Promise<InitResult["skill"]> {
+  const wants = opts.withSkill ?? (opts.promptSkill ? await opts.promptSkill() : false);
+  if (!wants) return "skipped";
+  const path = join(root, SKILL_REL_PATH);
+  if (await Bun.file(path).exists()) return "exists";
+  await Bun.write(path, SKILL_CONTENT);
+  return "written";
 }

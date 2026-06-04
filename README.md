@@ -62,6 +62,13 @@ discovered values, and asks where to keep the secret key
 (see [Key backends](#key-backends)). Run `menv` with no arguments any time to open
 the editor.
 
+It also offers to scaffold the **menv-usage agent skill** into
+`.claude/skills/menv-usage/SKILL.md` — a short guide that teaches an AI coding
+agent how to work in a menv repo (the vault is the source of truth, never
+hand-edit a generated `.env`, pipe secrets on stdin, …). On a TTY you're asked;
+pass `--with-skill` or `--no-skill` to decide non-interactively (headless runs skip
+it). An existing skill file is left untouched — delete it first to refresh.
+
 > Prefer a single binary? `bun run build` compiles a standalone `./menv`.
 
 ## The TUI
@@ -215,6 +222,9 @@ menv [command] [options]
       --backend <kind>      keychain | 1password | password
                             (omit to choose interactively)
       --vault <name>        1Password vault for the new item (default: Private)
+      --with-skill          Scaffold the menv-usage agent skill into
+      --no-skill            .claude/skills/ — or skip it (omit to be asked on a
+                            TTY; an existing skill file is never overwritten)
 
   Variables — the same operations as the TUI inspector, headless:
 

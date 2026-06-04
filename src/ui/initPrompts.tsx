@@ -44,6 +44,32 @@ export async function promptBackendKind(): Promise<KeyBackendKind> {
   return inlinePrompt<KeyBackendKind>((resolve) => <BackendMenu onSelect={resolve} />, "keychain");
 }
 
+// ── menv-usage skill scaffold ─────────────────────────────────────────────────
+
+function SkillMenu({ onSelect }: { onSelect: (yes: boolean) => void }) {
+  const [yes, setYes] = useState(true);
+  useInput((_input, key) => {
+    if (key.leftArrow || key.rightArrow) setYes((y) => !y);
+    if (key.return) onSelect(yes);
+  });
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
+      <Text>
+        Scaffold the menv-usage agent skill into .claude/skills/?{" "}
+        <Text color="gray">(←/→ move · enter select)</Text>
+      </Text>
+      <Text>
+        <Text inverse={yes}> Yes </Text> <Text inverse={!yes}> No </Text>{" "}
+        <Text color="gray">— teaches an AI agent how to use menv in this repo</Text>
+      </Text>
+    </Box>
+  );
+}
+
+export async function promptScaffoldSkill(): Promise<boolean> {
+  return inlinePrompt<boolean>((resolve) => <SkillMenu onSelect={resolve} />, false);
+}
+
 // ── passphrase provider ───────────────────────────────────────────────────────
 
 function PassphraseField({ label, error, onSubmit }: {

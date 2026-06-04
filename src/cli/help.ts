@@ -11,6 +11,9 @@ Commands:
                                               interactively)
                             --vault <name>    1Password vault for the new item
                                               (default: Private)
+                            --with-skill      Scaffold the menv-usage agent skill
+                            --no-skill        into .claude/skills/ — or skip it
+                                              (omit to be asked on a TTY)
   generate [--env <env>]  Regenerate .env files from the vault (headless/CI).
                           The password backend reads MENV_PASSPHRASE.
 

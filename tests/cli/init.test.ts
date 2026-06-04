@@ -53,3 +53,36 @@ test("init --backend 1password persists the op:// reference", async () => {
   expect(toml).toContain('kind = "1password"');
   expect(toml).toContain("op://Dev/itm/password");
 });
+
+const inMemoryBackend = async () => {
+  const kp = await generateKeypair();
+  return { async get() { return kp.identity; }, async set() { return { kind: "keychain" as const }; } };
+};
+const skillPath = (root: string) => join(root, ".claude", "skills", "menv-usage", "SKILL.md");
+
+test("init --with-skill scaffolds the menv-usage skill into the consumer repo", async () => {
+  const root = await scaffold();
+  const result = await runInit(root, { backend: await inMemoryBackend(), stamp: "s1", withSkill: true });
+
+  expect(await Bun.file(skillPath(root)).exists()).toBe(true);
+  // The embedded text is the canonical skill — its frontmatter name proves it round-trips.
+  expect(await Bun.file(skillPath(root)).text()).toContain("name: menv-usage");
+  expect(result.skill).toBe("written");
+});
+
+test("init does not scaffold the skill by default", async () => {
+  const root = await scaffold();
+  const result = await runInit(root, { backend: await inMemoryBackend(), stamp: "s1" });
+
+  expect(await Bun.file(skillPath(root)).exists()).toBe(false);
+  expect(result.skill).toBe("skipped");
+});
+
+test("init --with-skill never overwrites an existing skill file", async () => {
+  const root = await scaffold();
+  await Bun.write(skillPath(root), "DO NOT CLOBBER\n");
+  const result = await runInit(root, { backend: await inMemoryBackend(), stamp: "s1", withSkill: true });
+
+  expect(await Bun.file(skillPath(root)).text()).toBe("DO NOT CLOBBER\n");
+  expect(result.skill).toBe("exists");
+});
