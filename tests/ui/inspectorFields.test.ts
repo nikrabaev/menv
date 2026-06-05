@@ -5,7 +5,7 @@ import { copyableText, inspectorFields } from "../../src/ui/inspectorFields.ts";
 const variable: Variable = {
   id: "v1", name: "DATABASE_URL",
   description: "db conn", group: "DB", secret: true,
-  consumers: ["app:api"], example: "pg://example",
+  wiring: [{ consumer: "app:api" }], example: "pg://example",
 };
 const model: RepoModel = {
   root: "/r",
@@ -33,6 +33,13 @@ test("the value row follows the requested environment", () => {
 test("wiring summary uses consumer display names", () => {
   const wiring = inspectorFields(model, variable, "dev").find((f) => f.kind === "wiring")!;
   expect(wiring).toMatchObject({ summary: "api" });
+});
+
+test("wiring summary marks a consumer where the var is unapplied in the current env", () => {
+  const v: Variable = { ...variable, wiring: [{ consumer: "app:api", unapplied: ["prod"] }] };
+  const m: RepoModel = { ...model, variables: [v] };
+  expect(inspectorFields(m, v, "prod").find((f) => f.kind === "wiring")!.summary).toBe("api (off)");
+  expect(inspectorFields(m, v, "dev").find((f) => f.kind === "wiring")!.summary).toBe("api");
 });
 
 test("copyableText returns text for text fields and null for secret/wiring", () => {

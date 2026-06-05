@@ -5,12 +5,15 @@ import type { FileDrift } from "./drift.ts";
 
 // Pull a drifted file's hand-edits back into the vault:
 //   • changed value → update the existing variable for the file's environment;
+//   • applied flip → (un)apply the variable for this consumer/env. A deleted line
+//     unapplies the variable (it returns commented) rather than removing it;
+//     removing a variable stays an explicit `unwire`/TUI action;
 //   • added (unknown) key → mint a new variable wired to that consumer, carrying
-//     the file's base/local flag and the same secret-name heuristic init uses;
-//   • removed key → left untouched (report-only): dropping a variable is an
-//     explicit TUI action, never an implicit consequence of a hand-edit.
+//     the file's base/local flag, applied iff the line was live, and the same
+//     secret-name heuristic init uses.
 export function applyFileDrift(store: Store, drift: FileDrift): void {
   for (const ch of drift.changed) store.setValue(ch.varId, drift.env, ch.actual);
+  for (const ap of drift.applied) store.setApplied(ap.varId, drift.consumerId, drift.env, ap.to);
 
   if (drift.added.length === 0) return;
   const usedIds = new Set(store.getModel().variables.map((v) => v.id));
@@ -19,7 +22,8 @@ export function applyFileDrift(store: Store, drift: FileDrift): void {
     usedIds.add(id);
     store.addVariable({
       id, name: a.name, description: a.description, group: null,
-      secret: isSecretName(a.name), consumers: [drift.consumerId],
+      secret: isSecretName(a.name),
+      wiring: [a.active ? { consumer: drift.consumerId } : { consumer: drift.consumerId, unapplied: [drift.env] }],
       ...(drift.local ? { local: true } : {}),
     });
     store.setValue(id, drift.env, a.value);

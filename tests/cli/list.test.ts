@@ -22,7 +22,7 @@ test("list --json includes raw values and metadata", async () => {
   const arr = JSON.parse(await runList(root, { backend, json: true }));
   const port = arr.find((x: { name: string }) => x.name === "PORT");
   expect(port.value).toBe("3000");
-  expect(port.consumers).toEqual(["app:api"]);
+  expect(port.wiring).toEqual([{ consumer: "app:api" }]);
 });
 
 test("list --scope filters to one consumer", async () => {

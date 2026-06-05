@@ -11,7 +11,7 @@ test("define creates a variable with metadata and wiring", async () => {
   const v = model.variables.find((x) => x.name === "API_KEY")!;
   expect(v.secret).toBe(true);
   expect(v.description).toBe("the key");
-  expect(v.consumers.sort()).toEqual(["app:api", "root"]);
+  expect(v.wiring.map((w) => w.consumer).sort()).toEqual(["app:api", "root"]);
 });
 
 test("define updates an existing variable's metadata in place", async () => {
@@ -32,7 +32,7 @@ test("define --scope replaces the consumer set", async () => {
   await runDefine(root, "API_KEY", { backend, scope: ["web", "root"], stamp: "s2" });
 
   const { model } = await loadModel(root, { backend });
-  expect(model.variables.find((x) => x.name === "API_KEY")!.consumers.sort()).toEqual(["app:web", "root"]);
+  expect(model.variables.find((x) => x.name === "API_KEY")!.wiring.map((w) => w.consumer).sort()).toEqual(["app:web", "root"]);
 });
 
 test("define refuses to edit an ambiguous name", async () => {

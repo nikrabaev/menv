@@ -65,8 +65,9 @@ palette maps. Capture without it and you'll get a grey wall of text.
 Open `references/render-harness.tsx` and edit the `// EDIT:` blocks first:
 
 - **The demo model** — the sample apps and variables to show. The default set
-  exercises grouping, global vs. local, wiring, secrets, and an unset value. Tailor
-  it to whatever feature you're documenting.
+  exercises grouping, local overrides, wiring vs. applied (the `vOff` helper builds a
+  wired-but-unapplied variable that renders as a dimmed, commented `# value`),
+  secrets, and an unset value. Tailor it to whatever feature you're documenting.
 - **Viewport** (`COLUMNS`/`ROWS`) — keep `COLUMNS` ≥ ~150. menv's panes are
   scopes(40) + variables(flex) + inspector(60); a narrower viewport clips the
   inspector. `ROWS` should exceed the variable count so nothing scrolls off.

@@ -7,7 +7,7 @@ import { useModel } from "../../src/ui/useStore.ts";
 
 const model: RepoModel = {
   root: "/r", environments: [{ id: "dev", isDefault: true }],
-  variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+  variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
   consumers: [], values: {}, recipients: [],
 };
 
@@ -20,7 +20,7 @@ test("useModel renders model and reacts to changes", () => {
   const store = createStore(model);
   const { lastFrame, rerender } = render(<Probe store={store} />);
   expect(lastFrame()).toBe("1");
-  store.addVariable({ id: "v2", name: "X", description: "", group: null, secret: false, consumers: [] });
+  store.addVariable({ id: "v2", name: "X", description: "", group: null, secret: false, wiring: [] });
   rerender(<Probe store={store} />);
   expect(lastFrame()).toBe("2");
 });

@@ -54,6 +54,15 @@ import { freeVarId } from "../core/model.ts";
 import type { Consumer, RepoModel, Values, Variable } from "../core/types.ts";
 import { parseDotenv } from "./dotenv.ts";
 
+// name -> consumerId -> env -> the parsed occurrence (value + whether it was a live
+// line vs a commented-out one). `active: false` ⇒ the key was present as `# KEY=…`.
+type Occurrence = { value: string; active: boolean };
+type Occ = Map<string, Map<string, Map<string, Occurrence>>>;
+// Per consumer, the set of environments it has a base file and a local file for.
+// Used to tell "this var is absent from an env this consumer owns" (⇒ unapplied)
+// apart from "this var simply has no value there".
+type ConsumerFiles = Map<string, { base: Set<string>; local: Set<string> }>;
+
 // What a `.env*` filename means: the `.env.example` template, or a values file
 // carrying an environment id and a base/local flag. A `.local` suffix marks an
 // override file (`.env.local`, `.env.<env>.local`) whose keys become `local`
@@ -83,19 +92,24 @@ export const isSecretName = (name: string) => /SECRET|TOKEN|KEY|PASSWORD|DSN|URL
 // `usedIds` set so `var:NAME` and `var:NAME.local` never collide. `remember` is a
 // no-op for the local pass — `.env.example` reconciliation matches base keys only.
 function buildVarsFromOcc(
-  occ: Map<string, Map<string, Map<string, string>>>,
+  occ: Occ,
   local: boolean,
   ctx: {
     variables: Variable[];
     values: Values;
     descByName: Map<string, string>;
     usedIds: Set<string>;
+    filesByConsumer: ConsumerFiles;
     remember: (appId: string, name: string, id: string) => void;
   },
 ): void {
   for (const [name, byConsumer] of occ) {
+    // Variable identity (and value-group splits) is decided by the env→value map
+    // only; whether each occurrence was live or commented does not split a name.
     const sigOf = (cid: string) =>
-      JSON.stringify([...byConsumer.get(cid)!.entries()].sort(([a], [b]) => a.localeCompare(b)));
+      JSON.stringify(
+        [...byConsumer.get(cid)!.entries()].map(([env, o]) => [env, o.value]).sort(([a], [b]) => `${a}`.localeCompare(`${b}`)),
+      );
     const groups = new Map<string, string[]>();
     for (const cid of byConsumer.keys()) {
       const sig = sigOf(cid);
@@ -108,15 +122,24 @@ function buildVarsFromOcc(
       const consumers = [...members].sort();
       const id = freeVarId(ctx.usedIds, name, { local });
       ctx.usedIds.add(id);
+      // For each wired consumer, a var is unapplied in every env that consumer has
+      // a file for where the key was absent or only present commented-out.
+      const wiring = consumers.map((cid) => {
+        const owned = ctx.filesByConsumer.get(cid)?.[local ? "local" : "base"] ?? new Set<string>();
+        const here = byConsumer.get(cid)!;
+        const unapplied = [...owned].filter((env) => here.get(env)?.active !== true).sort();
+        return unapplied.length ? { consumer: cid, unapplied } : { consumer: cid };
+      });
       ctx.variables.push({
         id, name, description: ctx.descByName.get(name) ?? "",
-        group: null, secret: isSecretName(name), consumers,
+        group: null, secret: isSecretName(name), wiring,
         ...(local ? { local: true } : {}),
       });
-      // Every member shares the same env→value map by construction.
-      for (const [env, val] of byConsumer.get(consumers[0]!)!) {
+      // Every member shares the same env→value map by construction; a commented
+      // occurrence still carries its value so it round-trips on regeneration.
+      for (const [env, o] of byConsumer.get(consumers[0]!)!) {
         ctx.values[id] ??= {};
-        ctx.values[id][env] = val;
+        ctx.values[id][env] = o.value;
       }
       for (const cid of consumers) ctx.remember(cid, name, id);
     }
@@ -140,8 +163,9 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   // (`.env`/`.env.<env>`) and local (`.env.local`/`.env.<env>.local`) keys are
   // kept apart so a name appearing in both yields two variables (one flagged
   // `local`) generated into separate files.
-  const occBase = new Map<string, Map<string, Map<string, string>>>();
-  const occLocal = new Map<string, Map<string, Map<string, string>>>();
+  const occBase: Occ = new Map();
+  const occLocal: Occ = new Map();
+  const filesByConsumer: ConsumerFiles = new Map();
   const descByName = new Map<string, string>();
   const envIds = new Set<string>();
   const exampleFiles: Array<{ app: AppTarget; file: string }> = [];
@@ -165,12 +189,16 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
       // Existing env files seed the vault and mark the app for generation. Layout
       // (single ".env" vs per-env ".env.<env>") is decided by envMode below.
       app.envFile = ".env";
+      // Record that this consumer owns a file for (env, locality) so a key missing
+      // from it later reads as wired-but-unapplied rather than simply absent.
+      const files = filesByConsumer.get(app.id) ?? filesByConsumer.set(app.id, { base: new Set(), local: new Set() }).get(app.id)!;
+      (cls.local ? files.local : files.base).add(cls.env);
       const occ = cls.local ? occLocal : occBase;
       const text = await Bun.file(join(root, app.path, file)).text();
       for (const e of parseDotenv(text)) {
         const byApp = occ.get(e.key) ?? occ.set(e.key, new Map()).get(e.key)!;
         const byEnv = byApp.get(app.id) ?? byApp.set(app.id, new Map()).get(app.id)!;
-        byEnv.set(cls.env, e.value);
+        byEnv.set(cls.env, { value: e.value, active: e.active });
         if (e.description && !descByName.has(e.key)) descByName.set(e.key, e.description);
       }
     }
@@ -197,7 +225,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   // Group the consumers that define each name by VALUE into variables (see
   // buildVarsFromOcc). The base pass feeds `varForAppName` so `.env.example`
   // reconciliation can find a base variable by name; the local pass does not.
-  const buildCtx = { variables, values, descByName, usedIds, remember };
+  const buildCtx = { variables, values, descByName, usedIds, filesByConsumer, remember };
   buildVarsFromOcc(occBase, false, buildCtx);
   buildVarsFromOcc(occLocal, true, { ...buildCtx, remember: () => {} });
 
@@ -211,14 +239,20 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
         if (!v.example) v.example = e.value;
         if (!v.description && e.description) v.description = e.description;
       } else {
-        // Example-only key: no real env file declared it. For a workspace app
-        // this is harmless because its envFile stays undefined (generation skips
-        // it); it surfaces only via `.env.example` once a value is added.
+        // Example-only key: no real env file declared it. Reaching this branch
+        // means the key was absent from every base file this consumer owns, so
+        // it is wired-but-unapplied in each of those envs (generated commented-
+        // out) — the same rule buildVarsFromOcc applies to a key missing from
+        // one of several env files. With no real env file at all (owned empty)
+        // it stays applied-everywhere and surfaces only via `.env.example`.
+        const owned = [...(filesByConsumer.get(app.id)?.base ?? [])].sort();
         const id = mintId(e.key);
         variables.push({
           id, name: e.key,
           description: e.description ?? "", group: null,
-          secret: isSecretName(e.key), consumers: [app.id], example: e.value,
+          secret: isSecretName(e.key),
+          wiring: [owned.length ? { consumer: app.id, unapplied: owned } : { consumer: app.id }],
+          example: e.value,
         });
         remember(app.id, e.key, id);
       }

@@ -1,6 +1,6 @@
 import { copyFile, mkdir, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { resolveValue, varsForConsumer } from "../core/model.ts";
+import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel } from "../core/types.ts";
 import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
@@ -24,6 +24,9 @@ export function renderAppEnv(model: RepoModel, consumerId: string, env: string, 
     value: resolveValue(model, v.id, env),
     description: v.description,
     group: v.group,
+    // A variable wired to this consumer but not applied in `env` is written
+    // commented-out, so it stays visible as a known-but-inactive variable.
+    active: isApplied(v, consumerId, env),
   }));
   return serializeDotenv(entries, { groupHeaders: true });
 }

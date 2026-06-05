@@ -16,6 +16,7 @@ export interface Store {
   setExample(varId: string, example: string): void;
   wire(varId: string, consumerId: string, on: boolean): void;
   setConsumers(varId: string, consumers: string[]): void;
+  setApplied(varId: string, consumerId: string, env: string, applied: boolean): void;
   ensureEnvFile(consumerId: string): void;
   setEnvMode(consumerId: string, mode: EnvFileMode): void;
 }
@@ -56,12 +57,38 @@ export function createStore(initial: RepoModel): Store {
     wire(varId, consumerId, on) {
       mapVar(varId, (v) => ({
         ...v,
-        consumers: on
-          ? [...new Set([...v.consumers, consumerId])]
-          : v.consumers.filter((c) => c !== consumerId),
+        wiring: on
+          ? v.wiring.some((w) => w.consumer === consumerId)
+            ? v.wiring
+            : [...v.wiring, { consumer: consumerId }]
+          : v.wiring.filter((w) => w.consumer !== consumerId),
       }));
     },
-    setConsumers(varId, consumers) { mapVar(varId, (v) => ({ ...v, consumers: [...new Set(consumers)] })); },
+    setConsumers(varId, consumers) {
+      // Rebuild the wiring from the given consumer ids, de-duping and preserving
+      // each surviving consumer's `unapplied` set.
+      const ids = [...new Set(consumers)];
+      mapVar(varId, (v) => ({
+        ...v,
+        wiring: ids.map((id) => v.wiring.find((w) => w.consumer === id) ?? { consumer: id }),
+      }));
+    },
+    setApplied(varId, consumerId, env, applied) {
+      mapVar(varId, (v) => {
+        const existing = v.wiring.find((w) => w.consumer === consumerId);
+        // setApplied implies wiring: a previously-unwired consumer is wired here.
+        const wiring = existing ? v.wiring : [...v.wiring, { consumer: consumerId }];
+        return {
+          ...v,
+          wiring: wiring.map((w) => {
+            if (w.consumer !== consumerId) return w;
+            const without = (w.unapplied ?? []).filter((e) => e !== env);
+            const next = applied ? without : [...without, env];
+            return next.length ? { consumer: w.consumer, unapplied: next } : { consumer: w.consumer };
+          }),
+        };
+      });
+    },
     ensureEnvFile(consumerId) {
       // Wiring is an explicit intent to materialize: give the target an `.env`
       // output if it lacks one (e.g. an app that had no `.env` at init). The

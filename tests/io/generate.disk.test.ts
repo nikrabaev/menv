@@ -29,7 +29,7 @@ test("writes .env + .env.example and backs up overwritten files", async () => {
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { v1: { dev: "3000" } },
     recipients: [],
@@ -46,7 +46,7 @@ test("materializes a repo-root .env for variables wired to the root target", asy
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "v1", name: "SHARED", description: "", group: null, secret: false, consumers: ["root"] }],
+    variables: [{ id: "v1", name: "SHARED", description: "", group: null, secret: false, wiring: [{ consumer: "root" }] }],
     consumers: [{ kind: "app", id: "root", name: "root", path: ".", envFile: ".env" }],
     values: { v1: { dev: "rootval" } },
     recipients: [],
@@ -77,7 +77,7 @@ test("perenv mode writes one .env.<env> per environment (ignoring the active env
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
-    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
     values: { v1: { dev: "3000", prod: "8080" } },
     recipients: [],
@@ -98,7 +98,7 @@ test("perenv mode skips an environment the consumer has no values in", async () 
     root,
     // "dev" is a global environment (some other app uses it) that api has no data in.
     environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
-    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
     values: { v1: { prod: "8080" } }, // only prod has a value
     recipients: [],
@@ -116,8 +116,8 @@ test("single mode writes .env (base) and .env.local (override) side by side", as
     root,
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"] },
-      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"], local: true },
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }] },
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }], local: true },
     ],
     consumers: [{ kind: "app", id: "app:web", name: "web", path: "apps/web", envFile: ".env" }],
     values: { "var:PORT": { dev: "3000" }, "var:PORT.local": { dev: "3001" } },
@@ -137,8 +137,8 @@ test("perenv mode writes .env.<env>.local for an override", async () => {
     root,
     environments: [{ id: "production", isDefault: false }],
     variables: [
-      { id: "var:API_URL", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "var:API_URL.local", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
+      { id: "var:API_URL", name: "API_URL", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "var:API_URL.local", name: "API_URL", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }], local: true },
     ],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
     values: { "var:API_URL": { production: "https://prod" }, "var:API_URL.local": { production: "https://override" } },
@@ -155,7 +155,7 @@ test("a consumer with only base vars writes no stray .env.local", async () => {
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }],
-    variables: [{ id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "var:PORT", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { "var:PORT": { dev: "3000" } },
     recipients: [],
@@ -164,13 +164,38 @@ test("a consumer with only base vars writes no stray .env.local", async () => {
   expect(existsSync(join(root, "apps", "api", ".env.local"))).toBe(false);
 });
 
+test("perenv mode writes a commented line for a var unapplied in one env", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+    variables: [
+      { id: "v1", name: "FOO", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "v2", name: "BAR", description: "", group: null, secret: false, wiring: [{ consumer: "app:api", unapplied: ["prod"] }] },
+    ],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "perenv" }],
+    values: { v1: { dev: "1", prod: "9" }, v2: { dev: "2", prod: "8" } },
+    recipients: [],
+  };
+  await writeGeneratedFiles(model, "dev", "ts1");
+  const dev = await Bun.file(join(root, "apps", "api", ".env.dev")).text();
+  expect(dev).toContain("FOO=1");
+  expect(dev).toContain("BAR=2");
+  // prod: BAR is wired but not applied ⇒ commented out; FOO stays live.
+  const prod = await Bun.file(join(root, "apps", "api", ".env.prod")).text();
+  expect(prod).toContain("FOO=9");
+  expect(prod).toContain("# BAR=8");
+  expect(prod).not.toMatch(/^BAR=/m);
+});
+
 test("writes only .env for the active env across multiple environments", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
   await mkdir(join(root, "apps", "api"), { recursive: true });
   const model: RepoModel = {
     root,
     environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
-    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: { v1: { dev: "3000", prod: "8080" } },
     recipients: [],

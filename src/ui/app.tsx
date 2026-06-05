@@ -1,7 +1,7 @@
 import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import type React from "react";
 import { useState } from "react";
-import { freeVarId, resolveValue } from "../core/model.ts";
+import { consumerIdsOf, freeVarId, isApplied, isWired, resolveValue } from "../core/model.ts";
 import { resolveBackend } from "../crypto/resolveBackend.ts";
 import { copyToClipboard } from "../io/clipboard.ts";
 import { detectDrift } from "../io/drift.ts";
@@ -311,8 +311,11 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
         <WireModal
           varName={current.name}
           consumers={model.consumers}
-          wired={current.consumers}
-          onToggle={(id) => store.wire(current.id, id, !current.consumers.includes(id))}
+          wired={consumerIdsOf(current)}
+          unapplied={model.consumers.filter((c) => isWired(current, c.id) && !isApplied(current, c.id, env)).map((c) => c.id)}
+          env={env}
+          onToggle={(id) => store.wire(current.id, id, !isWired(current, id))}
+          onToggleApplied={(id) => store.setApplied(current.id, id, env, !isApplied(current, id, env))}
           onClose={() => setMode("browse")}
           height={Math.max(3, rows - 3)}
         />
@@ -377,9 +380,9 @@ export function MenvApp({ store, onSaveStamp, copy = copyToClipboard, viewportRo
             // Wire the new variable to the focused consumer (if a target scope is
             // selected); otherwise it starts unwired. The id is allocated so a
             // same-named variable can't collide.
-            const consumers = scope?.kind === "app" ? [scope.id] : [];
+            const wiring = scope?.kind === "app" ? [{ consumer: scope.id }] : [];
             const id = freeVarId(new Set(model.variables.map((v) => v.id)), name);
-            store.addVariable({ id, name, description: "", group: null, secret: false, consumers });
+            store.addVariable({ id, name, description: "", group: null, secret: false, wiring });
             setMode("browse");
           }}
           onCancel={() => setMode("browse")}

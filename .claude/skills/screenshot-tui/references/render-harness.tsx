@@ -14,7 +14,7 @@ import { test } from "bun:test";
 import { render } from "ink-testing-library";
 import { MenvApp } from "../../src/ui/app.tsx";
 import { createStore } from "../../src/store/store.ts";
-import type { RepoModel, Variable, Consumer } from "../../src/core/types.ts";
+import type { RepoModel, Variable, Consumer, Wiring } from "../../src/core/types.ts";
 
 // EDIT: where the captured frame is written. ansi2svg.ts reads this path.
 const OUT = "/tmp/menv-shot/frame.ansi";
@@ -32,10 +32,30 @@ const v = (
   consumers: string[],
   description = "",
   example?: string,
-): Variable => ({ id: `var:${name}`, name, description, group, secret, consumers, example });
+): Variable => ({
+  id: `var:${name}`, name, description, group, secret,
+  // Wired to every listed consumer, applied in every environment.
+  wiring: consumers.map((c) => ({ consumer: c })), example,
+});
+
+// A variable wired to its consumers but NOT applied in the given environments: it
+// generates commented-out there (`# KEY=value`) and shows a dimmed `# value` in the
+// list. This is what `init`/drift infer for a key present in one `.env.<env>` but
+// missing from (or commented in) another.
+const vOff = (
+  name: string,
+  group: string | null,
+  consumers: string[],
+  unapplied: string[],
+  description = "",
+): Variable => ({
+  id: `var:${name}`, name, description, group, secret: false,
+  wiring: consumers.map((c): Wiring => ({ consumer: c, unapplied })),
+});
 
 // EDIT: the demo data. These two apps + a dozen variables exercise grouping,
-// wiring, secrets, single vs. per-env file mode, and an unset value.
+// wiring vs. applied (the commented `vOff` row), secrets, single vs. per-env file
+// mode, and an unset value.
 const WEB = "app:web";
 const API = "app:api";
 
@@ -59,6 +79,8 @@ function demoModel(): RepoModel {
     v("NEXT_PUBLIC_API_URL", "Runtime", false, [WEB], "Public API base URL", "https://api.example.com"),
     v("PORT", "Runtime", false, [API], "HTTP listen port", "8080"),
     v("CONCURRENCY", "Runtime", false, [API], "Background job pool size", "8"),
+    // Wired but not applied in dev: renders as a dimmed, commented `# on`.
+    vOff("EDGE_CACHE", "Runtime", [WEB, API], ["dev"], "Prod-only — commented out in dev"),
   ];
 
   const values: RepoModel["values"] = {
@@ -74,6 +96,7 @@ function demoModel(): RepoModel {
     "var:NEXT_PUBLIC_API_URL": { dev: "https://api.acme.dev" },
     "var:PORT": { dev: "8080" },
     "var:CONCURRENCY": { dev: "8" },
+    "var:EDGE_CACHE": { dev: "on", prod: "on" },
   };
 
   return {

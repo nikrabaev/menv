@@ -14,7 +14,7 @@ const model: RepoModel = {
   root: "/repo/acme",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, consumers: ["app:api"] },
+    { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, wiring: [{ consumer: "app:api" }] },
   ],
   consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
@@ -42,7 +42,7 @@ test("limits rendered rows to the viewport", () => {
       description: "",
       group: null,
       secret: false,
-      consumers: ["app:api"],
+      wiring: [{ consumer: "app:api" }],
     })),
     values: {},
   };
@@ -89,7 +89,7 @@ const editModel: RepoModel = {
   root: "/repo/acme",
   environments: [{ id: "dev", isDefault: true }],
   variables: [
-    { id: "v1", name: "DATABASE_URL", description: "db", group: null, secret: false, consumers: ["app:api"], example: "ex" },
+    { id: "v1", name: "DATABASE_URL", description: "db", group: null, secret: false, wiring: [{ consumer: "app:api" }], example: "ex" },
   ],
   consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
   values: { v1: { dev: "pg://x" } },
@@ -224,8 +224,8 @@ test("filter mode narrows the variable list as the query is typed", async () => 
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, consumers: [] },
-      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, wiring: [] },
+      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -244,8 +244,8 @@ test("backspace in filter mode widens the match again", async () => {
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, consumers: [] },
-      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: null, secret: false, wiring: [] },
+      { id: "v2", name: "API_TOKEN", description: "", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -265,9 +265,9 @@ test("the variable list is sorted by name regardless of model order", async () =
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "z", name: "ZEBRA", description: "", group: null, secret: false, consumers: [] },
-      { id: "a", name: "ALPHA", description: "", group: null, secret: false, consumers: [] },
-      { id: "m", name: "MANGO", description: "", group: null, secret: false, consumers: [] },
+      { id: "z", name: "ZEBRA", description: "", group: null, secret: false, wiring: [] },
+      { id: "a", name: "ALPHA", description: "", group: null, secret: false, wiring: [] },
+      { id: "m", name: "MANGO", description: "", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -283,8 +283,8 @@ test("the variable list shows group headers when at least one group exists", asy
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "g", name: "GA", description: "", group: "Infra", secret: false, consumers: [] },
-      { id: "u", name: "UA", description: "", group: null, secret: false, consumers: [] },
+      { id: "g", name: "GA", description: "", group: "Infra", secret: false, wiring: [] },
+      { id: "u", name: "UA", description: "", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -300,8 +300,8 @@ test("shift+down/up jump the cursor to the next/previous group's first variable"
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "g", name: "GA", description: "infra-desc", group: "Infra", secret: false, consumers: [] },
-      { id: "u", name: "UA", description: "ungrouped-desc", group: null, secret: false, consumers: [] },
+      { id: "g", name: "GA", description: "infra-desc", group: "Infra", secret: false, wiring: [] },
+      { id: "u", name: "UA", description: "ungrouped-desc", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -322,8 +322,8 @@ test("editing a variable's group offers existing groups and applies a new one", 
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "v1", name: "HAS_GROUP", description: "", group: "DB", secret: false, consumers: [] },
-      { id: "v2", name: "NO_GROUP", description: "", group: null, secret: false, consumers: [] },
+      { id: "v1", name: "HAS_GROUP", description: "", group: "DB", secret: false, wiring: [] },
+      { id: "v2", name: "NO_GROUP", description: "", group: null, secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -347,8 +347,8 @@ test("a group scope drops the redundant group header from the list", async () =>
   const model: RepoModel = {
     ...editModel,
     variables: [
-      { id: "a", name: "ALPHA", description: "", group: "PAYMENTS", secret: false, consumers: [] },
-      { id: "b", name: "BETA", description: "", group: "PAYMENTS", secret: false, consumers: [] },
+      { id: "a", name: "ALPHA", description: "", group: "PAYMENTS", secret: false, wiring: [] },
+      { id: "b", name: "BETA", description: "", group: "PAYMENTS", secret: false, wiring: [] },
     ],
     values: {},
   };
@@ -411,7 +411,7 @@ test("esc cancels the quit prompt and returns to browse", async () => {
 const propModel: RepoModel = {
   root: "/repo/acme",
   environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
-  variables: [{ id: "v1", name: "API_URL", description: "", group: null, secret: false, consumers: ["app:api"] }],
+  variables: [{ id: "v1", name: "API_URL", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
   consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "single" }],
   values: { v1: { dev: "shared", prod: "shared" } },
   recipients: [],

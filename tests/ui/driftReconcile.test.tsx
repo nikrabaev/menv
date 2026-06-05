@@ -12,18 +12,18 @@ async function send(stdin: { write: (s: string) => void }, ...keys: string[]) {
 const drifts: FileDrift[] = [
   {
     rel: "apps/web/.env", consumerId: "app:web", env: "dev", local: false,
-    added: [{ name: "EXTRA", value: "hi", description: "" }],
+    added: [{ name: "EXTRA", value: "hi", description: "", active: true }],
     changed: [{ name: "PORT", varId: "var:PORT", expected: "3000", actual: "4000" }],
-    removed: [{ name: "GONE", varId: "var:GONE" }],
+    applied: [{ name: "GONE", varId: "var:GONE", to: false }],
   },
   {
     rel: "apps/web/.env.local", consumerId: "app:web", env: "dev", local: true,
-    added: [], changed: [{ name: "TOKEN", varId: "var:TOKEN.local", expected: "a", actual: "b" }], removed: [],
+    added: [], changed: [{ name: "TOKEN", varId: "var:TOKEN.local", expected: "a", actual: "b" }], applied: [],
   },
 ];
 
 describe("DriftReconciler", () => {
-  test("shows the first file's changes, additions and removals", async () => {
+  test("shows the first file's changes, additions and applied changes", async () => {
     const { lastFrame } = render(<DriftReconciler drifts={drifts} onDone={() => {}} onCancel={() => {}} />);
     await tick();
     const f = lastFrame() ?? "";

@@ -78,8 +78,8 @@ Three panes, driven entirely from the keyboard:
 | Pane | What it shows |
 |------|---------------|
 | **Scopes** | `All`, then your **targets** (each app, plus the repo root) and variable **groups**. Selecting one filters the list; a per-env target is tagged `per-env`. |
-| **Variables** | The variables in the current scope, grouped and name-sorted. Secrets render as `***`; unset values show `empty`. |
-| **Inspector** | Every field of the selected variable — description, example, group, secret flag, **wiring**, and the value for the active environment. |
+| **Variables** | The variables in the current scope, grouped and name-sorted. Secrets render as `***`; unset values show `empty`. A variable wired but **not applied** in the active environment shows its value dimmed and commented (`# value`). |
+| **Inspector** | Every field of the selected variable — description, example, group, secret flag, **wiring** (a target reads `(off)` where the variable isn't applied in the active environment), and the value for the active environment. |
 
 The top bar shows the repo, the **environment tabs** (the active one highlighted),
 and an unsaved-changes indicator (`* N unsaved` / `saved`).
@@ -92,7 +92,7 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 | `⇧↑` `⇧↓` *(or `⌥↑` `⌥↓`)* | Jump between group blocks in the variable list |
 | `Tab` | Cycle panes: scopes → variables → inspector |
 | `Esc` | From the inspector, back to the variable list |
-| `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal. Editing a value shared by other environments offers to update them too (default **No**). |
+| `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal (inside it, `Enter` wires/unwires a target and `a` toggles whether the variable is **applied** in the active environment). Editing a value shared by other environments offers to update them too (default **No**). |
 | `c` | Copy the value (or field) to the clipboard |
 | `e` | Switch environment (`dev` → `prod` → …) |
 | `m` | On an app scope, toggle its **file mode** (single `.env` ↔ per-env `.env.<env>`) |
@@ -126,16 +126,29 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   `.env` — and is kept out of the shared `.env.example` template. An app with both
   `.env` and `.env.local` stays **single** mode; only an explicit `.env.<env>` flips
   it to per-env.
-- **Wiring** — Which **consumers** actually receive a variable: any number of apps,
-  plus the synthetic `root` target (the repo's top-level `.env`). On save, `menv`
-  writes each variable into exactly the `.env` files of its wired consumers.
+- **Wiring vs. applied** — **Wiring** is which **consumers** receive a variable: any
+  number of apps, plus the synthetic `root` target (the repo's top-level `.env`).
+  Independently, a wired variable is either **applied** in a given consumer +
+  environment — written as a live `KEY=value` line — or not, in which case it is
+  still written but **commented out** (`# KEY=value`), staying visible as a
+  known-but-inactive variable. `menv init` and drift sync infer this from what's
+  actually present in each file: a key in `.env.development` but missing from (or
+  commented in) `.env.production` comes back wired to that target yet *unapplied* in
+  `prod`. `.env.example` documents the full surface but doesn't count as "present",
+  so a key that appears only there stays wired (it keeps its slot in the template)
+  yet *unapplied* — commented — in the real env files it was never set in. Toggle it
+  per environment with `a` in the wire modal. (A variable's
+  *value* for an environment is shared across every consumer it's wired to; only the
+  applied/commented state is per consumer.)
 - **Drift reconciliation** — Generated `.env` files are meant to be rewritten from
   the vault, but people edit them by hand. When you open the TUI, `menv` first
   compares every generated file against the vault and, if any diverge, walks you
   through them one at a time: import the on-disk edits back into the vault (changed
-  values update in place; brand-new keys become new variables) or keep the vault and
-  let the next save overwrite the file. (`menv generate` stays a one-way
-  vault→disk regenerate for CI.)
+  values update in place; brand-new keys become new variables; a key you **deleted
+  or commented out** becomes *unapplied* — it returns commented, not removed, and
+  uncommenting one re-applies it) or keep the vault and let the next save overwrite
+  the file. Removing a variable outright stays an explicit `unwire` / `x` action.
+  (`menv generate` stays a one-way vault→disk regenerate for CI.)
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
   auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
   `DSN`, `URL`) and toggleable per variable.

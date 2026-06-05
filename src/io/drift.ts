@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { resolveValue, varsForConsumer } from "../core/model.ts";
+import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
 import { parseDotenv } from "./dotenv.ts";
 
@@ -47,12 +47,15 @@ export interface FileDrift {
   consumerId: string;
   env: string;
   local: boolean;
-  // Keys present on disk but unknown to the vault (a hand-added line).
-  added: { name: string; value: string; description: string }[];
-  // Keys whose on-disk value differs from the vault.
+  // Keys present on disk but unknown to the vault (a hand-added line). `active`
+  // records whether it was a live `KEY=value` or a commented-out `# KEY=value`.
+  added: { name: string; value: string; description: string; active: boolean }[];
+  // Keys whose live on-disk value differs from the vault.
   changed: { name: string; varId: string; expected: string; actual: string }[];
-  // Keys the vault expects but the file no longer has (a hand-deleted line).
-  removed: { name: string; varId: string }[];
+  // Keys whose applied state diverged: a wired var deleted/commented on disk
+  // (`to: false`) or uncommented (`to: true`). Deleting a line unapplies the
+  // variable (it returns commented) rather than removing it — removal is `unwire`.
+  applied: { name: string; varId: string; to: boolean }[];
 }
 
 // Compares every generated file that exists on disk against the value the vault
@@ -66,26 +69,36 @@ export async function detectDrift(model: RepoModel, env: string): Promise<FileDr
     const file = Bun.file(join(model.root, t.rel));
     if (!(await file.exists())) continue;
 
-    const onDisk = new Map<string, { value: string; description: string }>();
-    for (const e of parseDotenv(await file.text())) onDisk.set(e.key, { value: e.value, description: e.description });
+    const onDisk = new Map<string, { value: string; description: string; active: boolean }>();
+    for (const e of parseDotenv(await file.text())) onDisk.set(e.key, { value: e.value, description: e.description, active: e.active });
 
-    const expected = new Map<string, { varId: string; value: string }>();
-    for (const v of t.vars) expected.set(v.name, { varId: v.id, value: resolveValue(model, v.id, t.env) });
+    const expected = new Map<string, { varId: string; value: string; applied: boolean }>();
+    for (const v of t.vars) {
+      expected.set(v.name, { varId: v.id, value: resolveValue(model, v.id, t.env), applied: isApplied(v, t.consumerId, t.env) });
+    }
 
     const added: FileDrift["added"] = [];
     const changed: FileDrift["changed"] = [];
-    const removed: FileDrift["removed"] = [];
+    const applied: FileDrift["applied"] = [];
     for (const [name, d] of onDisk) {
       const exp = expected.get(name);
-      if (!exp) added.push({ name, value: d.value, description: d.description });
-      else if (exp.value !== d.value) changed.push({ name, varId: exp.varId, expected: exp.value, actual: d.value });
+      if (!exp) {
+        added.push({ name, value: d.value, description: d.description, active: d.active });
+        continue;
+      }
+      // Applied-state divergence (live ↔ commented) is independent of a value edit.
+      if (d.active !== exp.applied) applied.push({ name, varId: exp.varId, to: d.active });
+      // Only a live line carries an authoritative value worth importing.
+      if (d.active && d.value !== exp.value) changed.push({ name, varId: exp.varId, expected: exp.value, actual: d.value });
     }
     for (const [name, exp] of expected) {
-      if (!onDisk.has(name)) removed.push({ name, varId: exp.varId });
+      // A key the vault applies but the file no longer has was deleted by hand:
+      // treat as "unapply" (it returns commented), not removal.
+      if (!onDisk.has(name) && exp.applied) applied.push({ name, varId: exp.varId, to: false });
     }
 
-    if (added.length || changed.length || removed.length)
-      drifts.push({ rel: t.rel, consumerId: t.consumerId, env: t.env, local: t.local, added, changed, removed });
+    if (added.length || changed.length || applied.length)
+      drifts.push({ rel: t.rel, consumerId: t.consumerId, env: t.env, local: t.local, added, changed, applied });
   }
   return drifts;
 }

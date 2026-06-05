@@ -1,5 +1,5 @@
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
-import type { Consumer, Environment, KeyBackendConfig, RepoModel, Variable } from "../core/types.ts";
+import type { Consumer, Environment, KeyBackendConfig, RepoModel, Variable, Wiring } from "../core/types.ts";
 import { DEFAULT_KEY_BACKEND } from "../core/types.ts";
 
 export function modelToToml(m: RepoModel): { config: string; manifest: string } {
@@ -17,12 +17,31 @@ export function modelToToml(m: RepoModel): { config: string; manifest: string } 
   const manifest = stringifyToml({
     variables: m.variables.map((v) => ({
       id: v.id, name: v.name,
-      description: v.description, group: v.group ?? "", secret: v.secret, consumers: v.consumers,
+      description: v.description, group: v.group ?? "", secret: v.secret,
+      // Each wiring is an inline table; `unapplied` is omitted when empty so the
+      // common (applied-everywhere) case stays a bare `{ consumer = "…" }`.
+      wiring: v.wiring.map((w) =>
+        w.unapplied?.length ? { consumer: w.consumer, unapplied: w.unapplied } : { consumer: w.consumer },
+      ),
       example: v.example ?? "", local: v.local ?? false,
     })),
   });
 
   return { config, manifest };
+}
+
+// Build the wiring list from a parsed variable, migrating the legacy flat
+// `consumers = [...]` shape (wired and applied everywhere) when `wiring` is absent.
+function parseWiring(v: RawVar): Wiring[] {
+  if (Array.isArray(v.wiring)) {
+    return v.wiring
+      .filter((w): w is RawWiring => !!w && typeof w.consumer === "string")
+      .map((w) => {
+        const unapplied = Array.isArray(w.unapplied) ? w.unapplied.filter((e): e is string => typeof e === "string") : [];
+        return unapplied.length ? { consumer: w.consumer, unapplied } : { consumer: w.consumer };
+      });
+  }
+  return (v.consumers ?? []).map((consumer) => ({ consumer }));
 }
 
 // Serialize the backend config. `op_ref` is emitted as "" when absent, matching
@@ -57,13 +76,18 @@ interface RawConfig {
   key_backend?: unknown;
   apps?: RawApp[];
 }
+interface RawWiring {
+  consumer: string;
+  unapplied?: string[];
+}
 interface RawVar {
   id: string;
   name: string;
   description?: string;
   group?: string;
   secret?: unknown;
-  consumers?: string[];
+  wiring?: RawWiring[];
+  consumers?: string[]; // legacy: flat wiring list, migrated by parseWiring
   example?: string;
   local?: unknown;
 }
@@ -98,7 +122,7 @@ export function tomlToModelParts(config: string, manifest: string): {
   const variables: Variable[] = (man.variables ?? []).map((v) => ({
     id: v.id, name: v.name,
     description: v.description ?? "", group: v.group || null, secret: !!v.secret,
-    consumers: v.consumers ?? [], example: v.example || undefined,
+    wiring: parseWiring(v), example: v.example || undefined,
     local: v.local ? true : undefined,
   }));
 

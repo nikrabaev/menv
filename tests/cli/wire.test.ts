@@ -9,7 +9,7 @@ import { scaffold } from "./helpers.ts";
 
 const consumersOf = async (root: string, backend: KeyBackend, name: string) => {
   const { model } = await loadModel(root, { backend });
-  return model.variables.find((v) => v.name === name)!.consumers.slice().sort();
+  return model.variables.find((v) => v.name === name)!.wiring.map((w) => w.consumer).sort();
 };
 
 test("wire adds consumers (including the root target) and unwire removes them", async () => {
@@ -49,8 +49,8 @@ test("wire --local (un)wires the override, not its base sibling", async () => {
   const { model } = await loadModel(root, { backend });
   const base = model.variables.find((v) => v.name === "API_URL" && !v.local)!;
   const local = model.variables.find((v) => v.name === "API_URL" && v.local)!;
-  expect(local.consumers.slice().sort()).toEqual(["app:api", "app:web"]);
-  expect(base.consumers).toEqual(["app:api"]); // base untouched
+  expect(local.wiring.map((w) => w.consumer).sort()).toEqual(["app:api", "app:web"]);
+  expect(base.wiring.map((w) => w.consumer)).toEqual(["app:api"]); // base untouched
 });
 
 test("rm --local deletes only the override, leaving the base intact", async () => {

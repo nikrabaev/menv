@@ -14,6 +14,17 @@ export interface KeyBackendConfig {
   opRef?: string;
 }
 
+// One consumer this variable is wired to, with the (sparse) set of environments
+// where it is wired but NOT applied. "Applied" ⇒ the variable is materialized as a
+// live `KEY=value` line in that consumer's generated file for that env; "unapplied"
+// ⇒ it is still wired (a known variable for the consumer) but written commented-out
+// (`# KEY=value`). An env absent from `unapplied` is applied; an absent/empty
+// `unapplied` means applied in every environment — identical to pre-applied menv.
+export interface Wiring {
+  consumer: ConsumerId;
+  unapplied?: EnvId[];
+}
+
 export interface Variable {
   id: VarId;
   name: string;
@@ -21,9 +32,10 @@ export interface Variable {
   group: string | null;
   secret: boolean;
   // Wiring: which consumers (workspace apps and/or the synthetic "root" target)
-  // receive this variable in their generated `.env`. A variable with no consumers
-  // is defined in the manifest but materialized nowhere until it is wired.
-  consumers: ConsumerId[];
+  // receive this variable in their generated `.env`, and where it is applied vs
+  // only commented-out. A variable with empty `wiring` is defined in the manifest
+  // but materialized nowhere until it is wired.
+  wiring: Wiring[];
   example?: string; // optional placeholder emitted into .env.example; one per variable, not per-env
   // A local override: discovered from / generated back into a `.local` file
   // (`.env.local`, `.env.<env>.local`) rather than the base `.env`/`.env.<env>`.

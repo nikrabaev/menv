@@ -1,3 +1,4 @@
+import { consumerIdsOf, isWired } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
 import { resolveBackend } from "../crypto/resolveBackend.ts";
@@ -62,7 +63,7 @@ export function resolveVar(model: RepoModel, name: string, opts: { scope?: strin
   let cands = model.variables.filter((v) => v.name === name);
   if (opts.scope) {
     const cid = resolveConsumer(model, opts.scope);
-    cands = cands.filter((v) => v.consumers.includes(cid));
+    cands = cands.filter((v) => isWired(v, cid));
   }
   if (opts.local) {
     cands = cands.filter((v) => v.local === true);
@@ -80,7 +81,7 @@ export function resolveVar(model: RepoModel, name: string, opts: { scope?: strin
     throw new Error(`menv: no variable named "${name}"${opts.scope ? ` wired to "${opts.scope}"` : ""}${hint}`);
   }
   if (cands.length > 1) {
-    const variants = cands.map((v) => `${v.id} (→ ${v.consumers.join(", ") || "unwired"})`).join("; ");
+    const variants = cands.map((v) => `${v.id} (→ ${consumerIdsOf(v).join(", ") || "unwired"})`).join("; ");
     throw new Error(`menv: "${name}" is ambiguous — ${cands.length} variants: ${variants}. Disambiguate with --scope <consumer>.`);
   }
   return cands[0]!;

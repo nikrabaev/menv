@@ -67,13 +67,15 @@ export function DriftReconciler({ drifts, onDone, onCancel }: {
         <Text key={`a:${a.name}`}>
           <Text color="green">+ {a.name}</Text>
           <Text color="gray">  {clip(a.value)}</Text>
-          <Text color="gray"> (new variable)</Text>
+          <Text color="gray"> (new variable{a.active ? "" : ", commented"})</Text>
         </Text>
       ))}
-      {cur.removed.map((r) => (
-        <Text key={`r:${r.name}`}>
-          <Text color="red">- {r.name}</Text>
-          <Text color="gray">  (kept in vault)</Text>
+      {cur.applied.map((p) => (
+        <Text key={`p:${p.name}`}>
+          {p.to
+            ? <Text color="green">✓ {p.name}</Text>
+            : <Text color="red">⊘ {p.name}</Text>}
+          <Text color="gray">  {p.to ? "(applied)" : "(commented out, kept in vault)"}</Text>
         </Text>
       ))}
       <Text>

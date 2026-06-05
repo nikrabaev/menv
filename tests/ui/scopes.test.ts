@@ -7,9 +7,9 @@ function model(): RepoModel {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, consumers: ["app:api"] },
-      { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "v3", name: "WEB_FLAG", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "v1", name: "DATABASE_URL", description: "", group: "DB", secret: true, wiring: [{ consumer: "app:api" }] },
+      { id: "v2", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "v3", name: "WEB_FLAG", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }] },
     ],
     consumers: [
       { kind: "app", id: "app:api", name: "api", path: "apps/api" },
@@ -45,7 +45,7 @@ describe("buildScopes", () => {
     // worker has no wired variables, so it does not appear
     expect(buildScopes(m).map((x) => x.label)).not.toContain("worker");
     // wire a variable to it — now it appears
-    m.variables[0]!.consumers = [...m.variables[0]!.consumers, "app:worker"];
+    m.variables[0]!.wiring = [...m.variables[0]!.wiring, { consumer: "app:worker" }];
     expect(buildScopes(m).map((x) => x.label)).toContain("worker");
   });
 });

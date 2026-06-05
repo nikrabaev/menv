@@ -10,7 +10,7 @@ import { VariableList } from "../../src/ui/components/VariableList.tsx";
 import { WireModal } from "../../src/ui/components/WireModal.tsx";
 import type { Scope } from "../../src/ui/scopes.ts";
 
-const v: Variable = { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, consumers: ["app:api"] };
+const v: Variable = { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, wiring: [{ consumer: "app:api" }] };
 const model: RepoModel = {
   root: "/repo/acme", environments: [{ id: "dev", isDefault: true }],
   variables: [v], consumers: [], values: { v1: { dev: "pg://x" } }, recipients: [],
@@ -34,17 +34,28 @@ test("VariableList renders the name and masks a secret's value", () => {
   expect(lastFrame()).not.toContain("pg://x");
 });
 
+test("VariableList comments the value of a var not applied in the current env", () => {
+  const flag: Variable = { ...v, id: "f", name: "FLAG", secret: false, wiring: [{ consumer: "app:api", unapplied: ["dev"] }] };
+  const applied: Variable = { ...v, id: "a", name: "PORT", secret: false, wiring: [{ consumer: "app:api" }] };
+  const m: RepoModel = { ...model, variables: [flag, applied], values: { f: { dev: "on" }, a: { dev: "3000" } } };
+  const { lastFrame } = render(<VariableList variables={[flag, applied]} cursor={0} model={m} env="dev" />);
+  const frame = lastFrame() ?? "";
+  expect(frame).toContain("# on"); // FLAG is wired but not applied in dev ⇒ commented
+  expect(frame).toContain("3000"); // PORT is applied ⇒ plain
+  expect(frame).not.toContain("# 3000");
+});
+
 test("VariableList tags a local-override variable with a (local) suffix", () => {
-  const base: Variable = { ...v, id: "b", name: "PORT", secret: false, consumers: [] };
-  const local: Variable = { ...v, id: "l", name: "PORT", secret: false, consumers: [], local: true };
+  const base: Variable = { ...v, id: "b", name: "PORT", secret: false, wiring: [] };
+  const local: Variable = { ...v, id: "l", name: "PORT", secret: false, wiring: [], local: true };
   const m: RepoModel = { ...model, variables: [base, local], values: { b: { dev: "3000" }, l: { dev: "3001" } } };
   const { lastFrame } = render(<VariableList variables={[base, local]} cursor={0} model={m} env="dev" />);
   expect(lastFrame()).toContain("(local)");
 });
 
 test("VariableList shows a plain value and masks a secret in the value column", () => {
-  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, consumers: [] };
-  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };
+  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, wiring: [] };
+  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, wiring: [] };
   const m: RepoModel = { ...model, variables: [secret, plain], values: { s: { dev: "supersecret" }, p: { dev: "3000" } } };
   const { lastFrame } = render(<VariableList variables={[secret, plain]} cursor={0} model={m} env="dev" />);
   const frame = lastFrame() ?? "";
@@ -55,7 +66,7 @@ test("VariableList shows a plain value and masks a secret in the value column", 
 
 test("VariableList truncates a value too long for the line", async () => {
   const longVal = "x".repeat(200);
-  const plain: Variable = { ...v, id: "p", name: "URL", secret: false, consumers: [] };
+  const plain: Variable = { ...v, id: "p", name: "URL", secret: false, wiring: [] };
   const m: RepoModel = { ...model, variables: [plain], values: { p: { dev: longVal } } };
   const { lastFrame } = render(<VariableList variables={[plain]} cursor={0} height={10} model={m} env="dev" />);
   await new Promise((r) => setTimeout(r, 20));
@@ -65,8 +76,8 @@ test("VariableList truncates a value too long for the line", async () => {
 });
 
 test("VariableList groups variables under headers, ungrouped first", () => {
-  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
-  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, wiring: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", wiring: [] };
   const m: RepoModel = { ...model, variables: [b, a], values: { a: { dev: "x" }, b: { dev: "y" } } };
   const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} grouped model={m} env="dev" />);
   const frame = lastFrame() ?? "";
@@ -79,8 +90,8 @@ test("VariableList groups variables under headers, ungrouped first", () => {
 });
 
 test("VariableList encloses group header names in brackets", () => {
-  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
-  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, wiring: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", wiring: [] };
   const m: RepoModel = { ...model, variables: [b, a], values: {} };
   const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} grouped model={m} env="dev" />);
   const frame = lastFrame() ?? "";
@@ -111,22 +122,22 @@ test("ScopeTree shows a per-env tag on a tagged app scope", () => {
 });
 
 test("VariableList stays flat with no headers when not grouped", () => {
-  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, consumers: [] };
-  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", consumers: [] };
+  const a: Variable = { ...v, id: "a", name: "ALPHA", secret: false, group: null, wiring: [] };
+  const b: Variable = { ...v, id: "b", name: "BETA", secret: false, group: "Storage", wiring: [] };
   const m: RepoModel = { ...model, variables: [b, a], values: {} };
   const { lastFrame } = render(<VariableList variables={[b, a]} cursor={0} model={m} env="dev" />);
   expect(lastFrame()).not.toContain("Ungrouped");
 });
 
 test("VariableList shows 'empty' for a variable with no value in the current env", () => {
-  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, consumers: [] };
+  const plain: Variable = { ...v, id: "p", name: "PORT", secret: false, wiring: [] };
   const m: RepoModel = { ...model, variables: [plain], values: {} };
   const { lastFrame } = render(<VariableList variables={[plain]} cursor={0} model={m} env="dev" />);
   expect(lastFrame()).toContain("empty");
 });
 
 test("VariableList shows 'empty' for a secret with no value, not the mask", () => {
-  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, consumers: [] };
+  const secret: Variable = { ...v, id: "s", name: "TOKEN", secret: true, wiring: [] };
   const m: RepoModel = { ...model, variables: [secret], values: {} };
   const { lastFrame } = render(<VariableList variables={[secret]} cursor={0} model={m} env="dev" />);
   const frame = lastFrame() ?? "";
@@ -149,7 +160,7 @@ test("VariableList shows scope wiring in All mode", () => {
     { kind: "app", id: "app:api", name: "api", path: "apps/api" },
     { kind: "app", id: "app:inbox", name: "inbox", path: "apps/inbox" },
   ];
-  const wiredVar: Variable = { ...v, consumers: ["app:api", "app:inbox"] };
+  const wiredVar: Variable = { ...v, wiring: [{ consumer: "app:api" }, { consumer: "app:inbox" }] };
   const { lastFrame } = render(<VariableList variables={[wiredVar]} cursor={0} consumers={consumers} showScopes />);
   expect(lastFrame()).toContain("app:api");
   expect(lastFrame()).toContain("app:inbox");
@@ -159,8 +170,8 @@ test("VariableList aligns value/scope columns across rows of differing name leng
   const consumers: Consumer[] = [
     { kind: "app", id: "app:api", name: "api", path: "apps/api" },
   ];
-  const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
-  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, consumers: ["app:api"] };
+  const short: Variable = { ...v, id: "s", name: "X", secret: true, wiring: [{ consumer: "app:api" }] };
+  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: true, wiring: [{ consumer: "app:api" }] };
   const m: RepoModel = { ...model, variables: [short, long], values: { s: { dev: "a" }, l: { dev: "b" } } };
   const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} consumers={consumers} showScopes model={m} env="dev" />);
   const lines = (lastFrame() ?? "").split("\n").filter((l) => l.includes("***"));
@@ -175,8 +186,8 @@ test("VariableList aligns value/scope columns across rows of differing name leng
 
 test("VariableList pads rows to the full pane width so the highlight spans the row", async () => {
   const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
-  const short: Variable = { ...v, id: "s", name: "X", secret: true, consumers: ["app:api"] };
-  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: false, consumers: ["app:api"] };
+  const short: Variable = { ...v, id: "s", name: "X", secret: true, wiring: [{ consumer: "app:api" }] };
+  const long: Variable = { ...v, id: "l", name: "A_MUCH_LONGER_NAME", secret: false, wiring: [{ consumer: "app:api" }] };
   const { lastFrame } = render(<VariableList variables={[short, long]} cursor={0} height={10} consumers={consumers} showScopes />);
   // Width is measured after layout, so let the effect-driven re-render flush.
   await new Promise((r) => setTimeout(r, 20));
@@ -190,8 +201,8 @@ test("VariableList pads rows to the full pane width so the highlight spans the r
 
 test("VariableList shows each variable's wiring in the scopes column", () => {
   const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
-  const wired: Variable = { ...v, id: "g", name: "NODE_ENV", secret: false, consumers: ["app:api"] };
-  const unwired: Variable = { ...v, id: "l", name: "IMAP_HOST", secret: false, consumers: [] };
+  const wired: Variable = { ...v, id: "g", name: "NODE_ENV", secret: false, wiring: [{ consumer: "app:api" }] };
+  const unwired: Variable = { ...v, id: "l", name: "IMAP_HOST", secret: false, wiring: [] };
   const { lastFrame } = render(<VariableList variables={[wired, unwired]} cursor={0} consumers={consumers} showScopes />);
   const lines = (lastFrame() ?? "").split("\n");
   // The wired variable's scopes cell names its consumer; the unwired one doesn't.
@@ -203,7 +214,7 @@ test("VariableList truncates wiring hint beyond 3 consumers", () => {
   const consumers: Consumer[] = Array.from({ length: 5 }, (_, i) => ({
     kind: "app" as const, id: `app:c${i}`, name: `c${i}`, path: `apps/c${i}`,
   }));
-  const varWithMany: Variable = { ...v, consumers: consumers.map((c) => c.id) };
+  const varWithMany: Variable = { ...v, wiring: consumers.map((c) => ({ consumer: c.id })) };
   const { lastFrame } = render(<VariableList variables={[varWithMany]} cursor={0} consumers={consumers} showScopes />);
   const frame = lastFrame() ?? "";
   expect(frame).toContain("app:c0, app:c1, app:c2");
@@ -285,6 +296,29 @@ test("WireModal windows its list to fit height without overflowing", () => {
   // Tail items are hidden behind an overflow marker that counts them (4 shown, 16 below).
   expect(frame).toContain("↓ 16 more");
   expect(frame).not.toContain("app-19");
+});
+
+test("WireModal marks a wired consumer the var is not applied in for the current env", () => {
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
+  const { lastFrame } = render(
+    <WireModal varName="FOO" consumers={consumers} wired={["app:api"]} unapplied={["app:api"]} env="prod" onToggle={() => {}} onClose={() => {}} />,
+  );
+  expect(lastFrame()).toContain("off");
+});
+
+test("WireModal 'a' toggles applied for the highlighted wired consumer", async () => {
+  const consumers: Consumer[] = [{ kind: "app", id: "app:api", name: "api", path: "apps/api" }];
+  let toggled: string | null = null;
+  const { stdin } = render(
+    <WireModal
+      varName="FOO" consumers={consumers} wired={["app:api"]} unapplied={[]} env="dev"
+      onToggle={() => {}} onToggleApplied={(id) => { toggled = id; }} onClose={() => {}}
+    />,
+  );
+  await new Promise((r) => setTimeout(r, 20));
+  stdin.write("a");
+  await new Promise((r) => setTimeout(r, 20));
+  expect(toggled).toBe("app:api");
 });
 
 test("PropagateModal lists the sharing environments but never the value", () => {

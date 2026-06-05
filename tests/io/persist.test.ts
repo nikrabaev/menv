@@ -9,8 +9,8 @@ const model: RepoModel = {
     { id: "prod", isDefault: false },
   ],
   variables: [
-    { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, consumers: ["app:api"] },
-    { id: "v2", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api", "root"] },
+    { id: "v1", name: "DATABASE_URL", description: "db", group: "DB", secret: true, wiring: [{ consumer: "app:api" }] },
+    { id: "v2", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }, { consumer: "root" }] },
   ],
   consumers: [
     { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env", envMode: "single" },
@@ -30,7 +30,21 @@ describe("persist", () => {
     expect(parts.consumers).toEqual(model.consumers);
   });
 
-  test("parses a legacy manifest that still carries tier/owner_app, dropping them", () => {
+  test("round-trips per-consumer unapplied sets in the wiring", () => {
+    const m: RepoModel = {
+      ...model,
+      variables: [
+        {
+          id: "v1", name: "PORT", description: "", group: null, secret: false,
+          wiring: [{ consumer: "app:api", unapplied: ["prod", "staging"] }, { consumer: "root" }],
+        },
+      ],
+    };
+    const { config, manifest } = modelToToml(m);
+    expect(tomlToModelParts(config, manifest).variables).toEqual(m.variables);
+  });
+
+  test("migrates a legacy `consumers = [...]` manifest to all-applied wiring", () => {
     const config = `environments = ["dev"]\ndefault_environment = "dev"\nrecipients = []\n`;
     const manifest = [
       "[[variables]]",
@@ -41,15 +55,18 @@ describe("persist", () => {
       'description = ""',
       'group = ""',
       "secret = false",
-      'consumers = ["app:api"]',
+      'consumers = ["app:api", "app:web"]',
       'example = ""',
       "",
     ].join("\n");
     const parts = tomlToModelParts(config, manifest);
     expect(parts.variables).toEqual([
-      { id: "var:OLD", name: "OLD", description: "", group: null, secret: false, consumers: ["app:api"], example: undefined },
+      {
+        id: "var:OLD", name: "OLD", description: "", group: null, secret: false,
+        wiring: [{ consumer: "app:api" }, { consumer: "app:web" }], example: undefined,
+      },
     ]);
-    // The parsed shape has no tier/ownerApp keys.
+    expect("consumers" in parts.variables[0]!).toBe(false);
     expect("tier" in parts.variables[0]!).toBe(false);
     expect("ownerApp" in parts.variables[0]!).toBe(false);
   });
@@ -87,8 +104,8 @@ test("round-trips the local-override flag", () => {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"] },
-      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:web"], local: true },
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }] },
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }], local: true },
     ],
     consumers: [{ kind: "app", id: "app:web", name: "web", path: "apps/web", envFile: ".env" }],
     values: {},
@@ -105,8 +122,8 @@ test("round-trips the optional example value", () => {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }],
     variables: [
-      { id: "var:REDIS_URL", name: "REDIS_URL", description: "", group: null, secret: false, consumers: ["app:api"], example: "redis://localhost:6379" },
-      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
+      { id: "var:REDIS_URL", name: "REDIS_URL", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }], example: "redis://localhost:6379" },
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
     ],
     consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
     values: {},

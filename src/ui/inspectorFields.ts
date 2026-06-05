@@ -1,3 +1,4 @@
+import { consumerIdsOf, isApplied } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
 
 // One descriptor per navigable inspector row. The single source of truth shared by
@@ -17,7 +18,14 @@ export function inspectorFields(model: RepoModel, variable: Variable, env: strin
     { kind: "example", label: "Example", text: variable.example ?? "" },
     { kind: "group", label: "Group", text: variable.group ?? "" },
     { kind: "secret", label: "Secret", on: variable.secret },
-    { kind: "wiring", label: "Wiring", summary: variable.consumers.map(consumerName).join(" · ") },
+    {
+      kind: "wiring", label: "Wiring",
+      // A consumer the variable is wired to but not applied in for the shown env is
+      // tagged "(off)" — it is generated commented-out there.
+      summary: consumerIdsOf(variable)
+        .map((id) => (isApplied(variable, id, env) ? consumerName(id) : `${consumerName(id)} (off)`))
+        .join(" · "),
+    },
     {
       kind: "value",
       label: "Value",

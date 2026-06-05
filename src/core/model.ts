@@ -1,7 +1,34 @@
-import type { RepoModel, Variable } from "./types.ts";
+import type { RepoModel, Variable, Wiring } from "./types.ts";
 
 export function varsForConsumer(model: RepoModel, consumerId: string): Variable[] {
-  return model.variables.filter((v) => v.consumers.includes(consumerId));
+  return model.variables.filter((v) => isWired(v, consumerId));
+}
+
+// The consumer ids this variable is wired to (order preserved from the wiring list).
+export function consumerIdsOf(v: Variable): string[] {
+  return v.wiring.map((w) => w.consumer);
+}
+
+export function wiringFor(v: Variable, consumerId: string): Wiring | undefined {
+  return v.wiring.find((w) => w.consumer === consumerId);
+}
+
+export function isWired(v: Variable, consumerId: string): boolean {
+  return v.wiring.some((w) => w.consumer === consumerId);
+}
+
+// Whether the variable is materialized as a live line (vs commented out) for this
+// consumer/env: it must be wired, and `env` must not be in its `unapplied` set.
+export function isApplied(v: Variable, consumerId: string, env: string): boolean {
+  const w = wiringFor(v, consumerId);
+  return !!w && !(w.unapplied ?? []).includes(env);
+}
+
+// Whether the variable is applied for at least one of its wired consumers in `env`
+// — used by scope-agnostic views (the "all" list) to decide if it reads as live or
+// commented. An unwired variable is applied nowhere.
+export function isAppliedAnywhere(v: Variable, env: string): boolean {
+  return v.wiring.some((w) => !(w.unapplied ?? []).includes(env));
 }
 
 export function resolveValue(model: RepoModel, varId: string, env: string): string {

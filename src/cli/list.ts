@@ -1,4 +1,4 @@
-import { resolveValue } from "../core/model.ts";
+import { consumerIdsOf, isWired, resolveValue } from "../core/model.ts";
 import type { Variable } from "../core/types.ts";
 import type { KeyBackend } from "../crypto/identity.ts";
 import { defaultEnv, loadModel, resolveConsumer } from "./context.ts";
@@ -25,7 +25,7 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
   let vars = model.variables;
   if (opts.scope !== undefined) {
     const cid = resolveConsumer(model, opts.scope);
-    vars = vars.filter((v) => v.consumers.includes(cid));
+    vars = vars.filter((v) => isWired(v, cid));
   }
   if (opts.group !== undefined) {
     vars = vars.filter((v) => (v.group ?? "") === opts.group);
@@ -45,7 +45,7 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
         group: v.group,
         description: v.description,
         example: v.example ?? null,
-        consumers: v.consumers,
+        wiring: v.wiring,
         value: resolveValue(model, v.id, env),
       })),
       null,
@@ -65,7 +65,8 @@ export async function runList(root: string, opts: ListOpts = {}): Promise<string
   const row = (a: string, b: string, c: string) => `${a.padEnd(nameW)}  ${b.padEnd(valW)}  ${c}`;
   const lines = [row("NAME", "VALUE", `WIRING (${env})`)];
   for (const v of vars) {
-    lines.push(row(shownName(v), shownValue(v), v.consumers.length ? v.consumers.join(", ") : "(unwired)"));
+    const ids = consumerIdsOf(v);
+    lines.push(row(shownName(v), shownValue(v), ids.length ? ids.join(", ") : "(unwired)"));
   }
   return lines.join("\n");
 }

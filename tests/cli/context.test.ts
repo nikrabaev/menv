@@ -7,9 +7,9 @@ function model(): RepoModel {
     root: "/r",
     environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
     variables: [
-      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "var:NODE_ENV", name: "NODE_ENV", description: "", group: null, secret: false, consumers: ["app:api"] },
-      { id: "var:NODE_ENV#2", name: "NODE_ENV", description: "", group: null, secret: false, consumers: ["app:web"] },
+      { id: "var:PORT", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "var:NODE_ENV", name: "NODE_ENV", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "var:NODE_ENV#2", name: "NODE_ENV", description: "", group: null, secret: false, wiring: [{ consumer: "app:web" }] },
     ],
     consumers: [
       { kind: "app", id: "app:api", name: "api", path: "apps/api" },
@@ -53,8 +53,8 @@ describe("resolveVar with --local", () => {
   function withLocal(): RepoModel {
     const m = model();
     m.variables.push(
-      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
-      { id: "var:TOKEN.local", name: "TOKEN", description: "", group: null, secret: false, consumers: ["app:api"], local: true },
+      { id: "var:PORT.local", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }], local: true },
+      { id: "var:TOKEN.local", name: "TOKEN", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }], local: true },
     );
     return m;
   }

@@ -1,6 +1,6 @@
 import { Box, type DOMElement, measureElement, Text } from "ink";
 import { useEffect, useRef, useState } from "react";
-import { resolveValue } from "../../core/model.ts";
+import { consumerIdsOf, isAppliedAnywhere, resolveValue } from "../../core/model.ts";
 import type { Consumer, RepoModel, Variable } from "../../core/types.ts";
 import { groupedRows } from "../grouping.ts";
 import { listWindow } from "./listWindow.ts";
@@ -61,16 +61,19 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
   const windowed = listWindow(rows, selectedRow, maxItems);
 
   const valueFor = (v: Variable) => (model && env ? resolveValue(model, v.id, env) : "");
+  // A wired variable that is applied for no consumer in this env is generated
+  // commented-out — surfaced here with a leading "# " and a dimmed colour.
+  const isInactive = (v: Variable) => !!(model && env && v.wiring.length > 0 && !isAppliedAnywhere(v, env));
   // The text shown in the value column: the placeholder for an unset value (a secret
   // with no value has nothing to mask), the mask for a secret with a value, otherwise
-  // the value itself.
+  // the value itself — prefixed with "# " when the variable is not applied here.
   const displayValueOf = (v: Variable) => {
     const value = valueFor(v);
-    if (value === "") return EMPTY_LABEL;
-    return v.secret ? SECRET_MASK : value;
+    const base = value === "" ? EMPTY_LABEL : v.secret ? SECRET_MASK : value;
+    return isInactive(v) ? `# ${base}` : base;
   };
   const isEmptyValue = (v: Variable) => valueFor(v) === "";
-  const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(v.consumers, consumers) : null);
+  const hintFor = (v: Variable) => (showScopes && consumers ? wireHint(consumerIdsOf(v), consumers) : null);
   // The scopes column shows the variable's wiring (which consumers receive it).
   // Plain text, used for width/fill.
   const scopeTextFor = (v: Variable): string => {
@@ -133,6 +136,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
         // between the two gutters. nameSeg width is constant (nameWidth + 2).
         const namePad = Math.max(0, nameWidth - dispNameLen(v));
         const empty = isEmptyValue(v);
+        const inactive = isInactive(v);
         const valueCell = valueWidth > 0 ? truncate(displayValueOf(v), valueWidth).padEnd(valueWidth) : "";
         const scopeLen = scopeTextFor(v).length;
         const contentLen = (nameWidth + 2) + (valueWidth > 0 ? valueCell.length + 1 : 0) + (scopeLen > 0 ? scopeLen + 1 : 0);
@@ -144,7 +148,7 @@ export function VariableList({ variables, cursor, height, scopeLabel, consumers,
         return (
           <Text key={`${v.id}:${row.index}`} backgroundColor={isCurrent ? "gray" : undefined} wrap={rowWidth > 0 ? "truncate" : undefined}>
             {GUTTER}{v.name}{v.local ? <Text color="magenta">{LOCAL_SUFFIX}</Text> : null}{" ".repeat(namePad)}{GUTTER}
-            {valueWidth > 0 ? <Text italic={empty} color={empty ? "gray" : v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
+            {valueWidth > 0 ? <Text italic={empty} color={inactive ? "blackBright" : empty ? "gray" : v.secret ? "yellow" : undefined}>{valueCell}</Text> : null}
             {valueWidth > 0 ? GUTTER : null}
             {hint ? <Text color="blackBright">{hint}</Text> : null}
             {scopeLen > 0 ? GUTTER : null}

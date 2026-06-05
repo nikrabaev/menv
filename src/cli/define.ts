@@ -31,7 +31,7 @@ export async function runDefine(root: string, name: string, opts: DefineOpts = {
   let id: string;
   if (existing.length === 0) {
     id = freeVarId(new Set(model.variables.map((v) => v.id)), name, { local });
-    store.addVariable({ id, name, description: "", group: null, secret: false, consumers: [], ...(local ? { local: true } : {}) });
+    store.addVariable({ id, name, description: "", group: null, secret: false, wiring: [], ...(local ? { local: true } : {}) });
   } else if (existing.length === 1) {
     id = existing[0]!.id;
   } else {
