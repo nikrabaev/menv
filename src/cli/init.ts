@@ -40,6 +40,9 @@ export interface InitOpts {
   // writes it, `false` skips; when omitted, `promptSkill` (a TTY) decides, else skip.
   withSkill?: boolean;
   promptSkill?: () => Promise<boolean>;
+  // Environment name that single-mode (non-per-env) consumers adopt — their plain
+  // `.env` imports here and it becomes the recorded default. Defaults to "dev".
+  defaultEnv?: string;
 }
 
 export interface InitResult {
@@ -49,7 +52,7 @@ export interface InitResult {
 }
 
 export async function runInit(root: string, opts: InitOpts = {}): Promise<InitResult> {
-  const { model } = await scanRepo(root);
+  const { model } = await scanRepo(root, { defaultEnv: opts.defaultEnv });
 
   let backend: KeyBackend;
   let chosen: KeyBackendConfig | undefined;

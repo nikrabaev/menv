@@ -29,6 +29,20 @@ test("init creates config, manifest, vault and gitignore", async () => {
   expect(await Bun.file(join(root, ".gitignore")).text()).toContain(".menv/values/");
 });
 
+test("init --default-env names the default environment and vault file", async () => {
+  const root = await scaffold(); // apps/api/.env carries PORT=3000
+
+  const kp = await generateKeypair();
+  const backend = { async get() { return kp.identity; }, async set() { return { kind: "keychain" as const }; } };
+  await runInit(root, { backend, stamp: "s1", defaultEnv: "staging" });
+
+  const toml = await Bun.file(join(root, "menv.toml")).text();
+  expect(toml).toContain('default_environment = "staging"');
+  // The scaffold's .env imported under the custom env, so the vault is keyed to it.
+  expect(await Bun.file(join(root, ".menv", "values", "staging.env.age")).exists()).toBe(true);
+  expect(await Bun.file(join(root, ".menv", "values", "dev.env.age")).exists()).toBe(false);
+});
+
 test("init --backend password writes a committed identity blob and records the kind", async () => {
   const root = await scaffold();
   const pass: PassphraseProvider = { async unlock() { return "pw"; }, async create() { return "pw"; } };

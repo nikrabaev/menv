@@ -71,10 +71,10 @@ type EnvFileClass =
   | { kind: "example" }
   | { kind: "env"; env: string; local: boolean };
 
-function classifyEnvFile(filename: string): EnvFileClass | null {
-  if (filename === ".env") return { kind: "env", env: "dev", local: false };
+function classifyEnvFile(filename: string, defaultEnv: string): EnvFileClass | null {
+  if (filename === ".env") return { kind: "env", env: defaultEnv, local: false };
   if (filename === ".env.example") return { kind: "example" };
-  if (filename === ".env.local") return { kind: "env", env: "dev", local: true };
+  if (filename === ".env.local") return { kind: "env", env: defaultEnv, local: true };
   const m = /^\.env\.(.+)$/.exec(filename);
   if (!m) return null;
   let rest = m[1]!;
@@ -146,7 +146,15 @@ function buildVarsFromOcc(
   }
 }
 
-export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
+export async function scanRepo(
+  root: string,
+  opts: { defaultEnv?: string } = {},
+): Promise<{ model: RepoModel }> {
+  // The environment that single-mode (non-per-env) consumers adopt: their plain
+  // `.env`/`.env.local` import here, and a repo with no env files at all seeds it.
+  // `menv init --default-env` overrides the historical "dev"; an empty/whitespace
+  // value falls back so a stray flag never yields a blank env name.
+  const defaultEnv = opts.defaultEnv?.trim() || "dev";
   const apps = await detectApps(root);
 
   // The repo root itself is always a wireable target: variables wired to "root"
@@ -176,7 +184,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   for (const app of scanTargets) {
     const glob = new Bun.Glob(".env*");
     for await (const file of glob.scan({ cwd: join(root, app.path), onlyFiles: true, dot: true })) {
-      const cls = classifyEnvFile(file);
+      const cls = classifyEnvFile(file, defaultEnv);
       if (!cls) continue;
       if (cls.kind === "example") {
         exampleFiles.push({ app, file });
@@ -203,7 +211,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
       }
     }
   }
-  if (envIds.size === 0) envIds.add("dev");
+  if (envIds.size === 0) envIds.add(defaultEnv);
 
   const variables: Variable[] = [];
   const values: Values = {};
@@ -260,7 +268,7 @@ export async function scanRepo(root: string): Promise<{ model: RepoModel }> {
   }
 
   const environments = [...envIds].sort().map((id, i) => ({
-    id, isDefault: id === "dev" || (i === 0 && !envIds.has("dev")),
+    id, isDefault: id === defaultEnv || (i === 0 && !envIds.has(defaultEnv)),
   }));
   const consumers: Consumer[] = scanTargets.map((c) => ({
     ...c,

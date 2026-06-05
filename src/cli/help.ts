@@ -14,6 +14,8 @@ Commands:
                             --with-skill      Scaffold the menv-usage agent skill
                             --no-skill        into .claude/skills/ — or skip it
                                               (omit to be asked on a TTY)
+                            --default-env <name>  Default environment name for
+                                              non-per-env consumers (default: dev)
   generate [--env <env>]  Regenerate .env files from the vault (headless/CI).
                           The password backend reads MENV_PASSPHRASE.
 

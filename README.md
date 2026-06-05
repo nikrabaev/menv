@@ -106,7 +106,9 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
 
 - **Environments** — `dev`, `prod`, `staging`, … Every variable can hold a distinct
   value per environment. The active environment (top bar, switch with `e`) decides
-  which value is written into the generated `.env` files.
+  which value is written into the generated `.env` files. A **single**-mode
+  consumer's plain `.env` belongs to one default environment — `dev` unless you pass
+  `menv init --default-env <name>`.
 - **File modes** — Each consumer is either **single** (one `.env`, the default — it
   holds the active environment's values) or **per-env** (one `.env.<env>` file per
   environment, side by side). `menv init` picks **per-env** automatically for any
@@ -238,6 +240,9 @@ menv [command] [options]
       --with-skill          Scaffold the menv-usage agent skill into
       --no-skill            .claude/skills/ — or skip it (omit to be asked on a
                             TTY; an existing skill file is never overwritten)
+      --default-env <name>  Environment name for non-per-env consumers — their
+                            plain .env imports here and it becomes the recorded
+                            default (default: dev)
 
   Variables — the same operations as the TUI inspector, headless:
 

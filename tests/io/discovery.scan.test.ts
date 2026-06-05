@@ -216,6 +216,44 @@ test("init round-trip: example-only keys regenerate commented-out in the env fil
   expect(dev).not.toMatch(/^VITE_AUTH_URL=/m);
 });
 
+test("a custom defaultEnv reclassifies plain .env/.env.local and labels it the default", async () => {
+  const root = await setup(["web"]);
+  await Bun.write(join(root, "apps", "web", ".env"), "PORT=3000\n");
+  await Bun.write(join(root, "apps", "web", ".env.local"), "PORT=3001\n");
+
+  const { model } = await scanRepo(root, { defaultEnv: "staging" });
+
+  // The single-mode consumer's .env imports under the custom env, not "dev".
+  const ports = model.variables.filter((v) => v.name === "PORT" && isWired(v, "app:web"));
+  const base = ports.find((v) => !v.local)!;
+  const local = ports.find((v) => v.local)!;
+  expect(model.values[base.id]!.staging).toBe("3000");
+  expect(model.values[local.id]!.staging).toBe("3001");
+  expect(model.values[base.id]!.dev).toBeUndefined();
+
+  // The custom env becomes the sole, default environment.
+  expect(model.environments.map((e) => e.id)).toEqual(["staging"]);
+  expect(model.environments.find((e) => e.id === "staging")!.isDefault).toBe(true);
+});
+
+test("a custom defaultEnv seeds the environment when no env files exist", async () => {
+  const root = await setup(["web"]); // apps exist but carry no .env files
+
+  const { model } = await scanRepo(root, { defaultEnv: "staging" });
+
+  expect(model.environments.map((e) => e.id)).toEqual(["staging"]);
+  expect(model.environments[0]!.isDefault).toBe(true);
+});
+
+test("an empty or whitespace defaultEnv falls back to dev", async () => {
+  const root = await setup(["web"]);
+
+  const { model } = await scanRepo(root, { defaultEnv: "   " });
+
+  expect(model.environments.map((e) => e.id)).toEqual(["dev"]);
+  expect(model.environments[0]!.isDefault).toBe(true);
+});
+
 test("imports example values and creates example-only variables", async () => {
   const root = await setup();
   await Bun.write(join(root, "apps", "api", ".env"), "DATABASE_URL=pg://real\n");
