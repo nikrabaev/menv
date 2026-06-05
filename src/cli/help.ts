@@ -41,6 +41,11 @@ Commands:
   unwire NAME <c1,c2,...> Unwire a variable from consumers (--local for the override)
   rm NAME [options]       Delete a variable
                             --scope <c>, --local
+  auto-group [--force]    Group variables by their longest shared name prefix —
+                          whole "_"-delimited segments: NEXT_PUBLIC_API,
+                          NEXT_PUBLIC_SITE → "NEXT_PUBLIC"; DB_USER, DB_HOST → "DB".
+                          A prefix must be shared by 2+ variables. Only ungrouped
+                          variables are touched unless --force re-derives them all.
 
   Without --local these commands address the base variable; --local targets its
   .env.local override (a separate variable generated into the .local file).

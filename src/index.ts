@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { runAutoGroup } from "./cli/autoGroup.ts";
 import { runBackup } from "./cli/backup.ts";
 import { readValue } from "./cli/context.ts";
 import { runDefine } from "./cli/define.ts";
@@ -212,6 +213,23 @@ try {
     if (!name) throw new Error("menv: rm requires a variable name");
     await runRm(root, name, { scope: flags.scope, local: bools.has("local") || undefined, env: flags.env, stamp: stamp() });
     console.log(`menv: removed ${name}`);
+    process.exit(0);
+  } else if (cmd === "auto-group") {
+    const { flags, bools } = parseArgs(["env"]);
+    const result = await runAutoGroup(root, {
+      overwrite: bools.has("force") || bools.has("overwrite"),
+      env: "env" in flags ? flags.env : undefined,
+      stamp: stamp(),
+    });
+    if (result.grouped === 0) {
+      console.log("menv: nothing to auto-group (need 2+ variables sharing a name prefix)");
+    } else {
+      const n = result.grouped;
+      const g = result.groups.length;
+      console.log(
+        `menv: grouped ${n} variable${n === 1 ? "" : "s"} into ${g} group${g === 1 ? "" : "s"} (${result.groups.join(", ")})`,
+      );
+    }
     process.exit(0);
   } else {
     if (!(await isMenvRepo(root))) {

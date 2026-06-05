@@ -261,6 +261,11 @@ menv [command] [options]
       --local                  Wire the .env.local override
   unwire NAME <c1,c2,…>   Unwire a variable from consumers (--local for the override)
   rm NAME [options]       Delete a variable (--scope <c>, --local)
+  auto-group [--force]    Group variables by their longest shared name prefix
+                          (whole "_"-delimited segments): NEXT_PUBLIC_API,
+                          NEXT_PUBLIC_SITE → "NEXT_PUBLIC"; DB_USER, DB_HOST → "DB".
+                          A prefix must be shared by 2+ variables. Only ungrouped
+                          variables are touched; --force re-derives every group.
   mode <consumer> <m>     Set a consumer's .env layout: single | perenv
 
   Without --local, variable commands address the base variable; --local targets
@@ -280,9 +285,10 @@ menv [command] [options]
   -v, --version           Show the version
 ```
 
-`define`, `set`, `wire`/`unwire`, and `rm` each re-encrypt the vault and regenerate
-the affected `.env` files. `define`/`set` (with the `password` backend) read
-`MENV_PASSPHRASE` for headless use, just like `generate`.
+`define`, `set`, `wire`/`unwire`, `rm`, and `auto-group` each re-encrypt the vault
+and regenerate the affected `.env` files (`auto-group` only when it changes a
+group). `define`/`set` (with the `password` backend) read `MENV_PASSPHRASE` for
+headless use, just like `generate`.
 
 ## On-disk layout
 

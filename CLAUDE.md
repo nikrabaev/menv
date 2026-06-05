@@ -25,10 +25,10 @@ bun run build          # compile a standalone ./menv binary
 
 Full CLI grammar, keybindings, and the feature tour live in `README.md` — the
 source of truth for user-facing behavior. The full command set (`init`, `generate`,
-`define`, `set`, `get`, `list`, `wire`/`unwire`, `mode`, `rm`, `backup`, `restore`,
-plus the no-arg TUI launch) is dispatched from `src/index.ts`; each handler lives in
-`src/cli/`. In a `bun link`ed checkout, the `menv` binary on `PATH` equals
-`bun run menv`.
+`define`, `set`, `get`, `list`, `wire`/`unwire`, `mode`, `rm`, `auto-group`,
+`backup`, `restore`, plus the no-arg TUI launch) is dispatched from `src/index.ts`;
+each handler lives in `src/cli/`. In a `bun link`ed checkout, the `menv` binary on
+`PATH` equals `bun run menv`.
 
 ## Structure
 
