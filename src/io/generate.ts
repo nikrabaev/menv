@@ -1,7 +1,7 @@
-import { copyFile, mkdir, rename } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel } from "../core/types.ts";
+import { writeFileWithBackup as writeFile } from "./atomicWrite.ts";
 import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
 // `local` selects which slice of the consumer's variables to emit: base vars go
@@ -40,24 +40,6 @@ export function renderAppExample(model: RepoModel, consumerId: string): string {
     group: v.group,
   }));
   return serializeDotenv(entries, { groupHeaders: true });
-}
-
-async function backupIfExists(root: string, rel: string, stamp: string): Promise<void> {
-  const abs = join(root, rel);
-  if (!(await Bun.file(abs).exists())) return;
-  const dest = join(root, ".menv", "backups", stamp, rel);
-  await mkdir(dirname(dest), { recursive: true });
-  await copyFile(abs, dest);
-}
-
-async function writeFile(root: string, rel: string, content: string, stamp: string): Promise<string> {
-  await backupIfExists(root, rel, stamp);
-  const abs = join(root, rel);
-  await mkdir(dirname(abs), { recursive: true });
-  const tmp = `${abs}.menv-tmp`;
-  await Bun.write(tmp, content);
-  await rename(tmp, abs);
-  return rel;
 }
 
 // Writes each app its env file(s) plus a `.env.example`. In "single" mode (the
