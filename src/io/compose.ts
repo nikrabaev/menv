@@ -1,5 +1,7 @@
+import { dirname, join } from "node:path";
 import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
+import { writeFileWithBackup } from "./atomicWrite.ts";
 import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
 const OPEN = /^(\s*)#\s*<menv:([^>]+)>\s*$/;
@@ -199,4 +201,35 @@ export function renderComposeEnv(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => ({ key, value, description: "" }));
   return serializeDotenv(entries);
+}
+
+// Fill every menv region across all compose files and write each compose-project
+// directory's `.env.compose`. Returns the repo-relative paths actually written.
+// Marker-free files are skipped; a directory whose regions resolve to no applied
+// values gets no stray `.env.compose`.
+export async function writeComposeFiles(model: RepoModel, env: string, stamp: string): Promise<string[]> {
+  const files = await discoverComposeFiles(model.root);
+  const byDir = new Map<string, string[]>();
+  for (const rel of files) {
+    const dir = dirname(rel);
+    (byDir.get(dir) ?? byDir.set(dir, []).get(dir)!).push(rel);
+  }
+
+  const written: string[] = [];
+  for (const [dir, rels] of byDir) {
+    const dirRefs: { consumerId: string; prefix: string }[] = [];
+    for (const rel of rels) {
+      const text = await Bun.file(join(model.root, rel)).text();
+      if (findRegions(text).length === 0) continue; // no markers → never touch the file
+      const { text: next, warnings, refs } = spliceRegions(text, model, env);
+      for (const w of warnings) console.warn(w);
+      dirRefs.push(...refs);
+      if (next !== text) written.push(await writeFileWithBackup(model.root, rel, next, stamp));
+    }
+    if (dirRefs.length === 0) continue;
+    const content = renderComposeEnv(model, dirRefs, env);
+    if (content.trim() === "") continue;
+    written.push(await writeFileWithBackup(model.root, join(dir, ".env.compose"), content, stamp));
+  }
+  return written;
 }
