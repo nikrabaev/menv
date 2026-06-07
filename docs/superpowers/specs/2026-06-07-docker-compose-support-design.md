@@ -117,7 +117,11 @@ For consumer `NAME` in the active environment `env`:
 
 - Take the variables wired to `NAME` that are **applied** in `env` (reuse
   `varsForConsumer` + `isApplied` from `src/core/model.ts`), sorted by group then
-  name (reuse the ordering in `src/io/generate.ts`'s `sortedVars`).
+  name, with **ungrouped variables last** — a deterministic, locale-independent
+  comparison. (This intentionally differs from `generate.ts`'s `sortedVars`, whose
+  `"~"` sentinel + `localeCompare` can sort ungrouped variables *first* on some
+  platforms for the `.env` files; unifying the two orderings is a possible
+  follow-up and out of scope here.)
 - Emit, at the marker's indentation, one entry per variable:
   - **Sequence style** (default): `- KEY=${PREFIX_KEY}`
   - **Mapping style** (if the block is a YAML mapping): `KEY: ${PREFIX_KEY}`

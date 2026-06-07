@@ -149,7 +149,7 @@ export function spliceRegions(text: string, model: RepoModel, env: string): Spli
   for (const { region, consumerId, style } of [...plans].reverse()) {
     if (!consumerId) {
       warnings.unshift(
-        `menv: marker # <menv:${region.token}> names an unknown consumer — region left unchanged`,
+        `menv: marker # <menv:${region.token}> names an unknown or ambiguous consumer — region left unchanged`,
       );
       continue;
     }
@@ -229,6 +229,9 @@ export async function writeComposeFiles(model: RepoModel, env: string, stamp: st
     if (dirRefs.length === 0) continue;
     const content = renderComposeEnv(model, dirRefs, env);
     if (content.trim() === "") continue;
+    // The compose YAML is committed, so it is only rewritten when changed (above);
+    // .env.compose is git-ignored and disposable, so it is regenerated every run
+    // like the other generated env files (generate.ts writes those unconditionally too).
     written.push(await writeFileWithBackup(model.root, join(dir, ".env.compose"), content, stamp));
   }
   return written;

@@ -211,3 +211,37 @@ test("renderComposeEnv unions prefixed values, sorted, collision-free across con
 test("renderComposeEnv returns empty string when nothing is applied", () => {
   expect(renderComposeEnv(model, [], "dev")).toBe("");
 });
+
+test("renderRegionBody sorts named groups alphabetically before ungrouped vars", () => {
+  const m: RepoModel = {
+    root: "/r",
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "a", name: "AAA", description: "", group: "Zeta", secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "b", name: "BBB", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "c", name: "CCC", description: "", group: "Alpha", secret: false, wiring: [{ consumer: "app:api" }] },
+    ],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
+    values: { a: { dev: "1" }, b: { dev: "2" }, c: { dev: "3" } },
+    recipients: [],
+  };
+  // group "Alpha" (CCC) → group "Zeta" (AAA) → ungrouped (BBB) LAST.
+  expect(renderRegionBody(m, "app:api", "API", "dev", "seq")).toEqual([
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+    "- CCC=${API_CCC}",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+    "- AAA=${API_AAA}",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+    "- BBB=${API_BBB}",
+  ]);
+});
+
+test("spliceRegions is idempotent on already-filled output", () => {
+  const text = ["    environment:", "      # <menv:api>", "      # </menv>"].join("\n");
+  const first = spliceRegions(text, model, "dev").text;
+  const second = spliceRegions(first, model, "dev").text;
+  expect(second).toBe(first);
+  // sanity: the region was actually filled on the first pass
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+  expect(first).toContain("- DATABASE_URL=${API_DATABASE_URL}");
+});
