@@ -159,6 +159,28 @@ export function spliceRegions(text: string, model: RepoModel, env: string): Spli
   return { text: lines.join("\n"), warnings, refs };
 }
 
+const COMPOSE_GLOBS = [
+  "**/docker-compose*.yml",
+  "**/docker-compose*.yaml",
+  "**/compose*.yml",
+  "**/compose*.yaml",
+];
+const IGNORED_SEGMENTS = ["node_modules/", ".git/", ".menv/"];
+
+// Repo-relative paths of every conventional compose file, excluding vendored and
+// menv-internal directories. Sorted and de-duplicated across the glob families.
+export async function discoverComposeFiles(root: string): Promise<string[]> {
+  const found = new Set<string>();
+  for (const pattern of COMPOSE_GLOBS) {
+    const glob = new Bun.Glob(pattern);
+    for await (const rel of glob.scan({ cwd: root, onlyFiles: true })) {
+      if (IGNORED_SEGMENTS.some((seg) => rel.includes(seg))) continue;
+      found.add(rel);
+    }
+  }
+  return [...found].sort();
+}
+
 // The `.env.compose` body for a compose-project directory: the union of the
 // referenced consumers' applied values, keyed by the prefixed interpolation name.
 // Keys are always prefixed, so the union never collides; sorted for stable output.
