@@ -151,6 +151,30 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   uncommenting one re-applies it) or keep the vault and let the next save overwrite
   the file. Removing a variable outright stays an explicit `unwire` / `x` action.
   (`menv generate` stays a one-way vault→disk regenerate for CI.)
+- **Docker Compose** — A compose service opts into menv by carrying a marker that
+  names an existing consumer inside its `environment:` block:
+
+  ```yaml
+  services:
+    api:
+      environment:
+        - NODE_ENV=production        # hand-authored, untouched
+        # <menv:api>
+        - DATABASE_URL=${API_DATABASE_URL}
+        # </menv>
+  ```
+
+  menv fills the region with `- KEY=${CONSUMER_KEY}` for exactly the variables
+  wired to that consumer and **applied** in the active environment — so
+  `wire`/`unwire` reflects into every linked service on the next generate. The
+  container variable name stays on the left; the interpolation key is always
+  prefixed with the consumer name, so a single shared file never collides even
+  when two services expose a same-named variable with different values. Lines
+  outside the markers are never touched. Values come from a generated,
+  git-ignored **`.env.compose`** beside the compose file (one per directory, the
+  union of every region's values for the active environment). Run compose with
+  `docker compose --env-file .env.compose …`; switch environments by
+  regenerating (`menv generate --env prod`).
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
   auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
   `DSN`, `URL`) and toggleable per variable.
@@ -278,8 +302,10 @@ menv [command] [options]
 
   Materialize & back up:
 
-  generate [--env <env>]  Regenerate .env files from the vault (headless / CI).
-                          The password backend reads MENV_PASSPHRASE.
+  generate [--env <env>]  Regenerate .env files from the vault (headless / CI),
+                          fill docker-compose marker regions, and write each
+                          compose directory's .env.compose. The password backend
+                          reads MENV_PASSPHRASE.
   backup                  Snapshot every .env and .env.example into
                           .menv/backups/<timestamp>
   restore [key] [-f]      Restore .env / .env.example files from a backup.
@@ -311,10 +337,12 @@ your-repo/
 │  ├─ .env                   # git-ignored — generated for the active environment
 │  ├─ .env.local             # git-ignored — local overrides, if any (kept out of .env.example)
 │  └─ .env.example           # committed — values-free template
-└─ apps/api/                 # per-env mode
-   ├─ .env.dev               # git-ignored — one file per environment it has values in
-   ├─ .env.prod              # git-ignored
-   └─ .env.example           # committed — values-free template
+├─ apps/api/                 # per-env mode
+│  ├─ .env.dev               # git-ignored — one file per environment it has values in
+│  ├─ .env.prod              # git-ignored
+│  └─ .env.example           # committed — values-free template
+├─ docker-compose.yml        # committed — menv fills `# <menv:NAME>` regions in services
+└─ .env.compose              # git-ignored — generated interpolation values (per compose dir)
 ```
 
 `menv init` appends this block to `.gitignore`:
