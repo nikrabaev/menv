@@ -136,3 +136,41 @@ test("writeGeneratedFiles fills compose regions and flips .env.compose by env", 
   await writeGeneratedFiles(model, "prod", "ts2");
   expect(await Bun.file(join(root, ".env.compose")).text()).toBe("API_PORT=8080\n");
 });
+
+test("writeComposeFiles lists an unapplied var uncommented in YAML but commented in .env.compose", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  const compose = [
+    "services:",
+    "  api:",
+    "    environment:",
+    "      # <menv:api>",
+    "      # </menv>",
+  ].join("\n");
+  await Bun.write(join(root, "docker-compose.yml"), `${compose}\n`);
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] },
+      { id: "v2", name: "DEBUG", description: "", group: null, secret: false, wiring: [{ consumer: "app:api", unapplied: ["dev"] }] },
+    ],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
+    values: { v1: { dev: "3000" }, v2: { dev: "true" } },
+    recipients: [],
+  };
+
+  await writeComposeFiles(model, "dev", "ts1");
+
+  // Both vars appear uncommented in the YAML region, regardless of applied state.
+  const yaml = await Bun.file(join(root, "docker-compose.yml")).text();
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+  expect(yaml).toContain("      - PORT=${API_PORT}");
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+  expect(yaml).toContain("      - DEBUG=${API_DEBUG}");
+
+  // .env.compose: PORT applied → live; DEBUG unapplied in dev → commented (value kept).
+  const envCompose = await Bun.file(join(root, ".env.compose")).text();
+  expect(envCompose).toContain("API_PORT=3000");
+  expect(envCompose).toContain("# API_DEBUG=true");
+  expect(envCompose).not.toMatch(/^API_DEBUG=/m);
+});

@@ -65,21 +65,18 @@ test("detectStyle reads sequence vs mapping from a sibling, defaulting to seq", 
   expect(detectStyle(empty.split("\n"), findRegions(empty)[0]!)).toBe("seq");
 });
 
-test("renderRegionBody emits only applied vars, group-then-name sorted, with prefixed refs", () => {
-  // dev: both applied → DB-group DATABASE_URL first, then REDIS_URL.
-  expect(renderRegionBody(model, "app:api", "API", "dev", "seq")).toEqual([
+test("renderRegionBody emits ALL wired base vars uncommented, group-then-name sorted", () => {
+  // Every wired var appears regardless of applied state: REDIS_URL is unapplied in
+  // prod but still listed here (its applied/unapplied state lives in .env.compose).
+  // DB-group DATABASE_URL first, then ungrouped REDIS_URL.
+  expect(renderRegionBody(model, "app:api", "API", "seq")).toEqual([
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
     "- DATABASE_URL=${API_DATABASE_URL}",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
     "- REDIS_URL=${API_REDIS_URL}",
   ]);
-  // prod: REDIS_URL is unapplied → omitted entirely.
-  expect(renderRegionBody(model, "app:api", "API", "prod", "seq")).toEqual([
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
-    "- DATABASE_URL=${API_DATABASE_URL}",
-  ]);
   // mapping style.
-  expect(renderRegionBody(model, "app:api", "API", "dev", "map")).toEqual([
+  expect(renderRegionBody(model, "app:api", "API", "map")).toEqual([
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
     "DATABASE_URL: ${API_DATABASE_URL}",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
@@ -101,7 +98,7 @@ test("spliceRegions rewrites only the region body and preserves everything else"
     "    ports:",
     '      - "3000:3000"',
   ].join("\n");
-  const { text: out, warnings, refs } = spliceRegions(text, model, "dev");
+  const { text: out, warnings, refs } = spliceRegions(text, model);
   expect(warnings).toEqual([]);
   expect(refs).toEqual([{ consumerId: "app:api", prefix: "API" }]);
   // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
@@ -121,22 +118,19 @@ test("spliceRegions rewrites only the region body and preserves everything else"
 test("spliceRegions warns and leaves an unknown-consumer region untouched", () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
   const text = ["    environment:", "      # <menv:ghost>", "      - X=${GHOST_X}", "      # </menv>"].join("\n");
-  const { text: out, warnings, refs } = spliceRegions(text, model, "dev");
+  const { text: out, warnings, refs } = spliceRegions(text, model);
   expect(refs).toEqual([]);
   expect(warnings).toHaveLength(1);
   expect(warnings[0]).toContain("ghost");
   expect(out).toBe(text); // unchanged
 });
 
-test("spliceRegions empties a region whose consumer has no applied vars", () => {
+test("spliceRegions empties a region whose consumer has no wired base variables", () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
   const text = ["    environment:", "      # <menv:api>", "      - GONE=${API_GONE}", "      # </menv>"].join("\n");
-  // prod with a model where api has nothing applied: reuse a var unapplied in prod.
-  const m: RepoModel = {
-    ...model,
-    variables: [{ id: "v2", name: "REDIS_URL", description: "", group: null, secret: false, wiring: [{ consumer: "app:api", unapplied: ["prod"] }] }],
-  };
-  const { text: out } = spliceRegions(text, m, "prod");
+  // app:api exists as a consumer but nothing is wired to it → region collapses.
+  const m: RepoModel = { ...model, variables: [] };
+  const { text: out } = spliceRegions(text, m);
   expect(out).toBe(["    environment:", "      # <menv:api>", "      # </menv>"].join("\n"));
 });
 
@@ -166,7 +160,7 @@ test("spliceRegions rewrites two regions in one file without index corruption", 
     "      # <menv:web>",
     "      # </menv>",
   ].join("\n");
-  const { text: out, warnings, refs } = spliceRegions(text, twoConsumerModel, "dev");
+  const { text: out, warnings, refs } = spliceRegions(text, twoConsumerModel);
   expect(warnings).toEqual([]);
   expect(refs).toEqual([
     { consumerId: "app:api", prefix: "API" },
@@ -208,7 +202,18 @@ test("renderComposeEnv unions prefixed values, sorted, collision-free across con
   expect(out).toBe("API_DATABASE_URL=pg://api\nWEB_DATABASE_URL=pg://web\n");
 });
 
-test("renderComposeEnv returns empty string when nothing is applied", () => {
+test("renderComposeEnv comments out values unapplied in the active env", () => {
+  // dev: both applied → both live, sorted by prefixed key.
+  expect(renderComposeEnv(model, [{ consumerId: "app:api", prefix: "API" }], "dev")).toBe(
+    "API_DATABASE_URL=pg://x\nAPI_REDIS_URL=redis://x\n",
+  );
+  // prod: REDIS_URL is unapplied → commented out (value preserved); DATABASE_URL stays live.
+  expect(renderComposeEnv(model, [{ consumerId: "app:api", prefix: "API" }], "prod")).toBe(
+    "API_DATABASE_URL=pg://p\n# API_REDIS_URL=redis://p\n",
+  );
+});
+
+test("renderComposeEnv returns empty string when there are no refs", () => {
   expect(renderComposeEnv(model, [], "dev")).toBe("");
 });
 
@@ -226,7 +231,7 @@ test("renderRegionBody sorts named groups alphabetically before ungrouped vars",
     recipients: [],
   };
   // group "Alpha" (CCC) → group "Zeta" (AAA) → ungrouped (BBB) LAST.
-  expect(renderRegionBody(m, "app:api", "API", "dev", "seq")).toEqual([
+  expect(renderRegionBody(m, "app:api", "API", "seq")).toEqual([
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
     "- CCC=${API_CCC}",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
@@ -238,8 +243,8 @@ test("renderRegionBody sorts named groups alphabetically before ungrouped vars",
 
 test("spliceRegions is idempotent on already-filled output", () => {
   const text = ["    environment:", "      # <menv:api>", "      # </menv>"].join("\n");
-  const first = spliceRegions(text, model, "dev").text;
-  const second = spliceRegions(first, model, "dev").text;
+  const first = spliceRegions(text, model).text;
+  const second = spliceRegions(first, model).text;
   expect(second).toBe(first);
   // sanity: the region was actually filled on the first pass
   // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture

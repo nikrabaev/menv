@@ -79,12 +79,14 @@ export function detectStyle(lines: string[], region: Region): "seq" | "map" {
   return scan(region.open - 1, -1, (i) => i < 0) ?? scan(region.close + 1, 1, (i) => i >= lines.length) ?? "seq";
 }
 
-// The base variables wired to `consumerId` and applied in `env`, group-then-name
-// sorted. Null groups sort last (sentinel "￿" sorts after all real group names).
-// Local (.env.local) overrides never appear in a compose region.
-function composeVars(model: RepoModel, consumerId: string, env: string): Variable[] {
+// Every base variable wired to `consumerId`, group-then-name sorted. Null groups
+// sort last (sentinel "￿" sorts after all real group names). Applied state does
+// NOT filter membership — the compose region declares the full wired surface, and
+// the applied/unapplied distinction is carried by `.env.compose` (commented
+// values). Local (.env.local) overrides never appear in a compose region.
+function composeVars(model: RepoModel, consumerId: string): Variable[] {
   return varsForConsumer(model, consumerId)
-    .filter((v) => !(v.local ?? false) && isApplied(v, consumerId, env))
+    .filter((v) => !(v.local ?? false))
     .sort((a, b) => {
       const ga = a.group ?? "￿";
       const gb = b.group ?? "￿";
@@ -96,16 +98,17 @@ function composeVars(model: RepoModel, consumerId: string, env: string): Variabl
     });
 }
 
-// The body lines for a region (no indentation; the splicer adds it). The container
+// The body lines for a region (no indentation; the splicer adds it). Every wired
+// base variable appears as a live (uncommented) reference regardless of applied
+// state — applied/unapplied is reflected only in `.env.compose`. The container
 // variable name stays on the left; the interpolation key is the prefixed name.
 export function renderRegionBody(
   model: RepoModel,
   consumerId: string,
   prefix: string,
-  env: string,
   style: "seq" | "map",
 ): string[] {
-  return composeVars(model, consumerId, env).map((v) =>
+  return composeVars(model, consumerId).map((v) =>
     style === "map" ? `${v.name}: \${${prefix}_${v.name}}` : `- ${v.name}=\${${prefix}_${v.name}}`,
   );
 }
@@ -130,11 +133,12 @@ export interface SpliceResult {
   refs: { consumerId: string; prefix: string }[]; // resolved consumers referenced here
 }
 
-// Rewrite every menv region in `text` for the active environment. Styles and
-// consumer resolutions are computed against the pristine text, then bodies are
-// spliced back-to-front so earlier line indices stay valid. Unknown-consumer
-// regions are left untouched and reported in `warnings`.
-export function spliceRegions(text: string, model: RepoModel, env: string): SpliceResult {
+// Rewrite every menv region in `text`. Region bodies are env-independent — they
+// list the full wired surface as `${...}` references — so this takes no env.
+// Styles and consumer resolutions are computed against the pristine text, then
+// bodies are spliced back-to-front so earlier line indices stay valid.
+// Unknown-consumer regions are left untouched and reported in `warnings`.
+export function spliceRegions(text: string, model: RepoModel): SpliceResult {
   const original = text.split("\n");
   const regions = findRegions(text);
   const plans = regions.map((region) => ({
@@ -155,7 +159,7 @@ export function spliceRegions(text: string, model: RepoModel, env: string): Spli
     }
     const prefix = prefixFor(region.token);
     refs.unshift({ consumerId, prefix });
-    const body = renderRegionBody(model, consumerId, prefix, env, style).map((l) => region.indent + l);
+    const body = renderRegionBody(model, consumerId, prefix, style).map((l) => region.indent + l);
     lines.splice(region.open + 1, region.close - region.open - 1, ...body);
   }
   return { text: lines.join("\n"), warnings, refs };
@@ -184,29 +188,34 @@ export async function discoverComposeFiles(root: string): Promise<string[]> {
 }
 
 // The `.env.compose` body for a compose-project directory: the union of the
-// referenced consumers' applied values, keyed by the prefixed interpolation name.
-// Keys are always prefixed, so the union never collides; sorted for stable output.
+// referenced consumers' values, keyed by the prefixed interpolation name. Keys are
+// always prefixed, so the union never collides; sorted for stable output. A value
+// unapplied in `env` is emitted commented-out (`# KEY=value`), matching menv's
+// .env convention, so it round-trips as known-but-inactive.
 export function renderComposeEnv(
   model: RepoModel,
   refs: { consumerId: string; prefix: string }[],
   env: string,
 ): string {
-  const byKey = new Map<string, string>();
+  const byKey = new Map<string, { value: string; active: boolean }>();
   for (const { consumerId, prefix } of refs) {
-    for (const v of composeVars(model, consumerId, env)) {
-      byKey.set(`${prefix}_${v.name}`, resolveValue(model, v.id, env));
+    for (const v of composeVars(model, consumerId)) {
+      byKey.set(`${prefix}_${v.name}`, {
+        value: resolveValue(model, v.id, env),
+        active: isApplied(v, consumerId, env),
+      });
     }
   }
   const entries: SerializeEntry[] = [...byKey.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => ({ key, value, description: "" }));
+    .map(([key, { value, active }]) => ({ key, value, description: "", active }));
   return serializeDotenv(entries);
 }
 
 // Fill every menv region across all compose files and write each compose-project
 // directory's `.env.compose`. Returns the repo-relative paths actually written.
-// Marker-free files are skipped; a directory whose regions resolve to no applied
-// values gets no stray `.env.compose`.
+// Marker-free files are skipped; a directory whose regions resolve to no wired
+// variables gets no stray `.env.compose`.
 export async function writeComposeFiles(model: RepoModel, env: string, stamp: string): Promise<string[]> {
   const files = await discoverComposeFiles(model.root);
   const byDir = new Map<string, string[]>();
@@ -221,7 +230,7 @@ export async function writeComposeFiles(model: RepoModel, env: string, stamp: st
     for (const rel of rels) {
       const text = await Bun.file(join(model.root, rel)).text();
       if (findRegions(text).length === 0) continue; // no markers → never touch the file
-      const { text: next, warnings, refs } = spliceRegions(text, model, env);
+      const { text: next, warnings, refs } = spliceRegions(text, model);
       for (const w of warnings) console.warn(w);
       dirRefs.push(...refs);
       if (next !== text) written.push(await writeFileWithBackup(model.root, rel, next, stamp));

@@ -164,16 +164,18 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
         # </menv>
   ```
 
-  menv fills the region with `- KEY=${CONSUMER_KEY}` for exactly the variables
-  wired to that consumer and **applied** in the active environment — so
-  `wire`/`unwire` reflects into every linked service on the next generate. The
-  container variable name stays on the left; the interpolation key is always
-  prefixed with the consumer name, so a single shared file never collides even
-  when two services expose a same-named variable with different values. Lines
-  outside the markers are never touched. Values come from a generated,
-  git-ignored **`.env.compose`** beside the compose file (one per directory, the
-  union of every region's values for the active environment). Run compose with
-  `docker compose --env-file .env.compose …`; switch environments by
+  menv fills the region with `- KEY=${CONSUMER_KEY}` for every variable wired to
+  that consumer (the block declares the full wired surface) — so `wire`/`unwire`
+  reflects into every linked service on the next generate. The container variable
+  name stays on the left; the interpolation key is always prefixed with the
+  consumer name, so a single shared file never collides even when two services
+  expose a same-named variable with different values. Lines outside the markers
+  are never touched. The actual values come from a generated, git-ignored
+  **`.env.compose`** beside the compose file (one per directory, the union of every
+  region's values for the active environment) — where a variable **unapplied** in
+  that environment is commented out (`# KEY=value`), exactly like a `.env` file, so
+  `docker compose` interpolates it to an empty string until you apply it. Run
+  compose with `docker compose --env-file .env.compose …`; switch environments by
   regenerating (`menv generate --env prod`).
 - **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
   auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
