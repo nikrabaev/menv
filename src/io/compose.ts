@@ -1,5 +1,6 @@
-import { isApplied, varsForConsumer } from "../core/model.ts";
+import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel, Variable } from "../core/types.ts";
+import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
 const OPEN = /^(\s*)#\s*<menv:([^>]+)>\s*$/;
 const CLOSE = /^\s*#\s*<\/menv(?::[^>]+)?>\s*$/;
@@ -156,4 +157,24 @@ export function spliceRegions(text: string, model: RepoModel, env: string): Spli
     lines.splice(region.open + 1, region.close - region.open - 1, ...body);
   }
   return { text: lines.join("\n"), warnings, refs };
+}
+
+// The `.env.compose` body for a compose-project directory: the union of the
+// referenced consumers' applied values, keyed by the prefixed interpolation name.
+// Keys are always prefixed, so the union never collides; sorted for stable output.
+export function renderComposeEnv(
+  model: RepoModel,
+  refs: { consumerId: string; prefix: string }[],
+  env: string,
+): string {
+  const byKey = new Map<string, string>();
+  for (const { consumerId, prefix } of refs) {
+    for (const v of composeVars(model, consumerId, env)) {
+      byKey.set(`${prefix}_${v.name}`, resolveValue(model, v.id, env));
+    }
+  }
+  const entries: SerializeEntry[] = [...byKey.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => ({ key, value, description: "" }));
+  return serializeDotenv(entries);
 }

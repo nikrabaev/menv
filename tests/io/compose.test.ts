@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { RepoModel } from "../../src/core/types.ts";
-import { detectStyle, findRegions, prefixFor, renderRegionBody, spliceRegions } from "../../src/io/compose.ts";
+import { detectStyle, findRegions, prefixFor, renderComposeEnv, renderRegionBody, spliceRegions } from "../../src/io/compose.ts";
 
 test("findRegions captures token, indent, and line span", () => {
   const text = [
@@ -183,4 +183,31 @@ test("spliceRegions rewrites two regions in one file without index corruption", 
   // Markers for both regions survive, in document order.
   const lines = out.split("\n");
   expect(lines.filter((l) => l.includes("# <menv:"))).toEqual(["      # <menv:api>", "      # <menv:web>"]);
+});
+
+test("renderComposeEnv unions prefixed values, sorted, collision-free across consumers", () => {
+  // Two consumers with a same-named but distinct DATABASE_URL variable.
+  const m: RepoModel = {
+    root: "/r",
+    environments: [{ id: "dev", isDefault: true }],
+    variables: [
+      { id: "va", name: "DATABASE_URL", description: "", group: null, secret: true, wiring: [{ consumer: "app:api" }] },
+      { id: "vw", name: "DATABASE_URL", description: "", group: null, secret: true, wiring: [{ consumer: "app:web" }] },
+    ],
+    consumers: [
+      { kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" },
+      { kind: "app", id: "app:web", name: "web", path: "apps/web", envFile: ".env" },
+    ],
+    values: { va: { dev: "pg://api" }, vw: { dev: "pg://web" } },
+    recipients: [],
+  };
+  const out = renderComposeEnv(m, [
+    { consumerId: "app:api", prefix: "API" },
+    { consumerId: "app:web", prefix: "WEB" },
+  ], "dev");
+  expect(out).toBe("API_DATABASE_URL=pg://api\nWEB_DATABASE_URL=pg://web\n");
+});
+
+test("renderComposeEnv returns empty string when nothing is applied", () => {
+  expect(renderComposeEnv(model, [], "dev")).toBe("");
 });
