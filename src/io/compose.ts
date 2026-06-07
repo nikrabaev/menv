@@ -106,3 +106,54 @@ export function renderRegionBody(
     style === "map" ? `${v.name}: \${${prefix}_${v.name}}` : `- ${v.name}=\${${prefix}_${v.name}}`,
   );
 }
+
+// Resolve a marker token to a consumer id, or null (caller warns + skips). Mirrors
+// cli/context.ts's resolveConsumer but returns null instead of throwing, and stays
+// in the io layer (no cli import). Accepts a consumer id, an app name, or "root".
+function resolveConsumerId(model: RepoModel, token: string): string | null {
+  const byId = model.consumers.find((c) => c.id === token);
+  if (byId) return byId.id;
+  if (token === "root") {
+    const r = model.consumers.find((c) => c.id === "root" || c.path === ".");
+    if (r) return r.id;
+  }
+  const byName = model.consumers.filter((c) => c.name === token);
+  return byName.length === 1 ? byName[0]!.id : null;
+}
+
+export interface SpliceResult {
+  text: string;
+  warnings: string[];
+  refs: { consumerId: string; prefix: string }[]; // resolved consumers referenced here
+}
+
+// Rewrite every menv region in `text` for the active environment. Styles and
+// consumer resolutions are computed against the pristine text, then bodies are
+// spliced back-to-front so earlier line indices stay valid. Unknown-consumer
+// regions are left untouched and reported in `warnings`.
+export function spliceRegions(text: string, model: RepoModel, env: string): SpliceResult {
+  const original = text.split("\n");
+  const regions = findRegions(text);
+  const plans = regions.map((region) => ({
+    region,
+    consumerId: resolveConsumerId(model, region.token),
+    style: detectStyle(original, region),
+  }));
+
+  const lines = [...original];
+  const warnings: string[] = [];
+  const refs: { consumerId: string; prefix: string }[] = [];
+  for (const { region, consumerId, style } of [...plans].reverse()) {
+    if (!consumerId) {
+      warnings.unshift(
+        `menv: marker # <menv:${region.token}> names an unknown consumer — region left unchanged`,
+      );
+      continue;
+    }
+    const prefix = prefixFor(region.token);
+    refs.unshift({ consumerId, prefix });
+    const body = renderRegionBody(model, consumerId, prefix, env, style).map((l) => region.indent + l);
+    lines.splice(region.open + 1, region.close - region.open - 1, ...body);
+  }
+  return { text: lines.join("\n"), warnings, refs };
+}
