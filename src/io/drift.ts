@@ -4,9 +4,10 @@ import type { RepoModel, Variable } from "../core/types.ts";
 import { parseDotenv } from "./dotenv.ts";
 
 // One generated file menv would write, paired with the variable slice that feeds
-// it. Mirrors the selection logic in `writeGeneratedFiles` (sans `.env.example`,
-// which holds placeholder text rather than real values and so is never drift-
-// checked). Used to know which on-disk files to compare against the vault.
+// it. Mirrors the app env-file selection logic in `writeGeneratedFiles` — sans
+// `.env.example` (placeholder text, not real values), and sans the docker-compose
+// files / `.env.compose` it also writes (those are rewritten in full each save and
+// are not drift-checked). Used to know which on-disk files to compare against the vault.
 interface GenTarget {
   rel: string;
   consumerId: string;

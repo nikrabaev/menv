@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RepoModel } from "../../src/core/types.ts";
 import { discoverComposeFiles, writeComposeFiles } from "../../src/io/compose.ts";
+import { writeGeneratedFiles } from "../../src/io/generate.ts";
 
 test("discoverComposeFiles finds conventional names and ignores node_modules/.git/.menv", async () => {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
@@ -109,4 +110,29 @@ test("writeComposeFiles unions refs from two files in the same directory into on
   // Union of both consumers' prefixed vars
   expect(envCompose).toContain("API_DATABASE_URL=pg://x");
   expect(envCompose).toContain("WORKER_QUEUE_URL=amqp://q");
+});
+
+test("writeGeneratedFiles fills compose regions and flips .env.compose by env", async () => {
+  const root = mkdtempSync(join(tmpdir(), "menv-"));
+  await mkdir(join(root, "apps", "api"), { recursive: true });
+  const compose = "services:\n  api:\n    environment:\n      # <menv:api>\n      # </menv>\n";
+  await Bun.write(join(root, "docker-compose.yml"), compose);
+  const model: RepoModel = {
+    root,
+    environments: [{ id: "dev", isDefault: true }, { id: "prod", isDefault: false }],
+    variables: [{ id: "v1", name: "PORT", description: "", group: null, secret: false, wiring: [{ consumer: "app:api" }] }],
+    consumers: [{ kind: "app", id: "app:api", name: "api", path: "apps/api", envFile: ".env" }],
+    values: { v1: { dev: "3000", prod: "8080" } },
+    recipients: [],
+  };
+
+  const written = await writeGeneratedFiles(model, "dev", "ts1");
+  expect(written).toContain("docker-compose.yml");
+  expect(written).toContain(".env.compose");
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal docker-compose interpolation fixture
+  expect(await Bun.file(join(root, "docker-compose.yml")).text()).toContain("      - PORT=${API_PORT}");
+  expect(await Bun.file(join(root, ".env.compose")).text()).toBe("API_PORT=3000\n");
+
+  await writeGeneratedFiles(model, "prod", "ts2");
+  expect(await Bun.file(join(root, ".env.compose")).text()).toBe("API_PORT=8080\n");
 });

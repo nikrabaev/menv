@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { isApplied, resolveValue, varsForConsumer } from "../core/model.ts";
 import type { RepoModel } from "../core/types.ts";
 import { writeFileWithBackup as writeFile } from "./atomicWrite.ts";
+import { writeComposeFiles } from "./compose.ts";
 import { type SerializeEntry, serializeDotenv } from "./dotenv.ts";
 
 // `local` selects which slice of the consumer's variables to emit: base vars go
@@ -88,5 +89,7 @@ export async function writeGeneratedFiles(model: RepoModel, env: string, stamp: 
       written.push(await writeFile(model.root, join(c.path, ".env.example"), renderAppExample(model, c.id), stamp));
     }
   }
+  // Fill any docker-compose marker regions and write their .env.compose files.
+  written.push(...(await writeComposeFiles(model, env, stamp)));
   return written;
 }
