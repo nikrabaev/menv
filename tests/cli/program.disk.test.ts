@@ -137,3 +137,31 @@ describe("program — end to end on a tmp repo", () => {
     expect(r.variables.API_TOKEN?.vaultMapping.local?.api).toBeDefined();
   });
 });
+
+// Regression: a global option placed BEFORE the subcommand (its natural spot)
+// must not be greedily swallowed. A variadic --vault-auth ate the subcommand.
+describe("program — global flags before the subcommand", () => {
+  async function encryptedRepo() {
+    const registry = makeRegistry();
+    registry.vaults.local.vaultConfig = { filename: ".menv/vault.json", encryption: true };
+    registry.variables.TOKEN = { vaultMapping: { local: { api: { key: "k" } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    return root;
+  }
+
+  test("--vault-auth before the subcommand reaches the action", async () => {
+    const root = await encryptedRepo();
+    await run(root, ["--vault-auth", "local=pw", "set", "TOKEN", "secret-v"]);
+    const get = await run(root, ["get", "TOKEN", "--vault-auth", "local=pw"]);
+    expect(get.out.join("")).toBe("secret-v");
+  });
+
+  test("--vault-auth is repeatable (one pair per occurrence)", async () => {
+    const root = await encryptedRepo();
+    // two pairs, before the subcommand: neither is swallowed
+    await run(root, ["--vault-auth", "local=pw", "--vault-auth", "other=zz", "set", "TOKEN", "v2"]);
+    const get = await run(root, ["get", "TOKEN", "--vault-auth", "local=pw"]);
+    expect(get.out.join("")).toBe("v2");
+  });
+});

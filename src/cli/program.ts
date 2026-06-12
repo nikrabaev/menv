@@ -79,7 +79,15 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     .option("-o, --output <mode>", "output mode: pretty | json")
     .option("--dry-run", "compute and print the plan without applying it")
     .option("--force", "override blockers (dependent references, unverified vaults, …)")
-    .option("--vault-auth <pairs...>", "vault auth as <vault>=<secret> (repeatable)")
+    // Repeatable but NOT variadic: a variadic <pairs...> placed before the
+    // subcommand (its natural spot) greedily eats the command name. One value
+    // per occurrence — `--vault-auth a=1 --vault-auth b=2` — cannot.
+    .option(
+      "--vault-auth <pair>",
+      "vault auth as <vault>=<secret> (repeatable)",
+      (val: string, acc: string[]) => [...acc, val],
+      [] as string[],
+    )
     .configureOutput({ writeOut: (s) => io.stdout(s), writeErr: (s) => io.stderr(s) });
   // exitOverride must be set BEFORE subcommands are attached: commander copies
   // _exitCallback into each child at .command() time (copyInheritedSettings), so

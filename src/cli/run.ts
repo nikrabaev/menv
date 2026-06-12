@@ -140,6 +140,8 @@ export async function runMutation(
       `${renderPlanPretty(plan)}\napplied${extras.pretty ? `\n${extras.pretty}` : ""}`,
     );
   } finally {
-    for (const s of sessions.values()) await s.close();
+    // allSettled: one rejecting close() must neither leak the other sessions
+    // nor mask the primary result/error propagating out of the try.
+    await Promise.allSettled([...sessions.values()].map((s) => s.close()));
   }
 }

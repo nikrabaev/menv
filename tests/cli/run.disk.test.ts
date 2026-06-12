@@ -4,10 +4,12 @@ import { join } from "node:path";
 import { memoryIo } from "../../src/cli/output.ts";
 import { collectValueRecords, openVaultSession, runMutation } from "../../src/cli/run.ts";
 import type { MenvError } from "../../src/core/errors.ts";
+import { planGroupAdd } from "../../src/core/ops/group.ts";
 import { planSetValue } from "../../src/core/ops/value.ts";
 import { planVarRemove } from "../../src/core/ops/variable.ts";
 import { loadRegistry } from "../../src/registry/persist.ts";
 import type { Registry } from "../../src/registry/types.ts";
+import type { VaultSession } from "../../src/vault/provider.ts";
 import { makeRegistry, tmpRepo } from "../helpers/fixtures.ts";
 
 const roots: string[] = [];
@@ -141,5 +143,40 @@ describe("runMutation", () => {
     }
     await runMutation(root, registry, op, { dryRun: false, force: true, mode: "pretty", vaultAuth: {}, env: {} }, memoryIo());
     expect((await loadRegistry(root)).variables.DATABASE_URL).toBeUndefined();
+  });
+
+  // Regression: a rejecting close() must not leak the other sessions nor mask
+  // the real outcome. Latent today (local close() is a no-op) but the provider
+  // contract allows a close() that rejects (e.g. a remote token revoke).
+  test("closes every passed-in session even if one close() rejects", async () => {
+    const { root, registry } = await repoWithValue();
+    const closed: string[] = [];
+    const fake = (name: string, throwOnClose: boolean): VaultSession => ({
+      get: async () => undefined,
+      set: async () => {},
+      remove: async () => {},
+      list: async () => [],
+      close: async () => {
+        if (throwOnClose) throw new Error(`close-${name}-failed`);
+        closed.push(name);
+      },
+    });
+    const sessions = new Map<string, VaultSession>([
+      ["a", fake("a", true)],
+      ["b", fake("b", false)],
+    ]);
+    // A registry-only op (no vault ops): runMutation opens nothing new and
+    // closes the passed-in sessions in its finally.
+    const op = planGroupAdd(registry, { key: "payments", title: "Payments" });
+    await runMutation(
+      root,
+      registry,
+      op,
+      { dryRun: false, force: false, mode: "pretty", vaultAuth: {}, env: {} },
+      memoryIo(),
+      sessions,
+    );
+    expect(closed).toEqual(["b"]); // "b" closed despite "a" throwing
+    expect((await loadRegistry(root)).groups.payments).toBeDefined(); // result not masked
   });
 });
