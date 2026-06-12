@@ -15,6 +15,7 @@ import { upsertManagedBlock } from "../io/gitignore.ts";
 import { loadRegistry } from "../registry/persist.ts";
 import type { Registry } from "../registry/types.ts";
 import { getProvider } from "../vault/registry.ts";
+import { runCheck } from "./check.ts";
 import { runGenerate } from "./generate.ts";
 import { runImport } from "./importEnv.ts";
 import { runInit } from "./init.ts";
@@ -371,6 +372,14 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     .action(async (o) => {
       const registry = await reg();
       await runGenerate(root, registry, { vault: o.vault, consumer: o.consumer }, flags(), io, prompt);
+    });
+
+  program
+    .command("check")
+    .description("validate the repo: interpolation, vault keys, compose markers, staleness, git tracking")
+    .action(async () => {
+      const registry = await reg();
+      await runCheck(root, registry, flags(), io);
     });
 
   // ── var ────────────────────────────────────────────────────────────────
