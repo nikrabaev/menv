@@ -12,6 +12,10 @@ describe("MenvError", () => {
     expect(new MenvError("VAULT_IO", "x").exitCode).toBe(4);
   });
 
+  test("AMBIGUOUS maps to exit 1", () => {
+    expect(new MenvError("AMBIGUOUS", "x").exitCode).toBe(1);
+  });
+
   test("is an Error and carries code, message, details", () => {
     const e = new MenvError("NOT_FOUND", "no such variable", { name: "FOO" });
     expect(e).toBeInstanceOf(Error);

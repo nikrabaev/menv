@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MenvError } from "../../src/core/errors.ts";
-import { authEnvVarName, resolveVaultAuth } from "../../src/vault/auth.ts";
+import { authEnvVarName, resolveVaultAuth, resolveVaultAuthOptional } from "../../src/vault/auth.ts";
 
 let root: string;
 beforeEach(async () => {
@@ -110,6 +110,23 @@ describe("resolveVaultAuth", () => {
       expect(err.message).toContain("--vault-auth");
       expect(err.message).toContain("MENV_VAULT_AUTH_LOCAL");
       expect(err.message).toContain(".menv/auth.local.json");
+    }
+  });
+
+  test("optional resolution returns {} instead of throwing when nothing is available", async () => {
+    const auth = await resolveVaultAuthOptional("local", { root, env: {} });
+    expect(auth).toEqual({});
+  });
+
+  test("optional resolution still honors flag/env/file and still surfaces real failures", async () => {
+    const fromEnv = await resolveVaultAuthOptional("local", { root, env: { MENV_VAULT_AUTH_LOCAL: "e" } });
+    expect(fromEnv.secret).toBe("e");
+    await writeAuthFile({ local: { type: "command", command: "exit 7" } });
+    try {
+      await resolveVaultAuthOptional("local", { root, env: {} });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("AUTH_FAILED");
     }
   });
 });

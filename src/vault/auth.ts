@@ -88,3 +88,29 @@ export async function resolveVaultAuth(vault: string, opts: ResolveAuthOptions):
       `the ${envVar} env var, a "${vault}" entry in ${AUTH_FILE_REL}, or run on a TTY to be prompted.`,
   );
 }
+
+// Like resolveVaultAuth, but "nothing available" is a normal outcome ({}), not
+// an error, and no prompt is attempted. The CLI uses this to open vaults that
+// may not need auth at all (plaintext menv-local); if the provider then throws
+// AUTH_MISSING, the session opener prompts (TTY) or rethrows.
+export async function resolveVaultAuthOptional(
+  vault: string,
+  opts: Omit<ResolveAuthOptions, "promptFn">,
+): Promise<VaultAuth> {
+  if (opts.flag !== undefined) return { secret: opts.flag };
+  const fromEnv = opts.env[authEnvVarName(vault)];
+  if (fromEnv !== undefined) return { secret: fromEnv };
+  const entry = await readAuthFileEntry(opts.root, vault);
+  if (entry !== undefined) {
+    if (entry.type === "value") return { secret: entry.value };
+    if (entry.type === "env") {
+      const v = opts.env[entry.name];
+      if (v === undefined) {
+        throw new MenvError("AUTH_FAILED", `${AUTH_FILE_REL}: "${vault}" points at unset env var ${entry.name}`);
+      }
+      return { secret: v };
+    }
+    return { secret: await runAuthCommand(vault, entry.command) };
+  }
+  return {};
+}

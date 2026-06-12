@@ -5,6 +5,7 @@ export type MenvErrorCode =
   | "VALIDATION"
   | "PARSE"
   | "NOT_FOUND"
+  | "AMBIGUOUS"
   | "BLOCKED"
   | "AUTH_MISSING"
   | "AUTH_FAILED"
@@ -14,6 +15,7 @@ const EXIT_CODES: Record<MenvErrorCode, number> = {
   VALIDATION: 1,
   PARSE: 1,
   NOT_FOUND: 1,
+  AMBIGUOUS: 1,
   BLOCKED: 1,
   AUTH_MISSING: 3,
   AUTH_FAILED: 3,
