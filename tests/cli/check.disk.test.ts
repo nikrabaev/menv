@@ -85,6 +85,22 @@ describe("runCheck", () => {
     }
   });
 
+  test("a broken ref with an existing generated file still returns the findings list", async () => {
+    const { root, registry } = await repo();
+    await runGenerate(root, registry, {}, FLAGS, memoryIo()); // marked apps/api/.env on disk
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k-port", "${GHOST}"); // now unresolved — the staleness preview would re-throw
+    await s.close();
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("VALIDATION");
+      expect(Array.isArray((e as MenvError).details)).toBe(true); // findings preserved, not a bare throw
+      expect(failedFindings(e)).toContain("INTERPOLATION");
+    }
+  });
+
   test("a compose marker naming an unknown consumer is COMPOSE_UNKNOWN_CONSUMER", async () => {
     const { root, registry } = await repo();
     registry.compose = { files: ["docker-compose.yml"] }; // runCheck reads the passed registry

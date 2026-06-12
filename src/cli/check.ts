@@ -36,18 +36,20 @@ async function gitTracked(root: string): Promise<Set<string> | null> {
 export async function runCheck(root: string, registry: Registry, flags: MutationFlags, io: Io): Promise<void> {
   const findings: Finding[] = [];
   const sessions = new Map<string, VaultSession>();
-  for (const [name, def] of Object.entries(registry.vaults)) {
-    try {
-      const auth = await resolveVaultAuthOptional(name, { root, flag: flags.vaultAuth[name], env: flags.env });
-      sessions.set(name, await getProvider(def.vaultType).init(def.vaultConfig, { root, auth }));
-    } catch (e) {
-      if (e instanceof MenvError && (e.code === "AUTH_MISSING" || e.code === "AUTH_FAILED")) {
-        findings.push(warn("UNVERIFIED_VAULT", `vault "${name}" could not be opened — checks against it skipped`));
-      } else throw e;
-    }
-  }
-
   try {
+    // Open every vault inside the try so the finally always closes whatever was
+    // opened, even if a later vault throws a non-auth error.
+    for (const [name, def] of Object.entries(registry.vaults)) {
+      try {
+        const auth = await resolveVaultAuthOptional(name, { root, flag: flags.vaultAuth[name], env: flags.env });
+        sessions.set(name, await getProvider(def.vaultType).init(def.vaultConfig, { root, auth }));
+      } catch (e) {
+        if (e instanceof MenvError && (e.code === "AUTH_MISSING" || e.code === "AUTH_FAILED")) {
+          findings.push(warn("UNVERIFIED_VAULT", `vault "${name}" could not be opened — checks against it skipped`));
+        } else throw e;
+      }
+    }
+
     // Interpolation, missing values, key existence (MISSING_VALUE) per scope.
     for (const target of envTargets(registry.consumers, registry.defaults, {})) {
       const session = sessions.get(target.vault);
@@ -79,7 +81,14 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
         const key = `${consumer}|${vault}`;
         let preview = previewCache.get(key);
         if (preview === undefined) {
-          preview = await previewGenerate(root, registry, { consumer, vault }, sessions);
+          try {
+            preview = await previewGenerate(root, registry, { consumer, vault }, sessions);
+          } catch (e) {
+            // A broken ref/cycle already surfaced as INTERPOLATION in the scope
+            // loop above; don't let it escape and discard the findings list.
+            if (e instanceof MenvError) continue;
+            throw e;
+          }
           previewCache.set(key, preview);
         }
         if (preview.writes.some((wr) => wr.path === rel)) findings.push(err("STALE", `${rel} differs from what generate would write`));
