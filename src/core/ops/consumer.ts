@@ -110,6 +110,12 @@ export interface ConsumerRemoveInput {
   // Vaults a session could be opened for; orphaned keys elsewhere become a
   // warning (Plan 3's `check` reports lingering keys), never a blocker.
   openable: Set<string>;
+  // The consumer's generated paths (main + .local + .env.example), computed by
+  // the caller via consumerPaths. Released (disclaimer stripped) by default, or
+  // deleted with --delete-files. Marker-guarded at apply time. OPTIONAL so the
+  // Plan-2 unit tests (registry cascade only) keep calling without them.
+  paths?: string[];
+  deleteFiles?: boolean;
 }
 
 // Registry cascade + orphan-key cleanup. Generated-file release/deletion is
@@ -152,6 +158,9 @@ export function planConsumerRemove(registry: Registry, input: ConsumerRemoveInpu
       code: "ORPHANED_KEYS",
       message: `vault "${vault}" could not be opened — keys orphaned by removing "${input.name}" remain (menv check will report them)`,
     });
+  }
+  for (const path of input.paths ?? []) {
+    plan.files.push({ action: input.deleteFiles === true ? "delete" : "release", path });
   }
   return { next, plan };
 }

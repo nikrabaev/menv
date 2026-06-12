@@ -506,7 +506,7 @@ Explicit only. Nothing snapshots automatically — v1's pre-write copies in
 | `unwire` | Blocked if the removed consumer's value feeds a reference for that consumer | Removes mapping (+ orphaned local key) |
 | `group remove` | Blocked if any variable has the `groupKey` | Clears `groupKey` on those variables |
 | `vault remove` | Blocked if any `vaultMapping`/`globals` entry targets it | Removes those entries (vault file/store itself is never deleted) |
-| `consumer remove` | Releases files (strips disclaimers); blocked only by broken-reference fallout | `--delete-files` deletes generated files; `--force` overrides reference blockers |
+| `consumer remove` | Releases files (strips disclaimers). No reference blockers: refs resolve within one (vault, consumer) scope, so removing whole scopes can't break a surviving reference. Orphaned compose markers are reported by `menv check`. | `--delete-files` deletes the consumer's generated files instead of releasing them |
 
 ## Architecture & source layout
 

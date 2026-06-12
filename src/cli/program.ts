@@ -9,6 +9,7 @@ import { planGroupAdd, planGroupRemove, planGroupUpdate } from "../core/ops/grou
 import { planVarDefine, planVarRemove, planVarUpdate } from "../core/ops/variable.ts";
 import { planVaultAdd, planVaultRemove, planVaultUpdate } from "../core/ops/vault.ts";
 import { planSetDisabled, planUnwire, planWire } from "../core/ops/wiring.ts";
+import { applyFileOp } from "../generate/apply.ts";
 import { consumerPaths } from "../generate/paths.ts";
 import { upsertManagedBlock } from "../io/gitignore.ts";
 import { loadRegistry } from "../registry/persist.ts";
@@ -225,14 +226,18 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
         }
       }
     });
-  consumer.command("remove <name>").action(async (name) => {
-    // --delete-files / disclaimer release arrive with generate in Plan 3.
-    const registry = await reg();
-    const wired = vaultsWiring(registry, (_v, c) => c === name);
-    const scan = await collectValueRecords(root, registry, wired, flags(), prompt);
-    const op = planConsumerRemove(registry, { name, openable: scan.openable });
-    await runMutation(root, registry, op, flags(), io, scan.sessions, {}, prompt);
-  });
+  consumer
+    .command("remove <name>")
+    .option("--delete-files", "delete the consumer's generated files instead of releasing them")
+    .action(async (name, o) => {
+      const registry = await reg();
+      const def = registry.consumers[name];
+      const paths = def !== undefined ? (() => { const p = consumerPaths(def); return [...p.main, ...p.local, ...(p.example !== undefined ? [p.example] : [])]; })() : [];
+      const wired = vaultsWiring(registry, (_v, c) => c === name);
+      const scan = await collectValueRecords(root, registry, wired, flags(), prompt);
+      const op = planConsumerRemove(registry, { name, openable: scan.openable, paths, deleteFiles: o.deleteFiles === true });
+      await runMutation(root, registry, op, flags(), io, scan.sessions, { applyFileOp: (fop) => applyFileOp(root, fop) }, prompt);
+    });
   consumer.command("list").action(async () => {
     const registry = await reg();
     const pretty = Object.entries(registry.consumers)

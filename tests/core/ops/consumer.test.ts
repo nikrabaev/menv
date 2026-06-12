@@ -103,4 +103,16 @@ describe("planConsumerRemove", () => {
     expect(plan.vaults).toEqual([]);
     expect(plan.warnings.some((w) => w.code === "ORPHANED_KEYS")).toBe(true);
   });
+
+  test("default mode emits release file ops; --delete-files emits delete ops", () => {
+    const r = makeRegistry();
+    const paths = ["apps/api/.env", "apps/api/.env.local"];
+    const released = planConsumerRemove(r, { name: "api", openable: new Set(), paths, deleteFiles: false });
+    expect(released.plan.files).toEqual([
+      { action: "release", path: "apps/api/.env" },
+      { action: "release", path: "apps/api/.env.local" },
+    ]);
+    const deleted = planConsumerRemove(r, { name: "api", openable: new Set(), paths, deleteFiles: true });
+    expect(deleted.plan.files.every((f) => f.action === "delete")).toBe(true);
+  });
 });
