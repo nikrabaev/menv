@@ -80,7 +80,15 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
           findings.push(err("FOREIGN_FILE", `${rel} exists but is not menv-managed (no marker)`));
           continue;
         }
-        const vault = headerVault(content) ?? registry.defaults.vault;
+        let vault = headerVault(content) ?? registry.defaults.vault;
+        if (rel === paths.example) {
+          // The example records no vault and is vault-independent (the union of
+          // wired names, values-free). A per-vault consumer may have no target
+          // in defaults.vault, so regenerate it against any vault that does have
+          // a target — otherwise previewGenerate yields nothing and drift hides.
+          const target = envTargets(registry.consumers, registry.defaults, { consumer }).find((t) => sessions.has(t.vault));
+          if (target !== undefined) vault = target.vault;
+        }
         const key = `${consumer}|${vault}`;
         let preview = previewCache.get(key);
         if (preview === undefined) {

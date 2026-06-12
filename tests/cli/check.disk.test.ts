@@ -122,6 +122,52 @@ async function gitInitAdd(root: string, paths: string[]): Promise<void> {
   await run("add", "-f", ...paths);
 }
 
+describe("runCheck — staleness vault selection", () => {
+  test("a drifted .env.example is STALE even when the consumer omits the default vault", async () => {
+    const registry = makeRegistry();
+    // per-vault consumer with NO target in defaults.vault (local) — only production.
+    registry.consumers = {
+      web: {
+        strategyType: "per-vault",
+        strategyConfig: { baseDir: "apps/web", filenames: { production: ".env.production" }, example: true },
+      },
+    };
+    registry.variables = { TOKEN: { vaultMapping: { production: { web: { key: "k-tok" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "production", FLAGS);
+    await s.set("k-tok", "t");
+    await s.close();
+    await runGenerate(root, registry, { vault: "production" }, FLAGS, memoryIo()); // writes apps/web/.env.example
+    const examplePath = join(root, "apps/web/.env.example");
+    await Bun.write(examplePath, `${await Bun.file(examplePath).text()}INJECTED_DRIFT=\n`); // marker intact
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect(failedFindings(e)).toContain("STALE");
+    }
+  });
+
+  test("generate --vault production then check reports no STALE (judged against the recorded vault)", async () => {
+    const registry = makeRegistry();
+    registry.consumers = { api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } } };
+    registry.variables = { GREETING: { vaultMapping: { local: { api: { key: "k" } }, production: { api: { key: "k" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const local = await openVaultSession(root, registry, "local", FLAGS);
+    await local.set("k", "hello-local");
+    await local.close();
+    const prod = await openVaultSession(root, registry, "production", FLAGS);
+    await prod.set("k", "hello-prod");
+    await prod.close();
+    await runGenerate(root, registry, { vault: "production" }, FLAGS, memoryIo()); // header records vault:production
+    const io = memoryIo();
+    await runCheck(root, registry, FLAGS, io); // regen against production matches → not stale vs local
+    expect(passedFindings(io)).not.toContain("STALE");
+  });
+});
+
 describe("runCheck — git-tracking gate", () => {
   test("PLAINTEXT_VAULT_TRACKED fires when a plaintext vault file is git-tracked", async () => {
     const { root, registry } = await repo(); // local vault is encryption:false → .menv/vault.json
