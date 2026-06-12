@@ -84,4 +84,24 @@ describe("executePlan", () => {
       expect((e as MenvError).code).toBe("VAULT_IO");
     }
   });
+
+  test("applyFileOp runs for each file op after vault ops, before commit", async () => {
+    const log: string[] = [];
+    await executePlan(makePlan(), {
+      sessions: new Map([["local", fakeSession(log)]]),
+      commitRegistry: async () => {
+        log.push("commit-registry");
+      },
+      applyFileOp: async (op) => {
+        log.push(`file ${op.action} ${op.path}`);
+      },
+    });
+    expect(log).toEqual(["set k1=secret-value", "remove k2", "file write apps/api/.env", "commit-registry"]);
+  });
+
+  test("without applyFileOp, file ops remain descriptive only", async () => {
+    const log: string[] = [];
+    await executePlan(makePlan(), { sessions: new Map([["local", fakeSession(log)]]) });
+    expect(log).toEqual(["set k1=secret-value", "remove k2"]); // unchanged Plan-2 behavior
+  });
 });

@@ -70,6 +70,10 @@ export interface ExecuteContext {
   // committed registry never references a key whose write failed; a failed
   // run can leave orphan vault keys, which `menv check` reports.
   commitRegistry?: () => Promise<void>;
+  // IO-bound file-op applier provided by the CLI (core does no I/O). Called
+  // for each plan.files entry after vault ops, before commitRegistry. Absent
+  // ⇒ file ops stay descriptive (rendered in plans, executed by nobody).
+  applyFileOp?: (op: FileOp) => Promise<void>;
 }
 
 export async function executePlan(plan: Plan, ctx: ExecuteContext): Promise<void> {
@@ -85,7 +89,8 @@ export async function executePlan(plan: Plan, ctx: ExecuteContext): Promise<void
     if (op.action === "set") await session.set(op.key, op.value ?? "");
     else await session.remove(op.key);
   }
+  if (ctx.applyFileOp !== undefined) {
+    for (const op of plan.files) await ctx.applyFileOp(op);
+  }
   await ctx.commitRegistry?.();
-  // plan.files is rendered for visibility today; the generate pipeline
-  // (Plan 3) is the component that turns FileOps into disk writes.
 }

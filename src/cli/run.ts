@@ -1,6 +1,7 @@
 import { MenvError } from "../core/errors.ts";
 import type { OpResult } from "../core/ops/util.ts";
 import { requireVault } from "../core/ops/util.ts";
+import type { FileOp } from "../core/plan.ts";
 import { executePlan, planToJson, renderPlanPretty } from "../core/plan.ts";
 import type { ValueRecord } from "../core/refs.ts";
 import { saveRegistry } from "../registry/persist.ts";
@@ -97,6 +98,9 @@ export async function collectValueRecords(
 export interface MutationExtras {
   result?: Record<string, unknown>; // merged into the JSON result
   pretty?: string; // appended to the pretty output
+  // IO-bound applier for plan.files (release/delete/write). Skipped on dry-run
+  // like everything else — executePlan is never called then.
+  applyFileOp?: (op: FileOp) => Promise<void>;
 }
 
 // The one path every mutating command goes through: dry-run prints the plan
@@ -132,6 +136,7 @@ export async function runMutation(
       force: flags.force,
       sessions,
       commitRegistry: () => saveRegistry(root, next),
+      applyFileOp: extras.applyFileOp,
     });
     emitResult(
       io,
