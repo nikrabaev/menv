@@ -14,7 +14,11 @@ const noPrompts: RestorePrompts = {
 
 async function repoWithBackup(key: string): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), "menv-"));
+  // apps/api must be a workspace package: backup only collects from init's scan
+  // targets (repo root + workspace dirs).
+  await Bun.write(join(root, "package.json"), JSON.stringify({ name: "repo", workspaces: ["apps/*"] }));
   await mkdir(join(root, "apps", "api"), { recursive: true });
+  await Bun.write(join(root, "apps", "api", "package.json"), JSON.stringify({ name: "api" }));
   await Bun.write(join(root, "apps", "api", ".env"), "PORT=3000\n");
   await Bun.write(join(root, "apps", "api", ".env.example"), "PORT=\n");
   await createBackup(root, key);

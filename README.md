@@ -108,7 +108,9 @@ and an unsaved-changes indicator (`* N unsaved` / `saved`).
   value per environment. The active environment (top bar, switch with `e`) decides
   which value is written into the generated `.env` files. A **single**-mode
   consumer's plain `.env` belongs to one default environment — `dev` unless you pass
-  `menv init --default-env <name>`.
+  `menv init --default-env <name>`. CLI edits never switch it: `menv set NAME --env
+  prod` writes the vault only, and the generated `.env` keeps the default
+  environment until you regenerate explicitly (`menv generate --env prod`).
 - **File modes** — Each consumer is either **single** (one `.env`, the default — it
   holds the active environment's values) or **per-env** (one `.env.<env>` file per
   environment, side by side). `menv init` picks **per-env** automatically for any
@@ -196,7 +198,7 @@ menv define STRIPE_KEY --secret --description "Stripe API key" --scope web,worke
 
 # Set its value — from an argument, a pipe, or a hidden prompt if you omit it
 printf '%s' "$KEY" | menv set STRIPE_KEY        # stdin keeps it out of shell history
-menv set PORT 3000 --env prod                   # a specific environment
+menv set PORT 3000 --env prod                   # prod in the vault; .env stays on dev
 
 menv get STRIPE_KEY                             # raw value to stdout — pipeable
 menv list --scope web                           # what `web` receives (secrets masked)
@@ -280,7 +282,10 @@ menv [command] [options]
       --scope <c1,c2,…>        Replace its wiring; "root" = the repo-root .env
       --local                  Create/address the .env.local override of NAME
   set NAME [value]        Set a value — from the arg, stdin, or a hidden prompt
-      --env <env>              Target environment (default: the default env)
+      --env <env>              Environment to write (default: the default env).
+                               Vault only — generated .env files keep the default
+                               environment; materialize another one explicitly
+                               with `menv generate --env <env>`
       --scope <consumer>       Disambiguate a name shared by several variables
       --local                  Target the .env.local override
   get NAME [options]      Print a value to stdout (raw; secrets included)
@@ -308,9 +313,11 @@ menv [command] [options]
                           fill docker-compose marker regions, and write each
                           compose directory's .env.compose. The password backend
                           reads MENV_PASSPHRASE.
-  backup                  Snapshot every .env and .env.example into
-                          .menv/backups/<timestamp>
-  restore [key] [-f]      Restore .env / .env.example files from a backup.
+  backup                  Snapshot the .env and .env.* files (.env.<env>,
+                          .env.local, .env.example, …) of the repo root and
+                          every workspace package — the same dirs init scans —
+                          into .menv/backups/<timestamp>
+  restore [key] [-f]      Restore env files from a backup.
                             key            a backup timestamp (omit to pick one)
                             -f, --force    overwrite every file without prompting
 

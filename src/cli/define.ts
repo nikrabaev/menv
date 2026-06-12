@@ -12,7 +12,6 @@ export interface DefineOpts {
   group?: string; // "" clears the group
   scope?: string[]; // replaces the consumer set (tokens incl. "root")
   local?: boolean; // create/address the `.env.local` override of NAME rather than the base
-  env?: string;
   stamp?: string;
 }
 
@@ -51,5 +50,5 @@ export async function runDefine(root: string, name: string, opts: DefineOpts = {
     for (const cid of ids) store.ensureEnvFile(cid);
   }
 
-  await saveModel(store.getModel(), defaultEnv(model, opts.env), opts.stamp ?? "define");
+  await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? "define");
 }

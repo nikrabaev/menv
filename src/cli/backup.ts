@@ -1,6 +1,7 @@
 import { createBackup } from "../io/backup.ts";
 
-// Snapshots every .env/.env.example into .menv/backups/<key>. Returns the relative
+// Snapshots the .env/.env.* files of every init scan target (repo root +
+// workspace packages) into .menv/backups/<key>. Returns the relative
 // backup path (for the exact "Backup saved in …" line) and the files copied.
 export async function runBackup(
   root: string,

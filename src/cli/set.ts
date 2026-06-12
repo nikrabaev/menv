@@ -13,11 +13,15 @@ export interface SetOpts {
 }
 
 // Set a variable's value for an environment. The variable must already be defined.
+// `--env` targets the vault write only: generated single-mode `.env` files always
+// keep the default environment's values, so setting a prod value from a dev
+// machine never flips the local app onto prod. Materializing another environment
+// is an explicit act (`menv generate --env <env>`).
 export async function runSet(root: string, name: string, opts: SetOpts = {}): Promise<void> {
   const { model } = await loadModel(root, { backend: opts.backend });
   const v = resolveVar(model, name, { scope: opts.scope, local: opts.local });
-  const env = defaultEnv(model, opts.env);
+  const targetEnv = defaultEnv(model, opts.env);
   const store = createStore(model);
-  store.setValue(v.id, env, opts.value ?? "");
-  await saveModel(store.getModel(), env, opts.stamp ?? "set");
+  store.setValue(v.id, targetEnv, opts.value ?? "");
+  await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? "set");
 }

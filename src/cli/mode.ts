@@ -6,7 +6,6 @@ import { defaultEnv, loadModel, resolveConsumer } from "./context.ts";
 
 export interface ModeOpts {
   backend?: KeyBackend;
-  env?: string;
   stamp?: string;
 }
 
@@ -17,5 +16,5 @@ export async function runMode(root: string, consumer: string, mode: EnvFileMode,
   const cid = resolveConsumer(model, consumer);
   const store = createStore(model);
   store.setEnvMode(cid, mode);
-  await saveModel(store.getModel(), defaultEnv(model, opts.env), opts.stamp ?? "mode");
+  await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? "mode");
 }

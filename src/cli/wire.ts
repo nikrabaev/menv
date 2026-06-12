@@ -6,7 +6,6 @@ import { defaultEnv, loadModel, resolveConsumer, resolveVar } from "./context.ts
 export interface WireOpts {
   backend?: KeyBackend;
   local?: boolean; // target the `.env.local` override of NAME rather than the base
-  env?: string;
   stamp?: string;
 }
 
@@ -25,7 +24,7 @@ async function applyWire(
     store.wire(v.id, cid, on);
     if (on) store.ensureEnvFile(cid);
   }
-  await saveModel(store.getModel(), defaultEnv(model, opts.env), opts.stamp ?? (on ? "wire" : "unwire"));
+  await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? (on ? "wire" : "unwire"));
 }
 
 // Wire a variable to one or more consumers (apps and/or "root"), so each receives

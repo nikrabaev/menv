@@ -1,14 +1,13 @@
 import type { Dirent } from "node:fs";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { detectApps } from "./discovery.ts";
 
-// Strict scope: only files named exactly `.env` and `.env.example` (not
-// `.env.local`/`.env.production`/…). These are the files menv itself materializes.
-const ENV_FILE_NAMES = [".env", ".env.example"];
-// Excluded by path segment so a top-level `node_modules/` and a nested
-// `apps/x/node_modules/` are both skipped. `.menv` is essential — otherwise a
-// backup's own copies would be re-collected on the next run.
-const EXCLUDE_SEGMENTS = new Set(["node_modules", ".git", ".menv"]);
+// `.env` plus every `.env.*` variant — the same names init's classifyEnvFile
+// ingests. menv materializes more than the base pair: `.env.<env>` (perenv mode),
+// `.local` overrides, `.env.example`, `.env.compose`. The dot in the prefix keeps
+// lookalikes such as `.envrc` out.
+const isEnvFileName = (name: string) => name === ".env" || name.startsWith(".env.");
 
 const backupsDir = (root: string) => join(root, ".menv", "backups");
 
@@ -26,19 +25,29 @@ export function backupKey(d: Date): string {
   );
 }
 
-// Repo-wide, relative paths of every `.env`/`.env.example`. Bun's matcher needs a
-// separate glob per name (a combined `{**/.env,**/.env.example}` returns nothing)
-// and ignores the `ignore` scan option, so exclusion is done here in code.
+// Relative paths of the `.env`/`.env.*` files in init's scan targets: the repo
+// root plus every workspace package dir (detectApps), each listed non-recursively
+// — exactly the dirs scanRepo ingests env files from. Never a repo-wide walk:
+// that swept in env files from nested checkouts (git worktrees) and spent minutes
+// inside node_modules in a big monorepo. Symlinked files are not collected,
+// matching the ingestion scan's semantics.
 export async function collectEnvFiles(root: string): Promise<string[]> {
-  const seen = new Set<string>();
-  for (const name of ENV_FILE_NAMES) {
-    const glob = new Bun.Glob(`**/${name}`);
-    for await (const rel of glob.scan({ cwd: root, dot: true, onlyFiles: true })) {
-      if (rel.split("/").some((seg) => EXCLUDE_SEGMENTS.has(seg))) continue;
-      seen.add(rel);
+  const dirs = new Set<string>(["."]);
+  for (const app of await detectApps(root)) dirs.add(app.path);
+  const out: string[] = [];
+  for (const dir of dirs) {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(join(root, dir), { withFileTypes: true });
+    } catch {
+      continue; // a vanished or unreadable target dir has nothing to back up
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !isEnvFileName(entry.name)) continue;
+      out.push(dir === "." ? entry.name : `${dir}/${entry.name}`);
     }
   }
-  return [...seen].sort();
+  return out.sort();
 }
 
 // Copies every collected file into .menv/backups/<key>/<rel>. The key dir is

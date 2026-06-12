@@ -195,12 +195,14 @@ try {
     console.log(out);
     process.exit(0);
   } else if (cmd === "wire" || cmd === "unwire") {
-    const { positionals, flags, bools } = parseArgs(["env"]);
+    // "env" stays a value flag only so a stray `--env <env>` is swallowed as a
+    // pair instead of leaking <env> into the scope positionals.
+    const { positionals, bools } = parseArgs(["env"]);
     const name = positionals[0];
     if (!name) throw new Error(`menv: ${cmd} requires a variable name`);
     const scopes = splitScopes(positionals.slice(1));
     if (scopes.length === 0) throw new Error(`menv: ${cmd} requires at least one scope (e.g. an app name or "root")`);
-    await (cmd === "wire" ? runWire : runUnwire)(root, name, scopes, { env: flags.env, local: bools.has("local") || undefined, stamp: stamp() });
+    await (cmd === "wire" ? runWire : runUnwire)(root, name, scopes, { local: bools.has("local") || undefined, stamp: stamp() });
     console.log(`menv: ${cmd}d ${name} ${cmd === "wire" ? "to" : "from"} ${scopes.join(", ")}`);
     process.exit(0);
   } else if (cmd === "mode") {
@@ -218,14 +220,13 @@ try {
     const { positionals, flags, bools } = parseArgs(["env", "scope"]);
     const name = positionals[0];
     if (!name) throw new Error("menv: rm requires a variable name");
-    await runRm(root, name, { scope: flags.scope, local: bools.has("local") || undefined, env: flags.env, stamp: stamp() });
+    await runRm(root, name, { scope: flags.scope, local: bools.has("local") || undefined, stamp: stamp() });
     console.log(`menv: removed ${name}`);
     process.exit(0);
   } else if (cmd === "auto-group") {
-    const { flags, bools } = parseArgs(["env"]);
+    const { bools } = parseArgs(["env"]);
     const result = await runAutoGroup(root, {
       overwrite: bools.has("force") || bools.has("overwrite"),
-      env: "env" in flags ? flags.env : undefined,
       stamp: stamp(),
     });
     if (result.grouped === 0) {

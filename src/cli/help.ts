@@ -29,7 +29,8 @@ Commands:
                             --local                  Create/address the .env.local
                                                      override of NAME (own variable)
   set NAME [value]        Set a value (value from arg, stdin, or hidden prompt)
-                            --env <env>       Target environment (default: default)
+                            --env <env>       Environment to write (default: default);
+                                              vault only — .env keeps the default env
                             --scope <c>       Disambiguate a repeated name
                             --local           Target the .env.local override
   get NAME [options]      Print a value to stdout (raw; secrets included)
@@ -54,9 +55,11 @@ Commands:
   mode <consumer> <m>     Set a consumer's .env file layout: single (one .env) or
                           perenv (one .env.<env> per environment)
 
-  backup                  Back up every .env and .env.example file into
-                          .menv/backups/<timestamp>
-  restore [key] [-f]      Restore .env/.env.example files from a backup
+  backup                  Back up the .env and .env.* files (.env.<env>,
+                          .env.local, .env.example, …) of the repo root and
+                          every workspace package — the same dirs init scans —
+                          into .menv/backups/<timestamp>
+  restore [key] [-f]      Restore env files from a backup
                             key          Restore a specific backup by its
                                          timestamp key. Omit it to pick one
                                          interactively (↑/↓ to move, Enter to

@@ -7,7 +7,6 @@ export interface RmOpts {
   backend?: KeyBackend;
   scope?: string; // disambiguates when several variables share the name
   local?: boolean; // target the `.env.local` override of NAME rather than the base
-  env?: string;
   stamp?: string;
 }
 
@@ -17,5 +16,5 @@ export async function runRm(root: string, name: string, opts: RmOpts = {}): Prom
   const v = resolveVar(model, name, { scope: opts.scope, local: opts.local });
   const store = createStore(model);
   store.deleteVariable(v.id);
-  await saveModel(store.getModel(), defaultEnv(model, opts.env), opts.stamp ?? "rm");
+  await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? "rm");
 }

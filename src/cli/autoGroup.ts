@@ -7,7 +7,6 @@ import { defaultEnv, loadModel } from "./context.ts";
 export interface AutoGroupOpts {
   backend?: KeyBackend;
   overwrite?: boolean; // re-derive groups for every variable, replacing existing ones
-  env?: string;
   stamp?: string;
 }
 
@@ -28,7 +27,7 @@ export async function runAutoGroup(root: string, opts: AutoGroupOpts = {}): Prom
   if (assignments.length) {
     const store = createStore(model);
     for (const a of assignments) store.setGroup(a.id, a.group);
-    await saveModel(store.getModel(), defaultEnv(model, opts.env), opts.stamp ?? "auto-group");
+    await saveModel(store.getModel(), defaultEnv(model), opts.stamp ?? "auto-group");
   }
 
   return {

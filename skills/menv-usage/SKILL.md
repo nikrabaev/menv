@@ -72,7 +72,9 @@ menv wire NAME api     ·     menv unwire NAME worker     ·     menv rm NAME
 menv generate [--env prod]
 
 # environments & local overrides
-menv set NAME … --env prod           # a per-environment value
+menv set NAME … --env prod           # a per-environment value (vault only — the
+                                     # generated .env keeps the default env;
+                                     # switch with `menv generate --env prod`)
 menv <define|set|get|rm> NAME --local  # the .env.local override: a SEPARATE variable,
                                        # generated into .local, kept out of .env.example
 menv mode <app> single|perenv        # one .env  vs  one .env.<env> per environment
