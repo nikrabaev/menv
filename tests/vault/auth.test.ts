@@ -61,6 +61,36 @@ describe("resolveVaultAuth", () => {
     }
   });
 
+  test("auth file: env-type entry pointing at an unset variable → AUTH_FAILED", async () => {
+    await writeAuthFile({ local: { type: "env", name: "NOPE" } });
+    try {
+      await resolveVaultAuth("local", { root, env: {} });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("AUTH_FAILED");
+    }
+  });
+
+  test("auth file: malformed JSON → PARSE", async () => {
+    await Bun.write(join(root, ".menv/auth.local.json"), "{ broken");
+    try {
+      await resolveVaultAuth("local", { root, env: {} });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("PARSE");
+    }
+  });
+
+  test("auth file: entry with an unknown type → PARSE", async () => {
+    await writeAuthFile({ local: { type: "weird" } });
+    try {
+      await resolveVaultAuth("local", { root, env: {} });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("PARSE");
+    }
+  });
+
   test("prompt is used last, only when provided", async () => {
     const auth = await resolveVaultAuth("local", {
       root,

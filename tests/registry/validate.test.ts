@@ -116,4 +116,13 @@ describe("validateRegistry", () => {
     (doc.variables as Record<string, unknown>)["1BAD NAME"] = { vaultMapping: {} };
     expect(paths(validateRegistry(doc).issues)).toContain("variables.1BAD NAME");
   });
+
+  // Provider existence is getProvider's job, not validate's: any non-empty
+  // vaultType is structurally valid here. This pins that boundary so a future
+  // change cannot quietly start (or stop) checking providers at this layer.
+  test("accepts an arbitrary non-empty vaultType (provider resolved later by getProvider)", () => {
+    const doc = makeDoc();
+    (doc.vaults as Record<string, Record<string, unknown>>).production.vaultType = "hashicorp";
+    expect(validateRegistry(doc).issues).toEqual([]);
+  });
 });

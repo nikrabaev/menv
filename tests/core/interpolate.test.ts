@@ -24,6 +24,11 @@ describe("tokenize / extractRefs", () => {
   test("invalid or unterminated references stay literal text", () => {
     expect(tokenize("${1bad} ${unclosed")).toEqual([{ kind: "text", text: "${1bad} ${unclosed" }]);
   });
+
+  test("an empty reference ${} stays literal text", () => {
+    expect(tokenize("a${}b")).toEqual([{ kind: "text", text: "a${}b" }]);
+    expect(extractRefs("${}")).toEqual([]);
+  });
 });
 
 describe("expandAll", () => {
@@ -65,6 +70,16 @@ describe("expandAll", () => {
   test("cycle → VALIDATION showing the chain", () => {
     try {
       expandAll({ values: values({ A: "${B}", B: "${A}" }), globals: globals({}) });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("VALIDATION");
+      expect((e as MenvError).message).toContain("cycle");
+    }
+  });
+
+  test("a single-node self-reference (A=${A}) is detected as a cycle", () => {
+    try {
+      expandAll({ values: values({ A: "${A}" }), globals: globals({}) });
       expect.unreachable();
     } catch (e) {
       expect((e as MenvError).code).toBe("VALIDATION");
