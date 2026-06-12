@@ -1,423 +1,274 @@
-<div align="center">
-
 # menv
 
-**A keyboard-driven TUI — and a full CLI — for managing environment variables
-across a monorepo. Values age-encrypted in one vault, `.env` files generated on
-demand.**
+A keyboard-friendly **CLI** for managing environment variables across a monorepo.
 
-<img src="assets/screenshot.png" alt="menv — the three-pane TUI: scopes, variables, and the inspector" width="900">
+menv keeps the *structure* of your environment — which variables exist, who
+consumes them, how they map into vault keys — in one committed **registry**
+(`menv.json`). The **values** live in pluggable **vaults** (the bundled
+`menv-local` vault age-encrypts them into a committable file). Plaintext `.env`
+files are never the source of truth: they are **generated outputs**, rewritten by
+`menv generate` and git-ignored.
 
-<sub>Runtime: <b>Bun</b> · UI: <b>Ink + React</b> · Encryption: <b>age</b></sub>
+The mental model: edit *structure* in the registry and *values* in a vault via the
+CLI. Never hand-edit a generated `.env` — it is an output. menv flags any drift
+with `menv check`.
 
-</div>
-
----
-
-`menv` discovers every `.env` file in your repo, lifts the
-values into a single **age-encrypted vault**, and lets you edit, group, and
-**wire** variables to the apps that consume them — from a fast keyboard-driven
-TUI or, just as fully, from the command line. The encrypted vault is committed;
-the plaintext `.env` files are regenerated on demand and stay git-ignored.
-
-No more "which `.env` has the real `STRIPE_SECRET_KEY`?", no more pasting secrets
-into Slack, no more `.env.example` drift.
-
-## Why
-
-A monorepo spreads the same handful of secrets across a dozen `.env` files. Keeping
-them in sync — and out of git — is tedious and error-prone. `menv` makes the repo
-the **single source of truth**:
-
-- **One encrypted vault, many `.env` files.** Values live once, age-encrypted under
-  `.menv/values/`. Each app's `.env` is *generated* from the vault, never hand-edited.
-- **Grouped by value, not by ceremony.** When several apps already share a value,
-  `menv init` collapses them into a single variable wired to all of them; apps
-  that disagree keep their own. No global/local bookkeeping to maintain.
-- **Wiring, not copy-paste.** Decide which apps (and the repo root) receive a
-  variable; `menv` writes it into exactly those `.env` files.
-- **Commit the secrets, safely.** The vault is ciphertext. Only the holder of the
-  age identity can read it — and you choose where that identity lives.
-- **`.env.example` for free.** Regenerated as a committed, values-free template so
-  new contributors know what to set.
+> The interactive TUI from v1 is not part of v2.0; it returns in a later release.
+> Everything below is the CLI.
 
 ## Quick start
 
-`menv` runs on [Bun](https://bun.sh) — TypeScript/TSX execute directly, no build step.
-
 ```bash
-bun install      # install dependencies
-bun link         # put `menv` on your PATH (optional)
+bun install              # install deps
+bun link                 # (optional) put `menv` on your PATH; equals `bun run menv`
+
+menv init                # create menv.json + an encrypted local vault
+# menv init --no-encrypt   # plaintext local vault instead (stays git-ignored)
+
+# Describe a recipient of generated files and a place to store values:
+menv consumer add api --strategy single --base-dir apps/api
+# (init already created the default `menv-local` vault)
+
+# Define a variable, wire it to a consumer's vault key, give it a value:
+menv var define DATABASE_URL --secret
+menv wire DATABASE_URL --consumers api
+printf '%s' 'postgres://localhost/app' | menv set DATABASE_URL
+
+# Write the outputs:
+menv generate            # apps/api/.env is created from the vault
+menv check               # validate everything (CI gate)
 ```
 
-Then, from the root of your repo:
-
-```bash
-menv init        # scan the repo, create the vault, update .gitignore
-menv             # launch the TUI
-```
-
-`menv init` walks your workspace, finds every `.env*` file, encrypts the
-discovered values, and asks where to keep the secret key
-(see [Key backends](#key-backends)). Run `menv` with no arguments any time to open
-the editor.
-
-It also offers to scaffold the **menv-usage agent skill** into
-`.claude/skills/menv-usage/SKILL.md` — a short guide that teaches an AI coding
-agent how to work in a menv repo (the vault is the source of truth, never
-hand-edit a generated `.env`, pipe secrets on stdin, …). On a TTY you're asked;
-pass `--with-skill` or `--no-skill` to decide non-interactively (headless runs skip
-it). An existing skill file is left untouched — delete it first to refresh.
-
-> Prefer a single binary? `bun run build` compiles a standalone `./menv`.
-
-## The TUI
-
-Three panes, driven entirely from the keyboard:
-
-| Pane | What it shows |
-|------|---------------|
-| **Scopes** | `All`, then your **targets** (each app, plus the repo root) and variable **groups**. Selecting one filters the list; a per-env target is tagged `per-env`. |
-| **Variables** | The variables in the current scope, grouped and name-sorted. Secrets render as `***`; unset values show `empty`. A variable wired but **not applied** in the active environment shows its value dimmed and commented (`# value`). |
-| **Inspector** | Every field of the selected variable — description, example, group, secret flag, **wiring** (a target reads `(off)` where the variable isn't applied in the active environment), and the value for the active environment. |
-
-The top bar shows the repo, the **environment tabs** (the active one highlighted),
-and an unsaved-changes indicator (`* N unsaved` / `saved`).
-
-### Keybindings
-
-| Key | Action |
-|-----|--------|
-| `↑` `↓` | Move within the focused pane (scope · variable · inspector field) |
-| `⇧↑` `⇧↓` *(or `⌥↑` `⌥↓`)* | Jump between group blocks in the variable list |
-| `Tab` | Cycle panes: scopes → variables → inspector |
-| `Esc` | From the inspector, back to the variable list |
-| `Enter` | Edit the focused value / field — or toggle **secret**, or open the **wire** modal (inside it, `Enter` wires/unwires a target and `a` toggles whether the variable is **applied** in the active environment). Editing a value shared by other environments offers to update them too (default **No**). |
-| `c` | Copy the value (or field) to the clipboard |
-| `e` | Switch environment (`dev` → `prod` → …) |
-| `m` | On an app scope, toggle its **file mode** (single `.env` ↔ per-env `.env.<env>`) |
-| `/` | Filter variables by name |
-| `n` | New variable |
-| `x` | Delete the selected variable |
-| `s` | Save — encrypt the vault and regenerate every `.env` / `.env.example` |
-| `q` *(or `Ctrl+C`)* | Quit — prompts to save if there are unsaved changes |
+`menv init` writes the registry and the local vault config but does **not** scan
+your repo — you describe consumers and variables explicitly.
 
 ## Concepts
 
-- **Environments** — `dev`, `prod`, `staging`, … Every variable can hold a distinct
-  value per environment. The active environment (top bar, switch with `e`) decides
-  which value is written into the generated `.env` files. A **single**-mode
-  consumer's plain `.env` belongs to one default environment — `dev` unless you pass
-  `menv init --default-env <name>`. CLI edits never switch it: `menv set NAME --env
-  prod` writes the vault only, and the generated `.env` keeps the default
-  environment until you regenerate explicitly (`menv generate --env prod`).
-- **File modes** — Each consumer is either **single** (one `.env`, the default — it
-  holds the active environment's values) or **per-env** (one `.env.<env>` file per
-  environment, side by side). `menv init` picks **per-env** automatically for any
-  consumer that already has `.env.<env>` files (e.g. `.env.production`); everything
-  else stays single. Toggle it later with `m` in the TUI or `menv mode <consumer>
-  <single|perenv>`. A per-env consumer only gets a file for the environments it
-  actually has values in — so `menv` round-trips exactly the `.env.<env>` files that
-  existed, not one for every global environment.
-- **Grouping by value** — `menv init` decides what's one variable by *value*, not by
-  tier. When several apps define the same name with the same value, they collapse
-  into a single variable wired to all of them; where the values differ, each value
-  becomes its own variable of the same name (disambiguate the duplicates with
-  `--scope`). There is no global/local distinction to track.
-- **Local overrides** — A key found in a `.env.local` (or `.env.<env>.local`) file
-  becomes its own variable tagged `(local)` in the TUI. It edits and wires like any
-  other, but generates back into the matching `.local` file rather than the base
-  `.env` — and is kept out of the shared `.env.example` template. An app with both
-  `.env` and `.env.local` stays **single** mode; only an explicit `.env.<env>` flips
-  it to per-env.
-- **Wiring vs. applied** — **Wiring** is which **consumers** receive a variable: any
-  number of apps, plus the synthetic `root` target (the repo's top-level `.env`).
-  Independently, a wired variable is either **applied** in a given consumer +
-  environment — written as a live `KEY=value` line — or not, in which case it is
-  still written but **commented out** (`# KEY=value`), staying visible as a
-  known-but-inactive variable. `menv init` and drift sync infer this from what's
-  actually present in each file: a key in `.env.development` but missing from (or
-  commented in) `.env.production` comes back wired to that target yet *unapplied* in
-  `prod`. `.env.example` documents the full surface but doesn't count as "present",
-  so a key that appears only there stays wired (it keeps its slot in the template)
-  yet *unapplied* — commented — in the real env files it was never set in. Toggle it
-  per environment with `a` in the wire modal. (A variable's
-  *value* for an environment is shared across every consumer it's wired to; only the
-  applied/commented state is per consumer.)
-- **Drift reconciliation** — Generated `.env` files are meant to be rewritten from
-  the vault, but people edit them by hand. When you open the TUI, `menv` first
-  compares every generated file against the vault and, if any diverge, walks you
-  through them one at a time: import the on-disk edits back into the vault (changed
-  values update in place; brand-new keys become new variables; a key you **deleted
-  or commented out** becomes *unapplied* — it returns commented, not removed, and
-  uncommenting one re-applies it) or keep the vault and let the next save overwrite
-  the file. Removing a variable outright stays an explicit `unwire` / `x` action.
-  (`menv generate` stays a one-way vault→disk regenerate for CI.)
-- **Docker Compose** — A compose service opts into menv by carrying a marker that
-  names an existing consumer inside its `environment:` block:
-
-  ```yaml
-  services:
-    api:
-      environment:
-        - NODE_ENV=production        # hand-authored, untouched
-        # <menv:api>
-        - DATABASE_URL=${API_DATABASE_URL}
-        # </menv>
-  ```
-
-  menv fills the region with `- KEY=${CONSUMER_KEY}` for every variable wired to
-  that consumer (the block declares the full wired surface) — so `wire`/`unwire`
-  reflects into every linked service on the next generate. The container variable
-  name stays on the left; the interpolation key is always prefixed with the
-  consumer name, so a single shared file never collides even when two services
-  expose a same-named variable with different values. Lines outside the markers
-  are never touched. The actual values come from a generated, git-ignored
-  **`.env.compose`** beside the compose file (one per directory, the union of every
-  region's values for the active environment) — where a variable **unapplied** in
-  that environment is commented out (`# KEY=value`), exactly like a `.env` file, so
-  `docker compose` interpolates it to an empty string until you apply it. Run
-  compose with `docker compose --env-file .env.compose …`; switch environments by
-  regenerating (`menv generate --env prod`).
-- **Secrets** — Flagged variables are masked (`***`) in the UI. The flag is
-  auto-detected from the name on `init` (`SECRET`, `TOKEN`, `KEY`, `PASSWORD`,
-  `DSN`, `URL`) and toggleable per variable.
-- **Groups** — An optional label (`Database`, `Payments`, …) that buckets variables
-  in the list and adds a scope in the sidebar.
-
-## Working from the CLI
-
-Everything the inspector does is also a command, so you can manage the vault from
-scripts, CI, or over SSH without opening the TUI. The commands split cleanly:
-**`define`** shapes a variable (metadata + wiring) in the manifest, while
-**`set`** writes its value.
-
-```bash
-# Create a secret and wire it to two apps and the repo root
-menv define STRIPE_KEY --secret --description "Stripe API key" --scope web,worker,root
-
-# Set its value — from an argument, a pipe, or a hidden prompt if you omit it
-printf '%s' "$KEY" | menv set STRIPE_KEY        # stdin keeps it out of shell history
-menv set PORT 3000 --env prod                   # prod in the vault; .env stays on dev
-
-menv get STRIPE_KEY                             # raw value to stdout — pipeable
-menv list --scope web                           # what `web` receives (secrets masked)
-menv list --json                                # machine-readable, full records
-
-menv wire   STRIPE_KEY api                       # also deliver it to `api`
-menv unwire STRIPE_KEY worker                    # stop delivering it to `worker`
-menv rm OLD_FLAG                                 # remove a variable entirely
-
-menv mode api perenv                             # api emits .env.<env> files
-menv mode web single                             # web emits a single .env
-
-# Local overrides: --local creates/addresses the .env.local variant of a name
-menv define API_URL --local --scope web          # a separate override variable
-menv set    API_URL --local http://localhost     # set the override's value
-menv get    API_URL                              # the base value (.env)
-menv get    API_URL --local                      # the override value (.env.local)
-```
-
-A few things worth knowing:
-
-- **Values never need to touch your shell history.** Pipe them on stdin, or omit
-  the argument entirely and `menv set` prompts (masked) on a TTY.
-- **`get` prints the real value** — secrets included — so `export TOKEN=$(menv get TOKEN)`
-  just works. (`list` masks secrets as `***`.)
-- **Wiring materializes the target.** Wire a variable to an app that had no `.env`
-  yet and `menv` starts generating one for it; `root` writes a top-level `.env`.
-- **Every mutating command re-encrypts the vault and regenerates the affected
-  `.env` / `.env.example` files** — exactly like pressing `s` in the TUI.
-- **Repeated names** (same variable name, different values) are addressed with
-  `--scope <consumer>`; without it, an ambiguous name is reported rather than guessed.
-- **Local overrides** are a separate variable behind `--local` (on `define`, `set`,
-  `get`, `rm`, `wire`/`unwire`, and as a `list` filter). Without the flag a command
-  addresses the base variable (`.env` is canonical); `--local` targets the
-  `.env.local` override, which generates into the matching `.local` file and is kept
-  out of `.env.example`.
-
-The full grammar is in the [CLI reference](#cli-reference).
-
-## Key backends
-
-The vault is encrypted to an **age** recipient (a public key, recorded in
-`menv.toml`). Decryption needs the matching **identity** (the private key). Where
-that identity lives is your choice at `menv init` — `--backend keychain|1password|password`,
-or pick interactively:
-
-| Backend | Where the identity lives | Portability | Trade-off |
-|---------|--------------------------|-------------|-----------|
-| `keychain` *(macOS)* | macOS login Keychain | This machine / Keychain sync | Most seamless, but macOS-only. |
-| `1password` | A 1Password item (via the `op` CLI); only an `op://…` reference is stored in `menv.toml` | Any machine signed in to the vault | Great for teams; requires `op`. |
-| `password` | A passphrase-encrypted `.menv/identity.age`, **committed to the repo** | Anywhere — travels with the repo | Fully portable, but the passphrase is the *only* barrier: anyone with repo access **and** the passphrase can decrypt the vault. |
-
-The `password` backend reads its passphrase interactively, or from
-`MENV_PASSPHRASE` for headless use.
+- **Registry** — `menv.json` (`schemaVersion` 2), committed. The single source of
+  truth for *structure*: vaults, consumers, groups, globals, bound compose files,
+  and every variable's `vaultMapping`. It never contains a value.
+- **Vault** — a named, pluggable key/value store that *is* a generation context.
+  The bundled `menv-local` provider keeps values in `.menv/vault.json` and
+  optionally age-encrypts them (`encryption: true` ⇒ committable ciphertext;
+  `false` ⇒ plaintext, which must stay git-ignored). HashiCorp Vault and AWS SSM
+  are on the roadmap, not shipped.
+- **Consumer** — an explicit recipient of generated files: a `baseDir` plus a file
+  strategy (`single` = one `.env`; `per-vault` = one file per vault), optional
+  `secretsAsLocalOverrides` (secret variables go to a `<file>.local` companion),
+  and an optional committed `.env.example`.
+- **Variable** — a globally unique name with a `vaultMapping[vault][consumer] →
+  { key, disabled? }`. Two consumers pointing at the **same key** share one value;
+  `disabled` emits the line commented-out. Variables may be marked `--secret`.
+- **Group** — a label only, for organizing variables in listings.
+- **Global** — a per-vault name that is either `runtime` (the platform provides it
+  at run/deploy time — passed through) or `static` (menv substitutes a fixed
+  `--value` at generate time).
+- **Interpolation** — values and globals may reference `${NAME}`; write `$${` for a
+  literal `${`. Variables and `static` globals expand at generate time; `runtime`
+  globals pass through unexpanded. Reference cycles or unresolved names abort the
+  generate.
 
 ## CLI reference
 
-```text
-menv [command] [options]
+Run `menv <command> --help` for the authoritative flags. Global options apply to
+every command:
 
-  (none)                  Launch the interactive TUI (default)
+| Global flag | Effect |
+| --- | --- |
+| `-o, --output <mode>` | `pretty` (default) or `json` — `MENV_OUTPUT` sets the default |
+| `--dry-run` | compute and print the plan without applying it |
+| `--force` | override blockers (dependent references, unverified vaults, …) |
+| `--vault-auth <vault>=<secret>` | supply a vault's auth secret (repeatable) |
 
-  init [options]          Scan the repo, set up the vault, update .gitignore
-      --backend <kind>      keychain | 1password | password
-                            (omit to choose interactively)
-      --vault <name>        1Password vault for the new item (default: Private)
-      --with-skill          Scaffold the menv-usage agent skill into
-      --no-skill            .claude/skills/ — or skip it (omit to be asked on a
-                            TTY; an existing skill file is never overwritten)
-      --default-env <name>  Environment name for non-per-env consumers — their
-                            plain .env imports here and it becomes the recorded
-                            default (default: dev)
+### Setup
 
-  Variables — the same operations as the TUI inspector, headless:
+| Command | Purpose |
+| --- | --- |
+| `init [--encrypt \| --no-encrypt]` | create `menv.json` and the local vault config (no scanning) |
+| `generate [--vault <v>] [--consumer <c>]` | regenerate `.env` files (and compose) — the only writer of outputs |
+| `check` | validate interpolation, vault keys, compose markers, staleness, git tracking |
+| `completions <zsh\|bash>` | print a shell completion script |
 
-  define NAME [options]   Create or update a variable's definition and wiring
-      --secret | --no-secret   Mark / unmark as a secret
-      --description <text>     Set the description
-      --example <text>         Set the .env.example placeholder
-      --group <name>           Set the group ("" clears it)
-      --scope <c1,c2,…>        Replace its wiring; "root" = the repo-root .env
-      --local                  Create/address the .env.local override of NAME
-  set NAME [value]        Set a value — from the arg, stdin, or a hidden prompt
-      --env <env>              Environment to write (default: the default env).
-                               Vault only — generated .env files keep the default
-                               environment; materialize another one explicitly
-                               with `menv generate --env <env>`
-      --scope <consumer>       Disambiguate a name shared by several variables
-      --local                  Target the .env.local override
-  get NAME [options]      Print a value to stdout (raw; secrets included)
-      --env <env>, --scope <consumer>, --local
-  list [options]          List variables (secrets shown as ***, unset as empty;
-                          overrides tagged "(local)")
-      --scope <consumer>, --group <name>, --env <env>, --local, --json
-  wire   NAME <c1,c2,…>   Wire a variable to consumers (apps and/or "root")
-      --local                  Wire the .env.local override
-  unwire NAME <c1,c2,…>   Unwire a variable from consumers (--local for the override)
-  rm NAME [options]       Delete a variable (--scope <c>, --local)
-  auto-group [--force]    Group variables by their longest shared name prefix
-                          (whole "_"-delimited segments): NEXT_PUBLIC_API,
-                          NEXT_PUBLIC_SITE → "NEXT_PUBLIC"; DB_USER, DB_HOST → "DB".
-                          A prefix must be shared by 2+ variables. Only ungrouped
-                          variables are touched; --force re-derives every group.
-  mode <consumer> <m>     Set a consumer's .env layout: single | perenv
+### Management
 
-  Without --local, variable commands address the base variable; --local targets
-  its .env.local override (a separate variable generated into the .local file).
+Each manages an entity group; all sub-verbs accept the global flags.
 
-  Materialize & back up:
+- **`vault add|update|remove|list|show`** — `add <name> --type <vaultType>
+  --config <k=v,…>`; `update <name> --config <k=v,…> --default`.
+- **`consumer add|update|remove|list|show`** — `add <name> --strategy
+  single|per-vault --base-dir <dir> --filename <file>` (or `--filenames
+  <vault>=<file>,…` for `per-vault`), `--secrets-as-local-overrides`, `--example`,
+  `--no-gitignore`; `remove <name> [--delete-files]`.
+- **`group add|update|remove|list`** — `add <key> --title <text>`.
+- **`global define|update|remove|list`** — `define <name> [--vault <v>] (--runtime
+  | --value <value>) [--description <text>]`; `remove <name> [--vault <v>]`.
+- **`compose bind|unbind|list`** — `bind <file>` registers a docker-compose file.
 
-  generate [--env <env>]  Regenerate .env files from the vault (headless / CI),
-                          fill docker-compose marker regions, and write each
-                          compose directory's .env.compose. The password backend
-                          reads MENV_PASSPHRASE.
-  backup                  Snapshot the .env and .env.* files (.env.<env>,
-                          .env.local, .env.example, …) of the repo root and
-                          every workspace package — the same dirs init scans —
-                          into .menv/backups/<timestamp>
-  restore [key] [-f]      Restore env files from a backup.
-                            key            a backup timestamp (omit to pick one)
-                            -f, --force    overwrite every file without prompting
+### Variables & values
 
-  -h, --help              Show help
-  -v, --version           Show the version
+| Command | Purpose |
+| --- | --- |
+| `var define <name> [--group <key>] [--secret] [--description <text>] [--example <text>]` | define a variable |
+| `var update <name> [--group <key>] [--secret\|--no-secret] [--description] [--example]` | edit a definition |
+| `var remove <name>` | delete a definition |
+| `var list [--vault <v>] [--consumer <c>] [--group <key>]` | list variables (secrets masked) |
+| `var show <name>` | inspect one variable (secrets masked) |
+| `wire <name> --vault <v> --consumers <list> [--shared] [--key <key>]` | map a variable into a vault key for consumers |
+| `unwire <name> --vault <v> --consumers <list>` | remove that mapping |
+| `enable / disable <name> --vault <v> --consumer <c>` | uncomment / comment-out a wired line |
+| `set <name> [value] [--vault <v>] [--consumer <c>]` | set a value (arg, stdin, or masked prompt) |
+| `get <name> [--vault <v>] [--consumer <c>]` | print the raw value (pipeable) |
+| `import <file> [--consumer <c>] [--vault <v>]` | ingest a dotenv file: define + wire + set |
+
+### Backups
+
+| Command | Purpose |
+| --- | --- |
+| `backup` | snapshot `menv.json`, the vault files, and generated files into `.menv/backups` |
+| `restore [key]` | restore a backup (omit `key` to pick one on a TTY; `--force` skips the confirmation) |
+
+## Values & secrets
+
+`menv set NAME value` takes the value from the argument, but for secrets prefer
+piping on stdin or omitting the argument:
+
+```bash
+printf '%s' "$SECRET" | menv set DATABASE_URL   # piped — stays out of shell history
+menv set DATABASE_URL                           # no arg + TTY ⇒ masked prompt
 ```
 
-`define`, `set`, `wire`/`unwire`, `rm`, and `auto-group` each re-encrypt the vault
-and regenerate the affected `.env` files (`auto-group` only when it changes a
-group). `define`/`set` (with the `password` backend) read `MENV_PASSPHRASE` for
-headless use, just like `generate`.
+`menv get NAME` prints the **raw** value (secrets included) to stdout, so it
+pipes. Everywhere else — `var list`, `var show`, and any `--output json` plan —
+secret values are masked. A real secret is never written into a plan.
+
+## Generation & the ownership rule
+
+`menv generate` is the **only** command that writes generated files; mutations
+(`set`, `wire`, `var define`, …) never touch them. Every generated file carries a
+disclaimer on its **first** line:
+
+```text
+# ── managed by menv ─ DO NOT EDIT ─────────────────────────…
+# Generated from menv.json · vault: menv-local · consumer: api
+# Re-create with `menv generate`; your edits will be overwritten.
+```
+
+menv only overwrites or deletes a file that still carries that marker. Remove the
+marker to take a file over — menv then leaves it alone and `check` reports it.
+`consumer remove` **releases** the consumer's files by stripping the marker by
+default; pass `--delete-files` to delete them instead. A consumer created with
+`--example` also emits a values-free, committed `.env.example`.
+
+## Compose
+
+Docker-compose files are user-owned; menv only fills a hand-authored region.
+Register the file, then add markers around the block menv should manage:
+
+```yaml
+services:
+  api:
+    environment:
+      # <menv:api>
+      # </menv>
+```
+
+```bash
+menv compose bind docker-compose.yml
+menv generate                                   # fills the region; also writes .env.compose
+docker compose --env-file .env.compose up
+```
+
+`menv generate` rewrites only the lines between `# <menv:consumer>` and `# </menv>`
+and writes the interpolation values to `.env.compose` (git-ignored).
+
+## Vaults, auth & encryption
+
+A vault's auth secret (e.g. the `menv-local` passphrase) resolves in this order,
+stopping at the first hit:
+
+1. `--vault-auth <vault>=<secret>` on the command line
+2. the `MENV_VAULT_AUTH_<VAULT>` environment variable (`<VAULT>` upper-cased, non
+   `A–Z0–9` replaced with `_`)
+3. a per-vault entry in `.menv/auth.local.json` (git-ignored, per machine)
+4. a masked TTY prompt — **only** when stdin is a TTY
+
+Off a TTY, a missing secret is a hard error (exit 3) — menv never blocks waiting
+for input in CI. The auth file's entries take one of three hook shapes:
+
+```jsonc
+{
+  "menv-local": { "type": "value",   "value": "the-passphrase" },
+  "staging":    { "type": "env",     "name":  "STAGING_KEY" },
+  "production": { "type": "command", "command": "op read op://vault/menv/password" }
+}
+```
+
+Vaults are modular: the bundled `menv-local` provider is registered in
+`src/vault/registry.ts`, and adding another provider is a registry entry
+implementing the `VaultProvider` contract. Remote providers (HashiCorp, AWS SSM)
+are on the roadmap.
+
+## Headless / CI
+
+menv is non-interactive off a TTY — it never prompts, and every command emits a
+machine-readable `--output json` envelope (`{ ok, result }` / `{ ok, error }`).
+Exit codes: **0** success (including `--dry-run`), **1** domain error / blockers /
+`check` findings, **2** usage, **3** auth, **4** vault I/O.
+
+```bash
+export MENV_VAULT_AUTH_PRODUCTION="$DEPLOY_KEY"
+menv check --output json || exit 1
+menv generate --vault production --output json
+```
 
 ## On-disk layout
 
+`menv init` creates and the CLI manages:
+
 ```text
-your-repo/
-├─ menv.toml                 # committed — envs, recipients, apps, [key_backend]
-├─ .menv/
-│  ├─ manifest.toml          # committed — variable definitions (name, group, secret, wiring…)
-│  ├─ identity.age           # committed — ONLY for the `password` backend (encrypted key)
-│  ├─ values/
-│  │  ├─ dev.env.age         # git-ignored — age-encrypted values for `dev`
-│  │  └─ prod.env.age        # git-ignored — …one file per environment
-│  └─ backups/               # git-ignored — timestamped .env snapshots
-├─ apps/web/                 # single mode (default)
-│  ├─ .env                   # git-ignored — generated for the active environment
-│  ├─ .env.local             # git-ignored — local overrides, if any (kept out of .env.example)
-│  └─ .env.example           # committed — values-free template
-├─ apps/api/                 # per-env mode
-│  ├─ .env.dev               # git-ignored — one file per environment it has values in
-│  ├─ .env.prod              # git-ignored
-│  └─ .env.example           # committed — values-free template
-├─ docker-compose.yml        # committed — menv fills `# <menv:NAME>` regions in services
-└─ .env.compose              # git-ignored — generated interpolation values (per compose dir)
+menv.json              # registry — committed
+.menv/vault.json       # menv-local store — committed if encrypted, git-ignored if plaintext
+.menv/auth.local.json  # per-machine vault auth — git-ignored, never committed
+.menv/backups/         # `menv backup` snapshots — git-ignored
+apps/*/.env            # GENERATED — git-ignored, never hand-edited
+apps/*/.env.example    # GENERATED values-free template — committed (per-consumer opt-in)
+.env.compose           # GENERATED compose interpolation values — git-ignored
 ```
 
-`menv init` appends this block to `.gitignore`:
+menv maintains its own block in `.gitignore`, between marker lines, unioning
+generated paths without touching your own entries:
 
 ```gitignore
-# menv
-.menv/values/
-.menv/backups/
+# menv (managed block)
 .env
-.env.*
-!.env.example
+apps/*/.env
+.env.compose
+# end menv
 ```
-
-The encrypted vault (`menv.toml`, `.menv/manifest.toml`, `.menv/values/*.age`) is
-safe to commit; the plaintext `.env` files are not, and are regenerated on demand.
 
 > **Note:** values are treated as single-line. A multi-line value (e.g. a PEM key
 > spanning several lines) isn't supported yet — keep such values on one line
 > (escaped `\n`) or out of the vault.
 
-## Headless / CI
-
-Materialize `.env` files on a build machine without the TUI:
-
-```bash
-# keychain / 1password backends use the ambient credential
-menv generate --env prod
-
-# password backend: supply the passphrase out-of-band
-MENV_PASSPHRASE='…' menv generate --env prod
-```
-
-`menv generate` decrypts the vault and writes each app's `.env` (plus refreshed
-`.env.example` templates). `--env` selects which environment lands in a
-single-mode app's `.env`; per-env apps always get all their `.env.<env>` files.
-
 ## Development
+
+Runtime is **Bun** (not Node); `.ts` runs directly, no build step for development.
 
 ```bash
 bun install            # install deps
 bun run menv           # run the CLI from source (src/index.ts)
-bun test               # run the test suite (bun:test)
+bun test               # whole suite
+bun test tests/cli/program.disk.test.ts   # a single file
+bun run lint           # Biome: lint + import-sort (read-only)
+bun run lint:fix       # Biome: apply safe fixes
 bun run build          # compile a standalone ./menv binary
-```
-
-Source is organized by responsibility — domain logic stays free of filesystem and
-crypto side-effects:
-
-```text
-src/
-├─ cli/      # command handlers: init, define, set, get, list, wire, mode, rm, generate, backup, restore
-├─ core/     # domain model and types
-├─ crypto/   # age encryption, identities, key backends, the vault
-├─ io/       # discovery, dotenv parsing, persistence, generation
-├─ store/    # in-memory store, load/save
-└─ ui/       # Ink components, app.tsx, scopes & grouping
-tests/       # mirrors src/ one-to-one
 ```
 
 ## Security model
 
-- Values are encrypted with **age** to a recipient public key in `menv.toml`.
-  Reading the vault requires the private identity from your chosen backend.
-- With `keychain` / `1password`, the identity never lands in the repo.
-- With `password`, the encrypted identity is committed for portability — so the
-  **passphrase is the whole barrier**. Choose a strong one, and treat repo access
-  plus passphrase as equivalent to full vault access.
-- Generated `.env` files and the decrypted `.menv/values/` are git-ignored by
-  default; keep them that way.
+Values live in vaults, addressed by the keys in each variable's `vaultMapping`;
+the registry never holds a value. The `menv-local` vault optionally age-encrypts
+its JSON — encrypted, it is safe to commit; plaintext, it must stay git-ignored
+(`menv check` enforces both). The key resolves per vault as described above, and
+never enters the repo. Plaintext `.env` files are disposable outputs, regenerated
+on demand and git-ignored — treat the encrypted vault as the thing you commit.
