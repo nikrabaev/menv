@@ -15,6 +15,7 @@ import { upsertManagedBlock } from "../io/gitignore.ts";
 import { loadRegistry } from "../registry/persist.ts";
 import type { Registry } from "../registry/types.ts";
 import { getProvider } from "../vault/registry.ts";
+import { defaultRestoreDeps, runBackup, runRestore } from "./backupCmd.ts";
 import { runCheck } from "./check.ts";
 import { runGenerate } from "./generate.ts";
 import { runImport } from "./importEnv.ts";
@@ -380,6 +381,21 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     .action(async () => {
       const registry = await reg();
       await runCheck(root, registry, flags(), io);
+    });
+
+  program
+    .command("backup")
+    .description("snapshot menv.json, the vault files, and the generated files into .menv/backups")
+    .action(async () => {
+      const registry = await reg();
+      await runBackup(root, registry, flags(), io);
+    });
+  program
+    .command("restore [key]")
+    .description("restore a backup (omit key to pick one on a TTY; --force skips the confirmation)")
+    .action(async (key) => {
+      await reg();
+      await runRestore(root, { key, force: flags().force }, flags(), io, defaultRestoreDeps);
     });
 
   // ── var ────────────────────────────────────────────────────────────────
