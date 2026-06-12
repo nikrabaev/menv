@@ -113,3 +113,104 @@ describe("runCheck", () => {
     }
   });
 });
+
+async function gitInitAdd(root: string, paths: string[]): Promise<void> {
+  const run = async (...args: string[]): Promise<void> => {
+    await Bun.spawn(["git", "-C", root, ...args], { stdout: "ignore", stderr: "ignore" }).exited;
+  };
+  await run("init");
+  await run("add", "-f", ...paths);
+}
+
+describe("runCheck — git-tracking gate", () => {
+  test("PLAINTEXT_VAULT_TRACKED fires when a plaintext vault file is git-tracked", async () => {
+    const { root, registry } = await repo(); // local vault is encryption:false → .menv/vault.json
+    await gitInitAdd(root, [".menv/vault.json"]);
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect(failedFindings(e)).toContain("PLAINTEXT_VAULT_TRACKED");
+    }
+  });
+
+  test("SECRET_FILE_TRACKED fires when a secret-bearing generated file is tracked", async () => {
+    const registry = makeRegistry();
+    registry.variables = { TOKEN: { secret: true, vaultMapping: { local: { api: { key: "k-tok" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k-tok", "supersecret");
+    await s.close();
+    await runGenerate(root, registry, {}, FLAGS, memoryIo()); // apps/api/.env carries TOKEN (no split)
+    await gitInitAdd(root, ["apps/api/.env"]);
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect(failedFindings(e)).toContain("SECRET_FILE_TRACKED");
+    }
+  });
+
+  test("with secrets split, the tracked .env.local is the flagged secret file", async () => {
+    const registry = makeRegistry();
+    registry.consumers.api = {
+      strategyType: "single",
+      strategyConfig: { baseDir: "apps/api", filename: ".env", secretsAsLocalOverrides: true },
+    };
+    registry.variables = {
+      TOKEN: { secret: true, vaultMapping: { local: { api: { key: "k-tok" } } } },
+      PORT: { vaultMapping: { local: { api: { key: "k-port" } } } },
+    };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k-tok", "supersecret");
+    await s.set("k-port", "3000");
+    await s.close();
+    await runGenerate(root, registry, {}, FLAGS, memoryIo()); // .env (PORT) + .env.local (TOKEN)
+    await gitInitAdd(root, ["apps/api/.env.local"]); // only the secret companion is tracked
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      const details = (e as MenvError).details as { code: string; message: string }[];
+      expect(details.find((f) => f.code === "SECRET_FILE_TRACKED")?.message).toContain(".env.local");
+    }
+  });
+
+  test("a tracked secret file at a non-ASCII path is still flagged (git quotes it)", async () => {
+    const registry = makeRegistry();
+    registry.consumers.api = { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env.café" } };
+    registry.variables = { TOKEN: { secret: true, vaultMapping: { local: { api: { key: "k-tok" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k-tok", "supersecret");
+    await s.close();
+    await runGenerate(root, registry, {}, FLAGS, memoryIo());
+    await gitInitAdd(root, ["apps/api/.env.café"]);
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect(failedFindings(e)).toContain("SECRET_FILE_TRACKED");
+    }
+  });
+
+  test("a tracked .env.compose for a bound file is flagged", async () => {
+    const registry = makeRegistry();
+    registry.compose = { files: ["docker-compose.yml"] };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    await Bun.write(join(root, "docker-compose.yml"), "services: {}\n");
+    await Bun.write(join(root, ".env.compose"), "API_X=secret\n");
+    await gitInitAdd(root, [".env.compose"]);
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable();
+    } catch (e) {
+      expect(failedFindings(e)).toContain("SECRET_FILE_TRACKED");
+    }
+  });
+});

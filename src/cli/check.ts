@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { MenvError } from "../core/errors.ts";
 import { findMarkerRegions } from "../generate/compose.ts";
 import { previewGenerate, scopeEntries } from "../generate/generate.ts";
@@ -21,10 +22,12 @@ const warn = (code: string, message: string): Finding => ({ severity: "warning",
 
 async function gitTracked(root: string): Promise<Set<string> | null> {
   try {
-    const proc = Bun.spawn(["git", "-C", root, "ls-files"], { stdout: "pipe", stderr: "ignore" });
+    // -z: NUL-separated, unquoted output — otherwise git quotes/escapes
+    // non-ASCII paths and the tracked-set lookups silently miss them.
+    const proc = Bun.spawn(["git", "-C", root, "ls-files", "-z"], { stdout: "pipe", stderr: "ignore" });
     if ((await proc.exited) !== 0) return null;
     const text = await new Response(proc.stdout).text();
-    return new Set(text.split("\n").filter((l) => l !== ""));
+    return new Set(text.split("\0").filter((l) => l !== ""));
   } catch {
     return null;
   }
@@ -133,6 +136,17 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
         const risky = split ? paths.local : paths.main; // secrets live in .local when split, else in main
         for (const p of risky) {
           if (tracked.has(p)) findings.push(err("SECRET_FILE_TRACKED", `${p} may contain secret values and is tracked by git`));
+        }
+      }
+      // A bound file's sibling .env.compose carries decrypted values too.
+      const composeEnvSeen = new Set<string>();
+      for (const cfile of registry.compose.files) {
+        const dir = dirname(cfile) === "." ? "" : dirname(cfile);
+        const envCompose = join(dir, ".env.compose");
+        if (composeEnvSeen.has(envCompose)) continue;
+        composeEnvSeen.add(envCompose);
+        if (tracked.has(envCompose)) {
+          findings.push(err("SECRET_FILE_TRACKED", `${envCompose} may contain secret values and is tracked by git`));
         }
       }
     }
