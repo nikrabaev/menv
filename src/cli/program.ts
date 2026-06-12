@@ -15,6 +15,7 @@ import { upsertManagedBlock } from "../io/gitignore.ts";
 import { loadRegistry } from "../registry/persist.ts";
 import type { Registry } from "../registry/types.ts";
 import { getProvider } from "../vault/registry.ts";
+import { runGenerate } from "./generate.ts";
 import { runImport } from "./importEnv.ts";
 import { runInit } from "./init.ts";
 import type { Io } from "./output.ts";
@@ -361,6 +362,16 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     const registry = await reg();
     emit(registry.compose, registry.compose.files.join("\n") || "no compose files bound");
   });
+
+  program
+    .command("generate")
+    .description("regenerate .env files (and compose) from the vault — the only writer of outputs")
+    .option("--vault <vault>", "vault to materialize (default: defaults.vault)")
+    .option("--consumer <consumer>", "limit to one consumer (skips compose)")
+    .action(async (o) => {
+      const registry = await reg();
+      await runGenerate(root, registry, { vault: o.vault, consumer: o.consumer }, flags(), io, prompt);
+    });
 
   // ── var ────────────────────────────────────────────────────────────────
   const varCmd = program.command("var").description("manage variable definitions");
