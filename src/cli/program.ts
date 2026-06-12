@@ -9,9 +9,10 @@ import { planGroupAdd, planGroupRemove, planGroupUpdate } from "../core/ops/grou
 import { planVarDefine, planVarRemove, planVarUpdate } from "../core/ops/variable.ts";
 import { planVaultAdd, planVaultRemove, planVaultUpdate } from "../core/ops/vault.ts";
 import { planSetDisabled, planUnwire, planWire } from "../core/ops/wiring.ts";
+import { consumerPaths } from "../generate/paths.ts";
 import { upsertManagedBlock } from "../io/gitignore.ts";
 import { loadRegistry } from "../registry/persist.ts";
-import type { ConsumerDef, Registry } from "../registry/types.ts";
+import type { Registry } from "../registry/types.ts";
 import { getProvider } from "../vault/registry.ts";
 import { runImport } from "./importEnv.ts";
 import { runInit } from "./init.ts";
@@ -57,19 +58,6 @@ function parseVaultAuth(list: string[] | undefined): Record<string, string> {
 }
 
 const splitList = (s: string) => s.split(",").map((x) => x.trim()).filter((x) => x !== "");
-
-// Generated paths a consumer's config implies — what `consumer add` appends to
-// the .gitignore managed block. With secretsAsLocalOverrides, the `.local`
-// companions are ALWAYS ignored, even under --no-gitignore (spec).
-function generatedPaths(def: ConsumerDef): { all: string[]; localOnly: string[] } {
-  // Access through `def` so TS narrows the strategyConfig union by discriminant.
-  const files =
-    def.strategyType === "single" ? [def.strategyConfig.filename] : Object.values(def.strategyConfig.filenames);
-  const base = def.strategyConfig.baseDir;
-  const all = files.map((f) => join(base, f));
-  const localOnly = def.strategyConfig.secretsAsLocalOverrides === true ? all.map((p) => `${p}.local`) : [];
-  return { all: [...all, ...localOnly], localOnly };
-}
 
 export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey: () => crypto.randomUUID() }): Command {
   const program = new Command()
@@ -203,8 +191,8 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
       if (!flags().dryRun) {
         const def = op.next.consumers[name];
         if (def !== undefined) {
-          const paths = generatedPaths(def);
-          const entries = o.gitignore === false ? paths.localOnly : paths.all;
+          const paths = consumerPaths(def);
+          const entries = o.gitignore === false ? paths.local : [...paths.main, ...paths.local];
           if (entries.length > 0) await upsertManagedBlock(root, entries);
         }
       }
@@ -231,8 +219,8 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
       if (!flags().dryRun) {
         const def = op.next.consumers[name];
         if (def !== undefined) {
-          const paths = generatedPaths(def);
-          const entries = o.gitignore === false ? paths.localOnly : paths.all;
+          const paths = consumerPaths(def);
+          const entries = o.gitignore === false ? paths.local : [...paths.main, ...paths.local];
           if (entries.length > 0) await upsertManagedBlock(root, entries);
         }
       }
