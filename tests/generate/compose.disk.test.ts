@@ -117,6 +117,22 @@ describe("previewCompose — multi-region and multi-directory", () => {
     expect(composed).toContain("- URL=${WEB_URL}");
   });
 
+  test("a resolved dir with no wired vars still rewrites .env.compose (scrubs stale values)", async () => {
+    const registry = makeRegistry();
+    registry.consumers = { api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } } };
+    registry.variables = {}; // nothing wired to the compose consumer
+    registry.compose = { files: ["docker-compose.yml"] };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    await Bun.write(join(root, "docker-compose.yml"), "x:\n  # <menv:api>\n  - STALE=leftover\n  # </menv>\n");
+    const local = await openVaultSession(root, registry, "local", AUTH);
+    const preview = await previewCompose(root, registry, { vault: "local" }, new Map([["local", local]]));
+    expect(preview.errors).toEqual([]);
+    // The vault opened fine, so the file resolved — emit a header-only file to
+    // overwrite any stale values (unlike the unverified-vault case, which skips).
+    expect(preview.writes.find((w) => w.path === ".env.compose")).toBeDefined();
+  });
+
   test("compose files in two directories each get their own sibling .env.compose", async () => {
     const registry = makeRegistry();
     registry.consumers = { api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } } };

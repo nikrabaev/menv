@@ -100,6 +100,7 @@ export async function previewCompose(
   const globals = globalsFor(registry, vault);
   // Group compose files by directory so one .env.compose serves all files there.
   const valuesByDir = new Map<string, Map<string, ComposeValue>>();
+  const succeededDirs = new Set<string>(); // dirs with at least one successfully-resolved file
   const splicedWrites: { path: string; content: string }[] = [];
 
   for (const file of registry.compose.files) {
@@ -155,15 +156,18 @@ export async function previewCompose(
       fillByStart.set(region.start, fill);
     }
     if (fileFailed) continue;
+    succeededDirs.add(dir);
     splicedWrites.push({ path: file, content: spliceRegions(content, regions, fillByStart) });
   }
 
   if (preview.errors.length > 0) return { ...preview, writes: [] };
   preview.writes.push(...splicedWrites);
   for (const [dir, values] of valuesByDir) {
-    // A dir whose files all failed/were unverified contributed no values; a
-    // header-only .env.compose would clobber a previously-correct file, so skip.
-    if (values.size === 0) continue;
+    // Skip only dirs where every file failed/was unverified — emitting a
+    // header-only .env.compose there would clobber a previously-correct file.
+    // A dir that DID resolve but yielded no values still gets a header-only
+    // file, so unwiring every var scrubs the stale (possibly secret) values.
+    if (!succeededDirs.has(dir)) continue;
     const header = disclaimerHeader({ vault });
     const lines = [...values.values()]
       .sort((a, b) => a.key.localeCompare(b.key))

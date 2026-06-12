@@ -119,6 +119,7 @@ async function gitInitAdd(root: string, paths: string[]): Promise<void> {
     await Bun.spawn(["git", "-C", root, ...args], { stdout: "ignore", stderr: "ignore" }).exited;
   };
   await run("init");
+  await run("config", "core.quotepath", "true"); // force quoting so the non-ASCII guard is host-independent
   await run("add", "-f", ...paths);
 }
 
