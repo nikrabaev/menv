@@ -127,6 +127,15 @@ describe("program — end to end on a tmp repo", () => {
     expect((await loadRegistry(root)).compose.files).toEqual(["docker-compose.yml"]);
   });
 
+  test("compose bind git-ignores the directory's .env.compose (it carries decrypted values)", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await Bun.write(join(root, "docker-compose.yml"), "services: {}\n");
+    await run(root, ["compose", "bind", "docker-compose.yml"]);
+    const gi = await Bun.file(join(root, ".gitignore")).text();
+    expect(gi).toContain(".env.compose");
+  });
+
   test("import wires a dotenv file through the program surface", async () => {
     const root = await tmpRepo(makeRegistry());
     roots.push(root);

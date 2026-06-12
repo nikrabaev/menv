@@ -161,6 +161,9 @@ export async function previewCompose(
   if (preview.errors.length > 0) return { ...preview, writes: [] };
   preview.writes.push(...splicedWrites);
   for (const [dir, values] of valuesByDir) {
+    // A dir whose files all failed/were unverified contributed no values; a
+    // header-only .env.compose would clobber a previously-correct file, so skip.
+    if (values.size === 0) continue;
     const header = disclaimerHeader({ vault });
     const lines = [...values.values()]
       .sort((a, b) => a.key.localeCompare(b.key))

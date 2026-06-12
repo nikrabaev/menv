@@ -76,4 +76,13 @@ describe("previewCompose", () => {
     expect(preview.errors.some((e) => e.message.includes("ghost"))).toBe(true);
     expect(preview.writes).toEqual([]); // nothing written when a file has an error
   });
+
+  test("an unverified vault writes no .env.compose, so an existing one is left intact", async () => {
+    const { root, registry } = await fixture();
+    // No session for the vault — every region fails to resolve. A header-only
+    // .env.compose would clobber a previously-correct file, so emit nothing.
+    const preview = await previewCompose(root, registry, { vault: "local" }, new Map());
+    expect(preview.warnings.some((w) => w.code === "UNVERIFIED_VAULT")).toBe(true);
+    expect(preview.writes.find((w) => w.path === ".env.compose")).toBeUndefined();
+  });
 });

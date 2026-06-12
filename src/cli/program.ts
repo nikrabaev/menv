@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Command } from "@commander-js/extra-typings";
 import pkg from "../../package.json";
 import { MenvError } from "../core/errors.ts";
@@ -356,6 +356,12 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     }
     const registry = await reg();
     await runMutation(root, registry, planComposeBind(registry, { file }), flags(), io, new Map(), {}, prompt);
+    if (!flags().dryRun) {
+      // .env.compose carries decrypted values for the bound file's directory —
+      // never commit it (mirrors the consumer-add gitignore of generated paths).
+      const dir = dirname(file) === "." ? "" : dirname(file);
+      await upsertManagedBlock(root, [join(dir, ".env.compose")]);
+    }
   });
   compose.command("unbind <file>").action(async (file) => {
     const registry = await reg();
