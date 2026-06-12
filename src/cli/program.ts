@@ -17,6 +17,7 @@ import type { Registry } from "../registry/types.ts";
 import { getProvider } from "../vault/registry.ts";
 import { defaultRestoreDeps, runBackup, runRestore } from "./backupCmd.ts";
 import { runCheck } from "./check.ts";
+import { emitCompletions } from "./completions.ts";
 import { runGenerate } from "./generate.ts";
 import { runImport } from "./importEnv.ts";
 import { runInit } from "./init.ts";
@@ -548,6 +549,13 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     .action(async (file, o) => {
       const registry = await reg();
       await runImport(root, registry, { file, consumer: o.consumer, vault: o.vault }, flags(), io, deps.newKey, prompt);
+    });
+
+  program
+    .command("completions <shell>")
+    .description("print a shell completion script (zsh | bash)")
+    .action((shell) => {
+      io.stdout(emitCompletions(program, shell));
     });
 
   return program;
