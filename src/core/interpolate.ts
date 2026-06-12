@@ -66,7 +66,6 @@ export function expandAll(input: ExpandInput): Map<string, string> {
       const chain = [...visiting.slice(cycleStart), name].join(" → ");
       throw new MenvError("VALIDATION", `interpolation cycle: ${chain}`);
     }
-    // biome-ignore lint/style/noNonNullAssertion: only called for known names
     const raw = input.values.get(name)!;
     visiting.push(name);
     let result = "";
