@@ -80,3 +80,26 @@ describe("menv-local provider", () => {
     }
   });
 });
+
+import { runVaultConformance } from "../conformance.ts";
+
+runVaultConformance({
+  label: "menv-local (plaintext)",
+  async create() {
+    const dir = await mkdtemp(join(tmpdir(), "menv-conf-plain-"));
+    return {
+      open: () => localProvider.init({ filename: "vault.json", encryption: false }, { root: dir, auth: {} }),
+    };
+  },
+});
+
+runVaultConformance({
+  label: "menv-local (encrypted)",
+  async create() {
+    const dir = await mkdtemp(join(tmpdir(), "menv-conf-enc-"));
+    return {
+      open: () =>
+        localProvider.init({ filename: "vault.json", encryption: true }, { root: dir, auth: { secret: "pw" } }),
+    };
+  },
+});
