@@ -168,6 +168,24 @@ describe("runCheck — staleness vault selection", () => {
   });
 });
 
+describe("runCheck — orphaned keys", () => {
+  test("a vault key referenced by no variable is an ORPHANED_KEY warning (gate still passes)", async () => {
+    const registry = makeRegistry();
+    registry.variables = { PORT: { vaultMapping: { local: { api: { key: "k-port" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k-port", "3000");
+    await s.set("k-orphan", "leftover"); // no variable references this key
+    await s.close();
+    const io = memoryIo();
+    await runCheck(root, registry, FLAGS, io); // warning only → resolves (exit 0)
+    const codes = passedFindings(io);
+    expect(codes).toContain("ORPHANED_KEY");
+    expect(codes).not.toContain("MISSING_VALUE"); // k-port is set, so no false orphan/missing noise
+  });
+});
+
 describe("runCheck — git-tracking gate", () => {
   test("PLAINTEXT_VAULT_TRACKED fires when a plaintext vault file is git-tracked", async () => {
     const { root, registry } = await repo(); // local vault is encryption:false → .menv/vault.json

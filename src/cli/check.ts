@@ -158,6 +158,25 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
         }
       }
     }
+
+    // Orphaned vault keys: present in a vault but referenced by no variable —
+    // a leftover from removing a wiring/variable/consumer. A warning, never a
+    // gate failure (the keys are harmless, just unreachable).
+    for (const [name, session] of sessions) {
+      const referenced = new Set<string>();
+      for (const v of Object.values(registry.variables)) {
+        for (const entry of Object.values(v.vaultMapping[name] ?? {})) referenced.add(entry.key);
+      }
+      let keys: string[];
+      try {
+        keys = await session.list();
+      } catch {
+        continue; // a provider that cannot list — skip, not an error
+      }
+      for (const k of keys) {
+        if (!referenced.has(k)) findings.push(warn("ORPHANED_KEY", `vault "${name}" key "${k}" is referenced by no variable`));
+      }
+    }
   } finally {
     await Promise.allSettled([...sessions.values()].map((s) => s.close()));
   }
