@@ -166,6 +166,31 @@ describe("runCheck — staleness vault selection", () => {
     await runCheck(root, registry, FLAGS, io); // regen against production matches → not stale vs local
     expect(passedFindings(io)).not.toContain("STALE");
   });
+
+  test("a broken ref in a file's recorded non-default vault still fails the gate", async () => {
+    const registry = makeRegistry();
+    registry.consumers = { api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } } };
+    registry.variables = { GREETING: { vaultMapping: { local: { api: { key: "k-l" } }, production: { api: { key: "k-p" } } } } };
+    const root = await tmpRepo(registry); // defaults.vault = local
+    roots.push(root);
+    const local = await openVaultSession(root, registry, "local", FLAGS);
+    await local.set("k-l", "ok"); // default vault is clean
+    await local.close();
+    const prod = await openVaultSession(root, registry, "production", FLAGS);
+    await prod.set("k-p", "fine");
+    await prod.close();
+    await runGenerate(root, registry, { vault: "production" }, FLAGS, memoryIo()); // file header records production
+    const prod2 = await openVaultSession(root, registry, "production", FLAGS);
+    await prod2.set("k-p", "${NONEXISTENT}"); // now broken — only in the recorded (non-default) vault
+    await prod2.close();
+    try {
+      await runCheck(root, registry, FLAGS, memoryIo());
+      expect.unreachable(); // generate --vault production would throw, so check must not pass
+    } catch (e) {
+      expect((e as MenvError).code).toBe("VALIDATION");
+      expect(failedFindings(e)).toContain("INTERPOLATION");
+    }
+  });
 });
 
 describe("runCheck — orphaned keys", () => {

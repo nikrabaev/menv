@@ -54,6 +54,10 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
     }
 
     // Interpolation, missing values, key existence (MISSING_VALUE) per scope.
+    // Remember which (consumer, vault) scopes failed interpolation so the
+    // staleness loop below doesn't double-report — and, crucially, so it can
+    // report a recorded vault the scope loop never validated.
+    const interpolationFailed = new Set<string>();
     for (const target of envTargets(registry.consumers, registry.defaults, {})) {
       const session = sessions.get(target.vault);
       if (session === undefined) continue;
@@ -61,8 +65,9 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
       try {
         await scopeEntries(registry, target.consumer, target.vault, session, w);
       } catch (e) {
-        if (e instanceof MenvError) findings.push(err("INTERPOLATION", `${target.consumer}/${target.vault}: ${e.message}`));
-        else throw e;
+        if (!(e instanceof MenvError)) throw e;
+        findings.push(err("INTERPOLATION", `${target.consumer}/${target.vault}: ${e.message}`));
+        interpolationFailed.add(`${target.consumer}|${target.vault}`);
       }
       for (const mv of w) findings.push(warn(mv.code, mv.message));
     }
@@ -95,10 +100,16 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
           try {
             preview = await previewGenerate(root, registry, { consumer, vault }, sessions);
           } catch (e) {
-            // A broken ref/cycle already surfaced as INTERPOLATION in the scope
-            // loop above; don't let it escape and discard the findings list.
-            if (e instanceof MenvError) continue;
-            throw e;
+            if (!(e instanceof MenvError)) throw e;
+            // A broken ref/cycle. The scope loop validates only defaults.vault
+            // targets, so a file recording a different vault (generate --vault X)
+            // may not have been flagged — record it here so the gate never
+            // silently passes a file whose generate would throw.
+            if (!interpolationFailed.has(key)) {
+              findings.push(err("INTERPOLATION", `${consumer}/${vault}: ${e.message}`));
+              interpolationFailed.add(key);
+            }
+            continue;
           }
           previewCache.set(key, preview);
         }
