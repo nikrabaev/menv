@@ -145,6 +145,38 @@ describe("program — end to end on a tmp repo", () => {
     expect(r.variables.API_TOKEN?.secret).toBe(true);
     expect(r.variables.API_TOKEN?.vaultMapping.local?.api).toBeDefined();
   });
+
+  // End-to-end: consumer remove → runMutation → executePlan → applyFileOp on disk.
+  async function consumerWithGeneratedFile(root: string) {
+    await run(root, ["init", "--no-encrypt"]);
+    await run(root, ["consumer", "add", "api", "--strategy", "single", "--base-dir", "apps/api", "--filename", ".env"]);
+    await run(root, ["var", "define", "PORT"]);
+    await run(root, ["wire", "PORT", "--vault", "local", "--consumers", "api"]);
+    await run(root, ["set", "PORT", "3000"]);
+    await run(root, ["generate"]);
+  }
+
+  test("consumer remove releases the generated file (strips the disclaimer, keeps the body)", async () => {
+    const root = await tmpRepo();
+    roots.push(root);
+    await consumerWithGeneratedFile(root);
+    const envPath = join(root, "apps/api/.env");
+    expect(await Bun.file(envPath).text()).toContain("managed by menv"); // marker present
+    await run(root, ["consumer", "remove", "api"]);
+    const released = await Bun.file(envPath).text();
+    expect(released).not.toContain("managed by menv"); // disclaimer stripped → user owns it
+    expect(released).toContain("PORT=3000"); // body preserved
+  });
+
+  test("consumer remove --delete-files deletes the generated file", async () => {
+    const root = await tmpRepo();
+    roots.push(root);
+    await consumerWithGeneratedFile(root);
+    const envPath = join(root, "apps/api/.env");
+    expect(await Bun.file(envPath).exists()).toBe(true);
+    await run(root, ["consumer", "remove", "api", "--delete-files"]);
+    expect(await Bun.file(envPath).exists()).toBe(false);
+  });
 });
 
 // Regression: a global option placed BEFORE the subcommand (its natural spot)

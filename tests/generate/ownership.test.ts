@@ -46,4 +46,8 @@ describe("headerVault", () => {
     expect(headerVault(disclaimerHeader({ consumer: "api" }))).toBeUndefined();
     expect(headerVault("FOO=bar\n")).toBeUndefined();
   });
+
+  test("reads a vault recorded at the end of the origin line (no consumer)", () => {
+    expect(headerVault(disclaimerHeader({ vault: "prod" }))).toBe("prod");
+  });
 });

@@ -51,4 +51,18 @@ describe("collect / create / restore", () => {
     expect(restored).toContain("apps/api/.env");
     expect(await Bun.file(join(root, "apps/api/.env")).text()).not.toBe("WIPED=1\n");
   });
+
+  test("restore reproduces exact content, including the nested vault file", async () => {
+    const { root, registry } = await repo();
+    const key = backupKey(new Date());
+    await createBackup(root, key, await collectBackupPaths(root, registry));
+    const envBefore = await Bun.file(join(root, "apps/api/.env")).text();
+    const vaultBefore = await Bun.file(join(root, ".menv/vault.json")).text();
+    await Bun.write(join(root, "apps/api/.env"), "WIPED=1\n");
+    await Bun.write(join(root, ".menv/vault.json"), "{}\n");
+    const restored = await restoreBackup(root, key);
+    expect(restored).toContain(".menv/vault.json"); // exercises the nested-directory walk
+    expect(await Bun.file(join(root, "apps/api/.env")).text()).toBe(envBefore); // byte-for-byte
+    expect(await Bun.file(join(root, ".menv/vault.json")).text()).toBe(vaultBefore);
+  });
 });

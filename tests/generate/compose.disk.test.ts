@@ -86,3 +86,52 @@ describe("previewCompose", () => {
     expect(preview.writes.find((w) => w.path === ".env.compose")).toBeUndefined();
   });
 });
+
+describe("previewCompose — multi-region and multi-directory", () => {
+  const AUTH = { vaultAuth: {}, env: {} };
+
+  test("two consumers sharing a var name get distinct prefixed keys in one .env.compose", async () => {
+    const registry = makeRegistry();
+    registry.consumers = {
+      api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } },
+      web: { strategyType: "single", strategyConfig: { baseDir: "apps/web", filename: ".env" } },
+    };
+    registry.variables = { URL: { vaultMapping: { local: { api: { key: "k-api" }, web: { key: "k-web" } } } } };
+    registry.compose = { files: ["docker-compose.yml"] };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    await Bun.write(
+      join(root, "docker-compose.yml"),
+      "services:\n  api:\n    environment:\n      # <menv:api>\n      # </menv>\n  web:\n    environment:\n      # <menv:web>\n      # </menv>\n",
+    );
+    const local = await openVaultSession(root, registry, "local", AUTH);
+    await local.set("k-api", "http://api");
+    await local.set("k-web", "http://web");
+    const preview = await previewCompose(root, registry, { vault: "local" }, new Map([["local", local]]));
+    expect(preview.errors).toEqual([]);
+    const envCompose = preview.writes.find((w) => w.path === ".env.compose")?.content as string;
+    expect(envCompose).toContain("API_URL=http://api"); // prefixed → no collision
+    expect(envCompose).toContain("WEB_URL=http://web");
+    const composed = preview.writes.find((w) => w.path === "docker-compose.yml")?.content as string;
+    expect(composed).toContain("- URL=${API_URL}");
+    expect(composed).toContain("- URL=${WEB_URL}");
+  });
+
+  test("compose files in two directories each get their own sibling .env.compose", async () => {
+    const registry = makeRegistry();
+    registry.consumers = { api: { strategyType: "single", strategyConfig: { baseDir: "apps/api", filename: ".env" } } };
+    registry.variables = { URL: { vaultMapping: { local: { api: { key: "k-url" } } } } };
+    registry.compose = { files: ["a/docker-compose.yml", "b/docker-compose.yml"] };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const yaml = "x:\n  # <menv:api>\n  # </menv>\n";
+    await Bun.write(join(root, "a/docker-compose.yml"), yaml);
+    await Bun.write(join(root, "b/docker-compose.yml"), yaml);
+    const local = await openVaultSession(root, registry, "local", AUTH);
+    await local.set("k-url", "http://x");
+    const preview = await previewCompose(root, registry, { vault: "local" }, new Map([["local", local]]));
+    const paths = preview.writes.map((w) => w.path);
+    expect(paths).toContain("a/.env.compose");
+    expect(paths).toContain("b/.env.compose");
+  });
+});
