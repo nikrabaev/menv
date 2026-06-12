@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MenvError } from "../../../src/core/errors.ts";
+import { encryptWithPassphrase } from "../../../src/vault/age.ts";
 import { localProvider } from "../../../src/vault/providers/local.ts";
 
 let root: string;
@@ -77,6 +78,64 @@ describe("menv-local provider", () => {
       expect.unreachable();
     } catch (e) {
       expect((e as MenvError).code).toBe("VALIDATION");
+    }
+  });
+
+  // Regression: a key named like an Object internal (e.g. "__proto__") must be
+  // stored as ordinary data, not silently dropped via the prototype setter.
+  // Such keys are reachable through `--key` / `import` in later plans.
+  test("stores prototype-named keys (__proto__, constructor) as ordinary data", async () => {
+    const s = await localProvider.init(PLAIN, { root, auth: {} });
+    await s.set("__proto__", "secret-value");
+    await s.set("constructor", "c");
+    await s.set("NORMAL", "ok");
+    await s.close();
+    const onDisk = JSON.parse(await Bun.file(join(root, ".menv/vault.json")).text());
+    expect(onDisk.__proto__).toBe("secret-value");
+    const s2 = await localProvider.init(PLAIN, { root, auth: {} });
+    expect(await s2.get("__proto__")).toBe("secret-value");
+    expect(await s2.get("constructor")).toBe("c");
+    expect(await s2.list()).toEqual(["NORMAL", "__proto__", "constructor"]);
+    await s2.close();
+  });
+
+  test("get on a prototype-named key in an empty store is undefined", async () => {
+    const s = await localProvider.init(PLAIN, { root, auth: {} });
+    expect(await s.get("__proto__")).toBeUndefined();
+    await s.close();
+  });
+
+  // Regression: a failed write must surface as VAULT_IO (exit-4 contract) and
+  // must not leave the session reporting a value that never reached disk.
+  test("plaintext: a failed write throws VAULT_IO and rolls back the in-memory value", async () => {
+    const dir = join(root, "ro");
+    const cfg = { filename: "vault.json", encryption: false };
+    const s = await localProvider.init(cfg, { root: dir, auth: {} });
+    await s.set("OK", "1");
+    await chmod(dir, 0o500); // read-only dir: the next atomic write cannot create its tmp file
+    try {
+      try {
+        await s.set("FAIL", "2");
+        expect.unreachable();
+      } catch (e) {
+        expect((e as MenvError).code).toBe("VAULT_IO");
+      }
+      expect(await s.get("FAIL")).toBeUndefined();
+      expect(await s.list()).toEqual(["OK"]);
+    } finally {
+      await chmod(dir, 0o700); // restore so afterEach can clean up
+    }
+    await s.close();
+  });
+
+  test("encrypted: decrypts but content is not a JSON object → VAULT_IO", async () => {
+    const ct = await encryptWithPassphrase("not json", "pw");
+    await Bun.write(join(root, ".menv/vault.json"), ct);
+    try {
+      await localProvider.init(ENCRYPTED, { root, auth: { secret: "pw" } });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("VAULT_IO");
     }
   });
 });
