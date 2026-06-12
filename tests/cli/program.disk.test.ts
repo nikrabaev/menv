@@ -165,3 +165,118 @@ describe("program — global flags before the subcommand", () => {
     expect(get.out.join("")).toBe("v2");
   });
 });
+
+// Coverage the happy-path E2E suite missed — each guards a real regression
+// class in the commander action wiring (review panel, test-adequacy).
+describe("program — command coverage", () => {
+  const readVault = async (root: string) =>
+    JSON.parse(await Bun.file(join(root, ".menv/vault.json")).text()) as Record<string, string>;
+
+  test("--dry-run on a registry-only mutator applies nothing", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    const io = await run(root, ["group", "add", "payments", "--title", "Payments", "--dry-run", "--output", "json"]);
+    expect(JSON.parse(io.out.join("")).result.dryRun).toBe(true);
+    expect((await loadRegistry(root)).groups.payments).toBeUndefined();
+  });
+
+  test("global define → list → remove, and the --runtime/--value XOR", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["global", "define", "FQDN", "--vault", "local", "--value", "localhost:3000"]);
+    expect((await loadRegistry(root)).globals.FQDN?.values.local).toEqual({ source: "static", value: "localhost:3000" });
+    const list = await run(root, ["global", "list", "--output", "json"]);
+    expect(JSON.parse(list.out.join("")).result.FQDN).toBeDefined();
+    await run(root, ["global", "remove", "FQDN"]);
+    expect((await loadRegistry(root)).globals.FQDN).toBeUndefined();
+    try {
+      await run(root, ["global", "define", "X", "--vault", "local", "--runtime", "--value", "y"]);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("VALIDATION");
+    }
+  });
+
+  test("unwire removes the mapping and the orphaned vault key's value", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X"]);
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api"]);
+    await run(root, ["set", "X", "v"]);
+    const key = (await loadRegistry(root)).variables.X?.vaultMapping.local?.api?.key as string;
+    await run(root, ["unwire", "X", "--vault", "local", "--consumers", "api"]);
+    expect((await loadRegistry(root)).variables.X?.vaultMapping.local).toBeUndefined();
+    expect((await readVault(root))[key]).toBeUndefined();
+  });
+
+  test("consumer remove drops the mapping and cleans the orphaned key", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X"]);
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api"]);
+    await run(root, ["set", "X", "v"]);
+    const key = (await loadRegistry(root)).variables.X?.vaultMapping.local?.api?.key as string;
+    await run(root, ["consumer", "remove", "api"]);
+    const after = await loadRegistry(root);
+    expect(after.consumers.api).toBeUndefined();
+    expect(after.variables.X?.vaultMapping.local).toBeUndefined();
+    expect((await readVault(root))[key]).toBeUndefined();
+  });
+
+  test("var update --no-secret flips secret off; no flag leaves it unchanged", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X", "--secret"]);
+    await run(root, ["var", "update", "X", "--no-secret"]);
+    expect((await loadRegistry(root)).variables.X?.secret).toBe(false);
+    await run(root, ["var", "update", "X", "--description", "d"]);
+    expect((await loadRegistry(root)).variables.X?.secret).toBe(false); // untouched
+  });
+
+  test("consumer add --secrets-as-local-overrides --no-gitignore ignores only the .local file", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, [
+      "consumer", "add", "svc",
+      "--strategy", "single", "--base-dir", "apps/svc", "--filename", ".env",
+      "--secrets-as-local-overrides", "--no-gitignore",
+    ]);
+    const gi = await Bun.file(join(root, ".gitignore")).text();
+    expect(gi).toContain("apps/svc/.env.local");
+    expect(gi.split("\n")).not.toContain("apps/svc/.env"); // base file not ignored under --no-gitignore
+  });
+
+  test("vault update --default lets the previous default be removed", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["vault", "update", "production", "--default"]);
+    expect((await loadRegistry(root)).defaults.vault).toBe("production");
+    await run(root, ["vault", "remove", "local"]); // no longer the default → allowed
+    expect((await loadRegistry(root)).vaults.local).toBeUndefined();
+  });
+
+  test("import shared-key conflict blocks without --force, splits with it", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X"]);
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api,web", "--shared"]);
+    await run(root, ["set", "X", "both"]);
+    await Bun.write(join(root, "api.env"), "X=api-own\n");
+    try {
+      await run(root, ["import", "api.env", "--consumer", "api", "--vault", "local"]);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as MenvError).code).toBe("BLOCKED");
+    }
+    const blocked = await loadRegistry(root);
+    expect(blocked.variables.X?.vaultMapping.local?.api?.key).toBe(blocked.variables.X?.vaultMapping.local?.web?.key);
+    await run(root, ["import", "api.env", "--consumer", "api", "--vault", "local", "--force"]);
+    const after = await loadRegistry(root);
+    const apiKey = after.variables.X?.vaultMapping.local?.api?.key as string;
+    const webKey = after.variables.X?.vaultMapping.local?.web?.key as string;
+    expect(apiKey).not.toBe(webKey);
+    const vault = await readVault(root);
+    expect(vault[apiKey]).toBe("api-own");
+    expect(vault[webKey]).toBe("both");
+  });
+});
