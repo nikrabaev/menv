@@ -1,3 +1,8 @@
+> **v2 REWRITE BRANCH.** `src/` is being rebuilt per
+> `docs/superpowers/specs/2026-06-12-menv-v2-design.md`. Everything below
+> describes v1 and is stale until the docs task in Plan 3. Trust the spec and
+> the plans in `docs/superpowers/plans/`, not this file's v1 sections.
+
 # menv — agent guide
 
 A keyboard-driven TUI **and** full CLI for managing environment variables across a
