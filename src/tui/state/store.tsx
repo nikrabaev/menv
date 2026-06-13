@@ -1,7 +1,7 @@
 // App state: one reducer + React context. All I/O lives in data.ts/mutations.ts
 // (async helpers that dispatch); components stay pure render + key handling.
 import type React from "react";
-import { createContext, useContext, useMemo, useReducer, useRef } from "react";
+import { createContext, useCallback, useContext, useMemo, useReducer, useRef } from "react";
 import type { Finding } from "../../cli/check.ts";
 import type { OpResult } from "../../core/ops/util.ts";
 import type { Registry } from "../../registry/types.ts";
@@ -175,6 +175,8 @@ export function reducer(state: AppState, action: Action): AppState {
 
 export interface Store {
   state: AppState;
+  // getState and dispatch are referentially STABLE across renders — effects
+  // can depend on them without re-running on every state change.
   getState: () => AppState;
   dispatch: React.Dispatch<Action>;
 }
@@ -191,7 +193,8 @@ export function StoreProvider({
   const [state, dispatch] = useReducer(reducer, registry, initialState);
   const ref = useRef(state);
   ref.current = state;
-  const store = useMemo<Store>(() => ({ state, getState: () => ref.current, dispatch }), [state]);
+  const getState = useCallback(() => ref.current, []);
+  const store = useMemo<Store>(() => ({ state, getState, dispatch }), [state, getState]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
 

@@ -130,6 +130,8 @@ Each manages an entity group; all sub-verbs accept the global flags.
 
 ## TUI
 
+![menv tui](assets/tui.png)
+
 `menv tui` opens a keyboard-first terminal UI over the same core (requires a
 TTY; needs ≥ 80×20). Three panes: **scopes** (vaults = generation contexts +
 consumers), the tabbed **main list** (`variables · globals · groups · compose ·

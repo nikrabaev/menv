@@ -37,22 +37,24 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
 
   // Startup load: vault snapshots, backups, and a background check — without
   // ever prompting for a passphrase (locked vaults degrade gracefully).
+  // Depends only on the store's STABLE handles, so it runs exactly once.
+  const { getState, dispatch } = store;
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const registry = store.getState().registry;
+      const registry = getState().registry;
       const vaults = await loadAllVaults(ctx, registry);
       if (!alive) return;
-      store.dispatch({ type: "vaultsReset", vaults });
-      store.dispatch({ type: "backups", backups: await loadBackupList(ctx) });
+      dispatch({ type: "vaultsReset", vaults });
+      dispatch({ type: "backups", backups: await loadBackupList(ctx) });
       const findings = await loadFindings(ctx, registry);
       if (!alive) return;
-      store.dispatch({ type: "findings", findings });
+      dispatch({ type: "findings", findings });
     })();
     return () => {
       alive = false;
     };
-  }, [ctx, store]);
+  }, [ctx, getState, dispatch]);
 
   const modalOpen = state.modals.length > 0;
   useInput((input, key) => handlePaneKey(store, ctx, narrow, input, key), {

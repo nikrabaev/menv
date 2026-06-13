@@ -36,9 +36,13 @@ export function GenerateModal({
   const scope = scopeRef.current;
   const [phase, setPhase] = useState<Phase>({ step: "loading" });
 
+  // The store object's identity changes on every dispatch — go through a ref
+  // so the preview computes exactly once for the scope captured at open time.
+  const storeRef = useRef(store);
+  storeRef.current = store;
   useEffect(() => {
     let alive = true;
-    computeGeneratePreview(store, ctx, scope)
+    computeGeneratePreview(storeRef.current, ctx, scope)
       .then((pending) => {
         if (alive) setPhase({ step: "preview", pending });
       })
@@ -48,7 +52,7 @@ export function GenerateModal({
     return () => {
       alive = false;
     };
-  }, [store, ctx, scope]);
+  }, [ctx, scope]);
 
   useInput(
     (_input, key) => {

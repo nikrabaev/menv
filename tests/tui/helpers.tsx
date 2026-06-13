@@ -1,7 +1,9 @@
 // Shared TUI test rig: a real tmp repo (registry + plaintext vault values) and
 // an App rendered through ink-testing-library with a fake 120×40 terminal.
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { render } from "ink-testing-library";
+import { saveRegistry } from "../../src/registry/persist.ts";
 import type { Registry } from "../../src/registry/types.ts";
 import { App } from "../../src/tui/app.tsx";
 import type { TuiContext } from "../../src/tui/state/data.ts";
@@ -81,8 +83,19 @@ export interface Rig {
   type: (s: string) => Promise<void>;
 }
 
-export async function renderApp(registry: Registry = tuiRegistry(), values?: Record<string, string>): Promise<Rig> {
-  const root = await tmpRepo(registry);
+export async function renderApp(
+  registry: Registry = tuiRegistry(),
+  values?: Record<string, string>,
+  opts: { root?: string } = {},
+): Promise<Rig> {
+  let root: string;
+  if (opts.root !== undefined) {
+    root = opts.root;
+    await mkdir(root, { recursive: true });
+    await saveRegistry(root, registry);
+  } else {
+    root = await tmpRepo(registry);
+  }
   await Bun.write(
     join(root, ".menv/vault.json"),
     JSON.stringify(values ?? { "k-db": "postgres://user:pw@host/db", "k-api": "https://api.example.com" }),
