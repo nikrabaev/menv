@@ -32,7 +32,7 @@ export function Sidebar({
           if (entry.kind === "header") {
             return (
               <Text key={`h:${entry.title}`} color={theme.muted} bold>
-                {"  "}
+                {"  \n"}
                 {entry.title}
               </Text>
             );
@@ -47,22 +47,18 @@ export function Sidebar({
           }
           if (entry.kind === "vault") {
             const rt = state.vaults[entry.name];
-            const badge =
-              rt === undefined
-                ? ""
-                : vaultBadgeText({
-                    encrypted: rt.encrypted,
-                    unlocked: rt.unlocked,
-                    isDefault: state.registry.defaults.vault === entry.name,
-                    isActive: state.activeVault === entry.name,
-                  });
+            const isDefault = state.registry.defaults.vault === entry.name;
             const isActive = state.activeVault === entry.name;
             const locked = rt !== undefined && !rt.unlocked;
+            // Lock state only: locked vaults carry "⚿"; unlocked ones show nothing.
+            const badge = rt === undefined ? "" : vaultBadgeText({ unlocked: rt.unlocked, isDefault });
             // Active vault = accent + bold name (the band/bar marks the cursor).
             const segments: Segment[] = [
               { text: truncate(entry.name, inner - 6), color: isActive ? theme.accent : undefined, bold: isActive },
-              { text: ` ${badge}`, color: locked ? theme.error : theme.muted, dim: !locked },
             ];
+            if (badge !== "") {
+              segments.push({ text: ` ${badge}`, color: locked ? theme.error : theme.muted, dim: !locked });
+            }
             return <ListRow key={`v:${entry.name}`} segments={segments} selected={isSelected} focused={focused} />;
           }
           const isFiltered = state.consumerFilter === entry.name;
@@ -75,7 +71,7 @@ export function Sidebar({
       />
       <Box marginTop={1}>
         <Text color={theme.muted} wrap="truncate">
-          {"  "}E enc · P plain · +/- un/locked · * default
+          {"  "}⚿ locked · * default
         </Text>
       </Box>
     </Pane>

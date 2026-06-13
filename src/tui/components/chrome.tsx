@@ -7,25 +7,18 @@ import type React from "react";
 import type { Finding } from "../../cli/check.ts";
 import type { KeyContext } from "../keys.ts";
 import { footerHints } from "../keys.ts";
-import { vaultBadgeText } from "../state/selectors.ts";
+import { LOCK_GLYPH } from "../state/selectors.ts";
 import type { AppState } from "../state/store.tsx";
 import { theme } from "../theme.ts";
 
 export function Header({ state, repoName }: { state: AppState; repoName: string }): React.ReactElement {
   const rt = state.vaults[state.activeVault];
-  const badge =
-    rt === undefined
-      ? ""
-      : vaultBadgeText({
-          encrypted: rt.encrypted,
-          unlocked: rt.unlocked,
-          isDefault: state.registry.defaults.vault === state.activeVault,
-          isActive: true,
-        });
-  const lockWord = rt === undefined ? "" : rt.unlocked ? "unlocked" : "locked";
-  // Pill color encodes vault health: green open, red locked, yellow plaintext.
-  const pillColor =
-    rt === undefined ? theme.muted : !rt.unlocked ? theme.error : rt.encrypted === false ? theme.warning : theme.success;
+  const isDefault = state.registry.defaults.vault === state.activeVault;
+  // Lock state only: "⚿ locked" when sealed, "unlocked" when open; "*" = default.
+  const lockWord = rt === undefined ? "" : rt.unlocked ? "unlocked" : `${LOCK_GLYPH} locked`;
+  const pillText = `${lockWord}${isDefault ? " *" : ""}`;
+  // Pill color encodes lock state: green open, red locked.
+  const pillColor = rt === undefined ? theme.muted : rt.unlocked ? theme.success : theme.error;
   return (
     <Box paddingX={1} gap={1}>
       <Text bold color={theme.accent}>
@@ -36,7 +29,7 @@ export function Header({ state, repoName }: { state: AppState; repoName: string 
         <Text>
           vault: <Text bold>{state.activeVault}</Text>{" "}
         </Text>
-        {rt !== undefined ? <Badge color={pillColor}>{`${badge} ${lockWord}`}</Badge> : null}
+        {rt !== undefined ? <Badge color={pillColor}>{pillText}</Badge> : null}
       </Box>
       <Text>
         consumer:{" "}

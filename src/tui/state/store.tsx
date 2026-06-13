@@ -11,7 +11,6 @@ export type MainTab = "variables" | "globals" | "groups" | "compose" | "backups"
 export const MAIN_TABS: MainTab[] = ["variables", "globals", "groups", "compose", "backups"];
 
 export interface VaultRuntime {
-  encrypted: boolean | undefined; // undefined: non-local provider
   unlocked: boolean;
   values: Record<string, string> | null; // key → value snapshot; null while locked
 }

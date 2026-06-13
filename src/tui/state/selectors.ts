@@ -128,23 +128,18 @@ export function wiringRows(
 // ── vault badges ─────────────────────────────────────────────────────────────
 
 export interface VaultBadge {
-  encrypted: boolean | undefined; // undefined for non-local vault types
   unlocked: boolean;
   isDefault: boolean;
-  isActive: boolean;
 }
 
-// "E+" encrypted+open, "E-" encrypted+locked, "P" plaintext (always open).
+// Lock state only — encryption is an implementation detail of how a vault
+// enforces auth, not something we surface. Locked vaults are marked "⚿"; an
+// unlocked vault carries no lock glyph. "*" flags the default vault.
+export const LOCK_GLYPH = "⚿";
 export function vaultBadgeText(b: VaultBadge): string {
-  const enc = b.encrypted === false ? "P" : "E";
-  const lock = enc === "P" ? "" : b.unlocked ? "+" : "-";
-  return `${enc}${lock}${b.isDefault ? " *" : ""}`;
-}
-
-export function isEncryptedConfig(vaultType: string, vaultConfig: unknown): boolean | undefined {
-  if (vaultType !== "menv-local") return undefined;
-  const enc = (vaultConfig as { encryption?: unknown }).encryption;
-  return enc !== false;
+  const lock = b.unlocked ? "" : LOCK_GLYPH;
+  if (b.isDefault) return lock === "" ? "*" : `${lock} *`;
+  return lock;
 }
 
 // ── misc ─────────────────────────────────────────────────────────────────────

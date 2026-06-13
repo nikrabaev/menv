@@ -10,7 +10,6 @@ import { listBackups } from "../../io/backup.ts";
 import { loadRegistry } from "../../registry/persist.ts";
 import type { Registry } from "../../registry/types.ts";
 import type { VaultSession } from "../../vault/provider.ts";
-import { isEncryptedConfig } from "./selectors.ts";
 import type { VaultRuntime } from "./store.tsx";
 
 export interface TuiContext {
@@ -41,14 +40,12 @@ function referencedKeys(registry: Registry, vault: string): string[] {
 // Open (without ever prompting), snapshot referenced values, close. Auth
 // failures are the normal "locked" outcome, not errors.
 export async function loadVaultRuntime(ctx: TuiContext, registry: Registry, vault: string): Promise<VaultRuntime> {
-  const def = registry.vaults[vault];
-  const encrypted = def === undefined ? undefined : isEncryptedConfig(def.vaultType, def.vaultConfig);
   let session: VaultSession;
   try {
     session = await openSession(ctx, registry, vault);
   } catch (e) {
     if (e instanceof MenvError && (e.code === "AUTH_MISSING" || e.code === "AUTH_FAILED")) {
-      return { encrypted, unlocked: false, values: null };
+      return { unlocked: false, values: null };
     }
     throw e;
   }
@@ -58,7 +55,7 @@ export async function loadVaultRuntime(ctx: TuiContext, registry: Registry, vaul
       const v = await session.get(key);
       if (v !== undefined) values[key] = v;
     }
-    return { encrypted, unlocked: true, values };
+    return { unlocked: true, values };
   } finally {
     await session.close();
   }

@@ -3,7 +3,6 @@ import type { VariableDef } from "../../src/registry/types.ts";
 import {
   cellGlyph,
   cellState,
-  isEncryptedConfig,
   maskValue,
   matches,
   truncate,
@@ -107,16 +106,12 @@ describe("wiringRows", () => {
 
 describe("badges & text utils", () => {
   test("vault badge text", () => {
-    expect(vaultBadgeText({ encrypted: true, unlocked: false, isDefault: false, isActive: false })).toBe("E-");
-    expect(vaultBadgeText({ encrypted: true, unlocked: true, isDefault: true, isActive: false })).toBe("E+ *");
-    expect(vaultBadgeText({ encrypted: false, unlocked: true, isDefault: false, isActive: true })).toBe("P");
-  });
-
-  test("isEncryptedConfig", () => {
-    expect(isEncryptedConfig("menv-local", { encryption: false })).toBe(false);
-    expect(isEncryptedConfig("menv-local", { encryption: true })).toBe(true);
-    expect(isEncryptedConfig("menv-local", {})).toBe(true); // missing → treat as encrypted
-    expect(isEncryptedConfig("aws-ssm", {})).toBeUndefined();
+    // Lock state only — encryption is no longer surfaced. Locked vaults are
+    // marked with ⚿; unlocked vaults carry no lock glyph. `*` flags the default.
+    expect(vaultBadgeText({ unlocked: false, isDefault: false })).toBe("⚿");
+    expect(vaultBadgeText({ unlocked: false, isDefault: true })).toBe("⚿ *");
+    expect(vaultBadgeText({ unlocked: true, isDefault: true })).toBe("*");
+    expect(vaultBadgeText({ unlocked: true, isDefault: false })).toBe("");
   });
 
   test("truncate and maskValue", () => {

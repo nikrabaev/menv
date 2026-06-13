@@ -244,7 +244,7 @@ export function HelpModal({ isTop, onClose }: { isTop: boolean; onClose: () => v
   }
   lines.push(
     <Text key="legend" color={theme.muted}>
-      legend: ● wired+value · ◌ missing value · ◆ shared key · # disabled · · unwired · S secret · E/P enc/plain · +/- un/locked · * default vault
+      legend: ● wired+value · ◌ missing value · ◆ shared key · # disabled · · unwired · S secret · ⚿ locked vault · * default vault
     </Text>,
   );
   const height = 16;

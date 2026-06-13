@@ -83,8 +83,7 @@ legibility without its scaling problem, and 2's detail-on-enter as the narrow fa
 | wiring: disabled (commented out) | `#` dim |
 | wiring: unwired | `·` dim |
 | secret variable | `S` magenta (values render `***`) |
-| vault encrypted / plaintext | `E` cyan / `P` yellow |
-| vault locked / unlocked | `-` red / `+` green (suffix on E/P) |
+| vault locked / unlocked | `⚿` red on locked vaults only; unlocked shows nothing (header pill: `⚿ locked` red / `unlocked` green) |
 | default vault | `*` after name |
 | active vault | `›` prefix + bold |
 | finding error / warning | `✖` red / `⚠` yellow |
