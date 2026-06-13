@@ -2,6 +2,9 @@ node_modules/
 .menv/values/
 .menv/backups/
 .superpowers/
+# installer-managed agent skills (restored from skills-lock.json)
+.agents/
+.claude/skills/
 # generated env files (menv owns these)
 .env
 .env.*
