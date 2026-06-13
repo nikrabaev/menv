@@ -105,9 +105,13 @@ export async function renderApp(
   patchStdoutSize(probe.stdout as unknown as NodeJS.WriteStream);
   probe.unmount(); // the probe rendered at the unpatched 100 cols; re-render
   const ui = render(<App ctx={ctx} registry={registry} />);
-  // Startup is done once the active vault's runtime landed in the header.
+  // Startup is done once the active vault's runtime landed in the header (the
+  // lock-state Badge uppercases its label: "… UNLOCKED" / "… LOCKED").
   if (testSize.columns >= 80 && testSize.rows >= 20) {
-    await waitFor(() => (ui.lastFrame() ?? "").includes("unlocked]") || (ui.lastFrame() ?? "").includes("LOCKED]"), "startup load");
+    await waitFor(() => {
+      const f = ui.lastFrame() ?? "";
+      return f.includes("UNLOCKED") || f.includes("LOCKED");
+    }, "startup load");
   } else {
     await tick(50);
   }

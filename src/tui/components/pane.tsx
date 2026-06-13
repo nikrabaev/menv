@@ -9,12 +9,16 @@ export function Pane({
   focused,
   width,
   flexGrow,
+  roomy,
   children,
 }: {
   title: string;
   focused: boolean;
   width?: number;
   flexGrow?: number;
+  // When the terminal is tall enough, a blank row under the title gives the
+  // content breathing room; it is dropped at the size floor so the list wins.
+  roomy?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
@@ -30,6 +34,7 @@ export function Pane({
       <Text bold={focused} color={focused ? theme.accent : theme.muted}>
         {title}
       </Text>
+      {roomy === true ? <Box height={1} /> : null}
       {children}
     </Box>
   );

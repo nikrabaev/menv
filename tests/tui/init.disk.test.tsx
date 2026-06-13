@@ -21,7 +21,7 @@ describe("init wizard", () => {
       vaults: Record<string, { vaultConfig: { encryption: boolean } }>;
     };
     expect(registry.vaults.local?.vaultConfig.encryption).toBe(true);
-    expect(ui.lastFrame()).toContain("[2] variables"); // main app took over
+    expect(ui.lastFrame()).toContain("[2] tabs"); // main app took over
     const gitignore = await Bun.file(join(root, ".gitignore")).text();
     expect(gitignore).toContain(".menv/auth.local.json");
     ui.unmount();

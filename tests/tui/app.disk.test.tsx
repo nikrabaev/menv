@@ -10,7 +10,8 @@ describe("menv tui (app)", () => {
     const rig = await renderApp();
     const frame = rig.frame();
     expect(frame).toContain("[1] scopes");
-    expect(frame).toContain("[2] variables");
+    expect(frame).toContain("[2] tabs");
+    expect(frame).toContain("▐ variables ▌"); // active tab renders as a filled pill
     expect(frame).toContain("[3] inspector");
     expect(frame).toContain("Database"); // group header
     expect(frame).toContain("DATABASE_URL");
@@ -180,13 +181,13 @@ describe("menv tui (app)", () => {
     await rig.type("q");
     expect(rig.frame()).toContain("Quit menv?");
     await rig.type("n");
-    expect(rig.frame()).toContain("[2] variables");
+    expect(rig.frame()).toContain("[2] tabs");
     rig.ui.unmount();
   });
 
   test("tab cycles focus across the three panes", async () => {
     const rig = await renderApp();
-    expect(rig.frame()).toContain("[2] variables"); // main focused initially
+    expect(rig.frame()).toContain("[2] tabs"); // main focused initially
     await rig.type("\t");
     // inspector now focused — its actions hint appears in the footer
     expect(rig.frame()).toContain("wiring rows");

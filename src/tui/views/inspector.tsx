@@ -4,6 +4,7 @@
 import { Box, Text } from "ink";
 import type React from "react";
 import { consumerPaths } from "../../generate/paths.ts";
+import { ListRow, type Segment } from "../components/listRow.tsx";
 import { Pane } from "../components/pane.tsx";
 import { selectedMainId, selectedSidebarEntry } from "../state/lists.ts";
 import { cellGlyph, maskValue, truncate, wiringRows } from "../state/selectors.ts";
@@ -116,17 +117,18 @@ export function VariableDetail({
               ? "locked"
               : maskValue(def.secret === true, row.cell.key !== undefined ? rt.values?.[row.cell.key] : undefined);
           const isSelected = showWiringCursor && i === wiringSelected;
+          const segments: Segment[] = [
+            { text: `${glyph.char} `, color: glyph.color },
+            { text: truncate(row.vault, 10).padEnd(11), bold: row.vault === state.activeVault },
+            { text: truncate(row.consumer, 10).padEnd(11) },
+            {
+              text: `${row.cell.disabled ? "# " : ""}${valueText === "locked" ? "locked (u)" : truncate(valueText, 18)}`,
+              color: row.cell.hasValue === false ? theme.error : theme.muted,
+            },
+          ];
+          if (row.cell.shared) segments.push({ text: " ⧉shared", color: theme.info });
           return (
-            <Text key={`${row.vault}/${row.consumer}`} inverse={isSelected} wrap="truncate">
-              <Text color={glyph.color}>{glyph.char} </Text>
-              <Text bold={row.vault === state.activeVault}>{truncate(row.vault, 10).padEnd(11)}</Text>
-              <Text>{truncate(row.consumer, 10).padEnd(11)}</Text>
-              <Text color={row.cell.hasValue === false ? theme.error : theme.muted}>
-                {row.cell.disabled ? "# " : ""}
-                {valueText === "locked" ? "locked (u)" : truncate(valueText, 18)}
-              </Text>
-              {row.cell.shared ? <Text color={theme.info}> ⧉shared</Text> : null}
-            </Text>
+            <ListRow key={`${row.vault}/${row.consumer}`} segments={segments} selected={isSelected} focused={showWiringCursor} />
           );
         })
       )}
@@ -220,9 +222,9 @@ export function inspectorBody(state: AppState): React.ReactElement {
   }
 }
 
-export function Inspector({ state, width }: { state: AppState; width: number }): React.ReactElement {
+export function Inspector({ state, width, roomy }: { state: AppState; width: number; roomy: boolean }): React.ReactElement {
   return (
-    <Pane title="[3] inspector" focused={state.focus === "inspector"} width={width}>
+    <Pane title="[3] inspector" focused={state.focus === "inspector"} width={width} roomy={roomy}>
       {inspectorBody(state)}
     </Pane>
   );

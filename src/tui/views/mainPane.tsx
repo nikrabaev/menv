@@ -2,6 +2,7 @@
 import { TextInput } from "@inkjs/ui";
 import { Box, Text } from "ink";
 import type React from "react";
+import { ListRow, type Segment } from "../components/listRow.tsx";
 import { Pane } from "../components/pane.tsx";
 import { ScrollList } from "../components/scrollList.tsx";
 import { backupsList, composeList, globalsList, groupsList, isSelectable, settleIndex, variablesList } from "../state/lists.ts";
@@ -10,15 +11,35 @@ import type { AppState, MainTab, Store } from "../state/store.tsx";
 import { MAIN_TABS } from "../state/store.tsx";
 import { theme } from "../theme.ts";
 
+// The tab strip. The active tab is a filled pill: half-block caps ▐…▌ wrap the
+// label on an accent fill. The caps are real glyphs, so under NO_COLOR (which
+// strips the fill and bold) the active tab stays bracketed and legible — same
+// trick as the list selection ▌ bar.
 function TabBar({ active }: { active: MainTab }): React.ReactElement {
   return (
-    <Box gap={1}>
-      {MAIN_TABS.map((tab) => (
-        <Text key={tab} bold={tab === active} color={tab === active ? theme.accent : theme.muted} underline={tab === active}>
-          {tab}
-        </Text>
-      ))}
-    </Box>
+    <Text>
+      {MAIN_TABS.map((tab, i) => {
+        const sep = i > 0 ? "  " : "";
+        if (tab === active) {
+          return (
+            <Text key={tab}>
+              {sep}
+              <Text color={theme.accent}>▐</Text>
+              <Text backgroundColor={theme.accent} color="black" bold>
+                {` ${tab} `}
+              </Text>
+              <Text color={theme.accent}>▌</Text>
+            </Text>
+          );
+        }
+        return (
+          <Text key={tab} color={theme.muted}>
+            {sep}
+            {tab}
+          </Text>
+        );
+      })}
+    </Text>
   );
 }
 
@@ -77,24 +98,16 @@ function VariablesTab({ state, height }: { state: AppState; height: number }): R
             </Text>
           );
         }
-        const chips = consumers.map((c) => {
-          const cell = cellState(row.def, state.activeVault, c, values);
-          const glyph = cellGlyph(cell);
-          return (
-            <Text key={c}>
-              {" "}
-              <Text color={theme.muted}>{truncate(c, 10)}</Text>
-              <Text color={glyph.color}>{glyph.char}</Text>
-            </Text>
-          );
-        });
-        return (
-          <Text key={row.name} inverse={isSelected && focused} wrap="truncate">
-            <Text bold={isSelected}>{truncate(row.name, 28).padEnd(Math.min(28, 30))}</Text>
-            <Text color={theme.secret}>{row.def.secret === true ? " S" : "  "}</Text>
-            {chips}
-          </Text>
-        );
+        const segments: Segment[] = [
+          { text: truncate(row.name, 28).padEnd(28), bold: isSelected },
+          { text: row.def.secret === true ? " S" : "  ", color: theme.secret },
+        ];
+        for (const c of consumers) {
+          const glyph = cellGlyph(cellState(row.def, state.activeVault, c, values));
+          segments.push({ text: ` ${truncate(c, 10)}`, color: theme.muted, dim: true });
+          segments.push({ text: glyph.char, color: glyph.color });
+        }
+        return <ListRow key={row.name} segments={segments} selected={isSelected} focused={focused} />;
       }}
     />
   );
@@ -116,13 +129,16 @@ function GlobalsTab({ state, height }: { state: AppState; height: number }): Rea
         const v = def?.values[state.activeVault];
         const sourceText =
           v === undefined ? "— (not for this vault)" : v.source === "runtime" ? "runtime" : `static = ${truncate(v.value, 24)}`;
-        return (
-          <Text key={name} inverse={isSelected && focused} wrap="truncate">
-            <Text bold={isSelected}>{truncate(name, 28).padEnd(30)}</Text>
-            <Text color={v === undefined ? theme.muted : v.source === "runtime" ? theme.info : theme.success}>{sourceText}</Text>
-            {def?.description !== undefined ? <Text color={theme.muted}> · {truncate(def.description, 30)}</Text> : null}
-          </Text>
-        );
+        const segments: Segment[] = [
+          { text: truncate(name, 28).padEnd(30), bold: isSelected },
+          {
+            text: sourceText,
+            color: v === undefined ? theme.muted : v.source === "runtime" ? theme.info : theme.success,
+            dim: v === undefined,
+          },
+        ];
+        if (def?.description !== undefined) segments.push({ text: ` · ${truncate(def.description, 30)}`, color: theme.muted, dim: true });
+        return <ListRow key={name} segments={segments} selected={isSelected} focused={focused} />;
       }}
     />
   );
@@ -139,13 +155,12 @@ function GroupsTab({ state, height }: { state: AppState; height: number }): Reac
       height={height}
       renderItem={(key, _i, isSelected) => {
         const members = Object.values(state.registry.variables).filter((v) => v.groupKey === key).length;
-        return (
-          <Text key={key} inverse={isSelected && focused} wrap="truncate">
-            <Text bold={isSelected}>{truncate(key, 20).padEnd(22)}</Text>
-            <Text>{truncate(state.registry.groups[key]?.title ?? "", 30).padEnd(32)}</Text>
-            <Text color={theme.muted}>{members} variable(s)</Text>
-          </Text>
-        );
+        const segments: Segment[] = [
+          { text: truncate(key, 20).padEnd(22), bold: isSelected },
+          { text: truncate(state.registry.groups[key]?.title ?? "", 30).padEnd(32) },
+          { text: `${members} variable(s)`, color: theme.muted, dim: true },
+        ];
+        return <ListRow key={key} segments={segments} selected={isSelected} focused={focused} />;
       }}
     />
   );
@@ -172,18 +187,16 @@ function ComposeTab({ state, height }: { state: AppState; height: number }): Rea
         renderItem={(file, _i, isSelected) => {
           const related = findings.filter((f) => f.message.startsWith(`${file}:`) || f.message.includes(` ${file}`));
           const worst = related.find((f) => f.severity === "error") ?? related[0];
-          return (
-            <Text key={file} inverse={isSelected && focused} wrap="truncate">
-              <Text bold={isSelected}>{truncate(file, 40).padEnd(42)}</Text>
-              {worst !== undefined ? (
-                <Text color={worst.severity === "error" ? theme.error : theme.warning}>
-                  {worst.severity === "error" ? "✖" : "⚠"} {worst.code}
-                </Text>
-              ) : (
-                <Text color={theme.muted}>bound</Text>
-              )}
-            </Text>
-          );
+          const segments: Segment[] = [{ text: truncate(file, 40).padEnd(42), bold: isSelected }];
+          if (worst !== undefined) {
+            segments.push({
+              text: `${worst.severity === "error" ? "✖" : "⚠"} ${worst.code}`,
+              color: worst.severity === "error" ? theme.error : theme.warning,
+            });
+          } else {
+            segments.push({ text: "bound", color: theme.muted, dim: true });
+          }
+          return <ListRow key={file} segments={segments} selected={isSelected} focused={focused} />;
         }}
       />
       <Text color={theme.muted} wrap="truncate">
@@ -203,16 +216,31 @@ function BackupsTab({ state, height }: { state: AppState; height: number }): Rea
       selected={state.mainIndex.backups}
       height={height}
       renderItem={(key, _i, isSelected) => (
-        <Text key={key} inverse={isSelected && focused}>
-          <Text bold={isSelected}>{key}</Text>
-          <Text color={theme.muted}> .menv/backups/{key}/</Text>
-        </Text>
+        <ListRow
+          key={key}
+          segments={[
+            { text: key, bold: isSelected },
+            { text: ` .menv/backups/${key}/`, color: theme.muted, dim: true },
+          ]}
+          selected={isSelected}
+          focused={focused}
+        />
       )}
     />
   );
 }
 
-export function MainPane({ store, height, narrow }: { store: Store; height: number; narrow: boolean }): React.ReactElement {
+export function MainPane({
+  store,
+  height,
+  narrow,
+  roomy,
+}: {
+  store: Store;
+  height: number;
+  narrow: boolean;
+  roomy: boolean;
+}): React.ReactElement {
   const state = store.state;
   const focused = state.focus === "main";
   const counts: Record<MainTab, [number, number]> = {
@@ -239,7 +267,7 @@ export function MainPane({ store, height, narrow }: { store: Store; height: numb
     }
   })();
   return (
-    <Pane title={`[2] ${state.tab}${narrow ? " (⏎ for detail)" : ""}`} focused={focused} flexGrow={1}>
+    <Pane title={`[2] tabs${narrow ? " (⏎ for detail)" : ""}`} focused={focused} flexGrow={1} roomy={roomy}>
       <TabBar active={state.tab} />
       <FilterLine store={store} count={count} total={total} />
       {body}

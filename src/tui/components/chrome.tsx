@@ -1,7 +1,7 @@
 // Header, status line, and footer hint bar — the persistent chrome around the
 // panes. All three are one row each.
 
-import { Spinner } from "@inkjs/ui";
+import { Badge, Spinner, StatusMessage } from "@inkjs/ui";
 import { Box, Text } from "ink";
 import type React from "react";
 import type { Finding } from "../../cli/check.ts";
@@ -22,21 +22,27 @@ export function Header({ state, repoName }: { state: AppState; repoName: string 
           isDefault: state.registry.defaults.vault === state.activeVault,
           isActive: true,
         });
-  const lockWord = rt === undefined ? "" : rt.unlocked ? "unlocked" : "LOCKED";
+  const lockWord = rt === undefined ? "" : rt.unlocked ? "unlocked" : "locked";
+  // Pill color encodes vault health: green open, red locked, yellow plaintext.
+  const pillColor =
+    rt === undefined ? theme.muted : !rt.unlocked ? theme.error : rt.encrypted === false ? theme.warning : theme.success;
   return (
     <Box paddingX={1} gap={1}>
       <Text bold color={theme.accent}>
         menv
       </Text>
       <Text color={theme.muted}>{repoName}</Text>
-      <Text>
-        vault: <Text bold>{state.activeVault}</Text>{" "}
-        <Text color={rt?.unlocked === false ? theme.error : theme.muted}>
-          [{badge} {lockWord}]
+      <Box>
+        <Text>
+          vault: <Text bold>{state.activeVault}</Text>{" "}
         </Text>
-      </Text>
+        {rt !== undefined ? <Badge color={pillColor}>{`${badge} ${lockWord}`}</Badge> : null}
+      </Box>
       <Text>
-        consumer: <Text bold>{state.consumerFilter ?? "all"}</Text>
+        consumer:{" "}
+        <Text bold color={state.consumerFilter !== null ? theme.accent : undefined}>
+          {state.consumerFilter ?? "all"}
+        </Text>
       </Text>
     </Box>
   );
@@ -57,17 +63,15 @@ export function findingsSummary(findings: Finding[] | null): { text: string; col
 export function StatusBar({ state }: { state: AppState }): React.ReactElement {
   const summary = findingsSummary(state.findings);
   const tone = state.status?.tone;
-  const color = tone === "error" ? theme.error : tone === "success" ? theme.success : theme.muted;
+  const variant = tone === "error" ? "error" : tone === "success" ? "success" : "info";
   return (
     <Box paddingX={1} gap={2}>
       <Box flexGrow={1}>
         {state.busy !== null ? (
           <Spinner label={state.busy} />
-        ) : (
-          <Text color={color} wrap="truncate">
-            {state.status?.text ?? ""}
-          </Text>
-        )}
+        ) : state.status !== null ? (
+          <StatusMessage variant={variant}>{state.status.text}</StatusMessage>
+        ) : null}
       </Box>
       <Text color={summary.color} wrap="truncate">
         {summary.text}

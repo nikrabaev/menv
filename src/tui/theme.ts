@@ -9,6 +9,10 @@ export const theme = {
   info: "blue",
   secret: "magenta",
   muted: "gray",
+  // Selection: a quiet bright-black band fills the full row width (Ink paints it
+  // edge-to-edge); the leading ▌ bar + bold carry selection under NO_COLOR.
+  selectionBand: "blackBright",
+  selectionBar: "cyan", // = accent; the bar when the pane is focused
 } as const;
 
 export type ThemeColor = (typeof theme)[keyof typeof theme];

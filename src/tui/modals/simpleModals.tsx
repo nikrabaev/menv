@@ -1,6 +1,6 @@
 // The small modals: confirm, quit, unlock, reveal, consumer pick, findings,
 // help, and the narrow-terminal detail view.
-import { PasswordInput, Spinner } from "@inkjs/ui";
+import { PasswordInput, Select, Spinner, StatusMessage } from "@inkjs/ui";
 import { Box, Text, useApp, useInput } from "ink";
 import type React from "react";
 import { useState } from "react";
@@ -111,7 +111,7 @@ export function UnlockModal({
         )}
       </Box>
       <Text color={theme.muted}>kept in memory for this session only — never written to disk</Text>
-      {error !== null ? <Text color={theme.error}>✖ {error}</Text> : null}
+      {error !== null ? <StatusMessage variant="error">{error}</StatusMessage> : null}
     </ModalFrame>
   );
 }
@@ -161,28 +161,25 @@ export function ConsumerPickModal({
   isTop: boolean;
   onClose: () => void;
 }): React.ReactElement {
-  const [index, setIndex] = useState(0);
+  // esc is ours; ↑↓/⏎ belong to Select (disabled unless this modal is on top so
+  // it never steals keys from a modal stacked above it).
   useInput(
-    (input, key) => {
+    (_input, key) => {
       if (key.escape) onClose();
-      else if (key.upArrow || input === "k") setIndex((i) => Math.max(0, i - 1));
-      else if (key.downArrow || input === "j") setIndex((i) => Math.min(consumers.length - 1, i + 1));
-      else if (key.return) {
-        const chosen = consumers[index];
-        onClose();
-        if (chosen !== undefined) onPick(chosen);
-      }
     },
     { isActive: isTop },
   );
   return (
     <ModalFrame title={title} hints="↑↓ choose · ⏎ pick · esc cancel">
-      {consumers.map((c, i) => (
-        <Text key={c} inverse={i === index}>
-          {i === index ? "› " : "  "}
-          {c}
-        </Text>
-      ))}
+      <Select
+        isDisabled={!isTop}
+        visibleOptionCount={Math.min(consumers.length, 8)}
+        options={consumers.map((c) => ({ label: c, value: c }))}
+        onChange={(value) => {
+          onClose();
+          onPick(value);
+        }}
+      />
     </ModalFrame>
   );
 }
