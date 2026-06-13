@@ -13,9 +13,6 @@ The mental model: edit *structure* in the registry and *values* in a vault via t
 CLI. Never hand-edit a generated `.env` — it is an output. menv flags any drift
 with `menv check`.
 
-> The interactive TUI from v1 is not part of v2.0; it returns in a later release.
-> Everything below is the CLI.
-
 ## Quick start
 
 ```bash
@@ -130,7 +127,7 @@ Each manages an entity group; all sub-verbs accept the global flags.
 
 ## TUI
 
-![menv tui](assets/tui.png)
+![menv tui](assets/tui.gif)
 
 `menv tui` opens a keyboard-first terminal UI over the same core (requires a
 TTY; needs ≥ 80×20). Three panes: **scopes** (vaults = generation contexts +

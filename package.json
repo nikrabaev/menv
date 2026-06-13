@@ -10,7 +10,8 @@
     "build": "bun build --compile --outfile menv src/index.ts",
     "test": "bun test",
     "lint": "biome check",
-    "lint:fix": "biome check --write"
+    "lint:fix": "biome check --write",
+    "demo:gif": "bash scripts/capture-tui-demo.sh"
   },
   "dependencies": {
     "@commander-js/extra-typings": "^15",
