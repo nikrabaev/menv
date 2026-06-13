@@ -87,6 +87,7 @@ every command:
 | `init [--encrypt \| --no-encrypt]` | create `menv.json` and the local vault config (no scanning) |
 | `generate [--vault <v>] [--consumer <c>]` | regenerate `.env` files (and compose) — the only writer of outputs |
 | `check` | validate interpolation, vault keys, compose markers, staleness, git tracking |
+| `tui` | interactive terminal UI over the whole feature set (see [TUI](#tui)) |
 | `completions <zsh\|bash>` | print a shell completion script |
 
 ### Management
@@ -126,6 +127,31 @@ Each manages an entity group; all sub-verbs accept the global flags.
 | --- | --- |
 | `backup` | snapshot `menv.json`, the vault files, and generated files into `.menv/backups` |
 | `restore [key]` | restore a backup (omit `key` to pick one on a TTY; `--force` skips the confirmation) |
+
+## TUI
+
+`menv tui` opens a keyboard-first terminal UI over the same core (requires a
+TTY; needs ≥ 80×20). Three panes: **scopes** (vaults = generation contexts +
+consumers), the tabbed **main list** (`variables · globals · groups · compose ·
+backups`), and the **inspector** (full wiring matrix of the selection; below 110
+columns it becomes a detail view on `⏎`). An uninitialized repo opens the init
+wizard instead.
+
+- Navigate: `tab`/`1`–`3` panes · `[` `]` tabs · `↑↓`/`jk` · `/` filter · `?`
+  full key reference · `q` quit.
+- Scope: `⏎` on a vault makes it active (the environment everything reads
+  from); `⏎` on a consumer narrows the variable list.
+- Act (variables tab): `n` define · `e` edit · `w` wire · `u` unwire · `s` set
+  value · `r` reveal · `d` enable/disable · `x` remove · `g` generate · `c`
+  check · `i` import.
+- **Every mutation shows its plan first** — registry ops, vault ops (keys only,
+  never values), file ops, warnings, blockers — and applies on `⏎`; blockers
+  require arming force (`f`) explicitly. This is `--dry-run`/`--force` made
+  visual.
+- Secrets render `***` everywhere; reveal is per-value behind a confirm. A
+  locked (encrypted) vault prompts for its passphrase in a masked modal — the
+  passphrase stays in memory for the session, never on disk. `--vault-auth
+  <vault>=<secret>` pre-unlocks.
 
 ## Values & secrets
 

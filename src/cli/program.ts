@@ -391,6 +391,15 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     });
 
   program
+    .command("tui")
+    .description("interactive terminal UI (requires a TTY; --vault-auth pre-unlocks vaults)")
+    .action(async () => {
+      // Lazy import: React/Ink never load for plain CLI invocations.
+      const { runTui } = await import("../tui/index.tsx");
+      await runTui(root, { vaultAuth: flags().vaultAuth, env: process.env });
+    });
+
+  program
     .command("backup")
     .description("snapshot menv.json, the vault files, and the generated files into .menv/backups")
     .action(async () => {

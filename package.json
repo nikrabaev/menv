@@ -14,11 +14,16 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "^15",
+    "@inkjs/ui": "^2.0.0",
     "age-encryption": "^0.3.0",
-    "commander": "^15"
+    "commander": "^15",
+    "ink": "^7.0.5",
+    "react": "^19.2.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
-    "@types/bun": "^1.3.14"
+    "@types/bun": "^1.3.14",
+    "@types/react": "^19.2.17",
+    "ink-testing-library": "^4.0.0"
   }
 }

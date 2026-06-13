@@ -12,7 +12,7 @@ import type { Io } from "./output.ts";
 import { emitResult } from "./output.ts";
 import type { MutationFlags } from "./run.ts";
 
-interface Finding {
+export interface Finding {
   severity: "error" | "warning";
   code: string;
   message: string;
@@ -33,10 +33,14 @@ async function gitTracked(root: string): Promise<Set<string> | null> {
   }
 }
 
-// Read-only health gate. Collects every finding, then exits 1 if any is an
-// error (the entry point maps the thrown VALIDATION → exit 1, carrying the full
-// findings list in details). Warnings never fail the gate.
-export async function runCheck(root: string, registry: Registry, flags: MutationFlags, io: Io): Promise<void> {
+export interface CheckAuth {
+  vaultAuth: Record<string, string>;
+  env: Record<string, string | undefined>;
+}
+
+// Read-only findings collection — shared by the CLI gate and the TUI. Collects
+// every finding; never throws on auth failures (→ UNVERIFIED_VAULT).
+export async function collectFindings(root: string, registry: Registry, auth: CheckAuth): Promise<Finding[]> {
   const findings: Finding[] = [];
   const sessions = new Map<string, VaultSession>();
   try {
@@ -44,8 +48,8 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
     // opened, even if a later vault throws a non-auth error.
     for (const [name, def] of Object.entries(registry.vaults)) {
       try {
-        const auth = await resolveVaultAuthOptional(name, { root, flag: flags.vaultAuth[name], env: flags.env });
-        sessions.set(name, await getProvider(def.vaultType).init(def.vaultConfig, { root, auth }));
+        const resolved = await resolveVaultAuthOptional(name, { root, flag: auth.vaultAuth[name], env: auth.env });
+        sessions.set(name, await getProvider(def.vaultType).init(def.vaultConfig, { root, auth: resolved }));
       } catch (e) {
         if (e instanceof MenvError && (e.code === "AUTH_MISSING" || e.code === "AUTH_FAILED")) {
           findings.push(warn("UNVERIFIED_VAULT", `vault "${name}" could not be opened — checks against it skipped`));
@@ -191,7 +195,14 @@ export async function runCheck(root: string, registry: Registry, flags: Mutation
   } finally {
     await Promise.allSettled([...sessions.values()].map((s) => s.close()));
   }
+  return findings;
+}
 
+// The CLI gate: exits 1 if any finding is an error (the entry point maps the
+// thrown VALIDATION → exit 1, carrying the full findings list in details).
+// Warnings never fail the gate.
+export async function runCheck(root: string, registry: Registry, flags: MutationFlags, io: Io): Promise<void> {
+  const findings = await collectFindings(root, registry, flags);
   const errors = findings.filter((f) => f.severity === "error");
   const pretty =
     findings.length === 0

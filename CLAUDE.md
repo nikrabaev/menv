@@ -27,12 +27,13 @@ bun run build          # compile a standalone ./menv binary
 Full CLI grammar and concepts live in `README.md`. The command set (`init`;
 `vault`/`consumer`/`group`/`global`/`compose` management; `var
 define/update/remove/list/show`; `wire`/`unwire`/`enable`/`disable`; `set`/`get`;
-`import`; `generate`; `check`; `backup`/`restore`; `completions`) is built in
-`src/cli/program.ts`.
+`import`; `generate`; `check`; `tui`; `backup`/`restore`; `completions`) is built
+in `src/cli/program.ts`.
 
 ## Structure
 
 - `src/cli/` — commander v15 program (`program.ts`), entry (`index.ts`), command handlers, output/prompt/run plumbing
+- `src/tui/` — Ink/React TUI (`menv tui`): `state/` (store, loaders, mutation bridge, pure selectors), `views/`, `modals/`, `input.ts` key router, `keys.ts` keymap (footer + help derive from it). Lazy-imported from `program.ts` so plain CLI runs never load React
 - `src/core/` — pure domain: `errors.ts`, `interpolate.ts`, `refs.ts`, `plan.ts`, and the op planners in `src/core/ops/` (no I/O)
 - `src/registry/` — `menv.json` types, validation, load/save
 - `src/vault/` — `VaultProvider` contract, provider registry, `providers/local.ts` (age encryption), auth resolution
