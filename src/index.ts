@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { emitError, peekJsonMode, processIo } from "./cli/output.ts";
 import { buildProgram } from "./cli/program.ts";
 import { MenvError } from "./core/errors.ts";
