@@ -6,6 +6,17 @@ import type { Registry } from "../../src/registry/types.ts";
 import { getProvider } from "../../src/vault/registry.ts";
 import { ENTER, renderApp, tick, tuiRegistry } from "./helpers.tsx";
 
+// Decryption now runs off-thread (a Worker), so a fixed tick() no longer lines
+// up with a ~1s scrypt — poll for the outcome instead. (Before, the synchronous
+// KDF froze the event loop, so a short tick "happened" to wait for it.)
+async function waitForText(rig: { frame: () => string }, text: string, timeoutMs = 8000): Promise<void> {
+  const start = Date.now();
+  while (!rig.frame().includes(text)) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for "${text}":\n${rig.frame()}`);
+    await tick(50);
+  }
+}
+
 async function encryptedFixture(): Promise<Registry> {
   const registry = tuiRegistry();
   registry.vaults.local = {
@@ -41,12 +52,11 @@ describe("locked vaults", () => {
     expect(rig.frame()).toContain('Unlock vault "local"');
     await rig.type("wrong-pass");
     await rig.type(ENTER);
-    await tick(300);
-    expect(rig.frame()).toContain("could not decrypt");
+    await waitForText(rig, "could not decrypt");
 
     await rig.type("hunter2");
     await rig.type(ENTER);
-    await tick(400);
+    await waitForText(rig, "unlocked");
     const frame = rig.frame();
     expect(frame).toContain("unlocked");
     expect(frame).not.toContain('Unlock vault "local"');
@@ -67,8 +77,7 @@ describe("locked vaults", () => {
     expect(rig.frame()).toContain('Unlock vault "local"');
     await rig.type("pw");
     await rig.type(ENTER);
-    await tick(400);
-    expect(rig.frame()).toContain("would write");
+    await waitForText(rig, "would write");
     rig.ui.unmount();
   }, 30000);
 });

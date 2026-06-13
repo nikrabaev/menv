@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { MenvError } from "../../core/errors.ts";
 import { writeFileAtomic } from "../../io/write.ts";
-import { decryptWithPassphrase, encryptWithPassphrase } from "../age.ts";
+import { decryptWithPassphrase, encryptWithPassphrase } from "../cryptoPool.ts";
 import type { VaultInitContext, VaultProvider, VaultSession } from "../provider.ts";
 
 interface LocalVaultConfig {

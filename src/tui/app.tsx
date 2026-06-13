@@ -74,7 +74,7 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
   const paneHeight = rows - 5; // header + status + footer + main pane border
   const listHeight = paneHeight - 4;
   const sidebarWidth = 36;
-  const inspectorWidth = columns >= 130 ? 44 : 36;
+  const inspectorWidth = columns >= 130 ? 66 : 36;
   const roomy = rows >= 24; // breathing room above the floor; dropped at 80×20
   const entry = selectedSidebarEntry(state);
 

@@ -22,25 +22,38 @@ export function ListRow({
   selected: boolean;
   focused: boolean;
 }): React.ReactElement {
-  const active = selected && focused;
+  // Fast path for the common (unselected) row: a single truncating Text — no
+  // band, so no need for the full-width Box wrappers. Nested Text are inline
+  // spans (one Yoga node), where the selected path below costs ~4 nodes/row.
+  // Lists re-render every keystroke, so keeping the 99% case to one node is
+  // what keeps scrolling smooth at scale.
+  if (!selected) {
+    return (
+      <Text wrap="truncate">
+        <Text color={theme.muted}>{"  "}</Text>
+        {segments.map((s, i) => (
+          <Text key={`${i}:${s.text}`} color={s.color} bold={s.bold === true} dimColor={s.dim === true}>
+            {s.text}
+          </Text>
+        ))}
+      </Text>
+    );
+  }
+  // Selected row: the gray band fills the row edge-to-edge (the outer Box bg +
+  // the flexGrow inner Box stretch it to full width). Only 1–2 rows hit this.
   return (
-    <Box backgroundColor={selected ? theme.selectionBand : undefined}>
-      <Text color={active ? theme.selectionBar : theme.muted} bold={active}>
-        {selected ? "▌ " : "  "}
+    <Box backgroundColor={theme.selectionBand}>
+      <Text color={focused ? theme.selectionBar : theme.muted} bold={focused}>
+        {"▌ "}
       </Text>
       <Box flexGrow={1} flexShrink={1} overflow="hidden">
         <Text wrap="truncate">
           {segments.map((s, i) => {
             // Muted/dim spans wash out on the gray band — promote them to the
-            // default (brighter) fg while a row is selected; keep semantic colors.
-            const wash = selected && (s.dim === true || s.color === theme.muted);
+            // default (brighter) fg on the selected row; keep semantic colors.
+            const wash = s.dim === true || s.color === theme.muted;
             return (
-              <Text
-                key={`${i}:${s.text}`}
-                color={wash ? undefined : s.color}
-                bold={s.bold === true || active}
-                dimColor={s.dim === true && !selected}
-              >
+              <Text key={`${i}:${s.text}`} color={wash ? undefined : s.color} bold={s.bold === true || focused}>
                 {s.text}
               </Text>
             );
