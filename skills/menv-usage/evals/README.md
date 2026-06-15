@@ -6,76 +6,108 @@ developer would type in a menv-managed repo. Runs compare **with-skill** vs a
 
 ## Fixture
 
-A throwaway monorepo, `menv init`'d with the **password** backend (so it decrypts
-headlessly via `MENV_PASSPHRASE`, touching no real keychain/1Password):
+A throwaway monorepo, `menv init --no-encrypt`'d so every vault is **plaintext and
+git-ignored** — the suite runs fully headless with no passphrase or keychain. (For
+an encrypted vault instead, auth resolves from `MENV_VAULT_AUTH_<VAULT>` or
+`.menv/auth.local.json`; off a TTY a missing key is a hard error.)
 
-- `apps/web` (single mode): `PORT`, `NODE_ENV`, `NEXT_PUBLIC_API_URL`
-- `apps/worker` (single mode): `REDIS_URL`, `LOG_LEVEL`, `QUEUE_CONCURRENCY`
-- `apps/api` (perenv mode, dev+prod): `PORT`, `DATABASE_URL`
-- `DATABASE_URL` is wired to `api` only — not `web` (eval 2/3 depend on this).
+**Vaults** (each `menv-local`, plaintext):
+
+- `local` — the default vault (`defaults.vault`), the everyday dev values.
+- `prod` — a second vault (`vault add prod --type menv-local --config
+  filename=.menv/prod.json,encryption=false`) — the prod generation context for
+  eval 3.
+- `localdev` — a per-machine override vault (same shape) — eval 5's `.env.local`
+  source.
+
+**Consumers**:
+
+- `web` — `per-vault`, base `apps/web`, filenames `local=.env,localdev=.env.local`,
+  `--example`: `NEXT_PUBLIC_API_URL`, `PORT`, `NODE_ENV`.
+- `worker` — `single`, `apps/worker/.env`: `REDIS_URL`, `LOG_LEVEL`,
+  `QUEUE_CONCURRENCY`.
+- `api` — `per-vault`, base `apps/api`, filenames `local=.env,prod=.env.prod`:
+  `PORT`, `DATABASE_URL`.
+
+`DATABASE_URL` is wired to `api` only — not `web` (eval 2/3 depend on this), with a
+value in both the `local` and `prod` vaults. `NEXT_PUBLIC_API_URL` is wired to
+`web` in the `local` vault (its base value); eval 5 adds an override in `localdev`.
 
 Each run gets its own copy of the fixture so runs don't interfere. To let an agent
-invoke menv non-interactively, the fixture carries a `./bin/menv` wrapper that
-exports the vault passphrase and calls menv.
+invoke menv non-interactively, expose `menv` on PATH (or `bun run menv` from the
+repo); no auth wrapper is needed since the vaults are plaintext.
 
 ## Evals
 
 | id | task | what it probes |
 |----|------|----------------|
 | 1 | add a Stripe secret to web+worker | secret handling — **stdin vs leaking it as a CLI arg** |
-| 2 | web's `.env` is missing `DATABASE_URL` | wiring an existing var, not hand-appending a guess |
-| 3 | rotate the prod DB password | `set --env prod` + regenerate; dev value preserved |
-| 4 | a value was hand-added to a generated `.env` | drift: import to the vault so it survives `generate` |
-| 5 | local-only override of a var | `--local` → `.env.local`, kept out of `.env.example` |
+| 2 | web's `.env` is missing `DATABASE_URL` | wiring an existing var to a new consumer **sharing the value** (`--key`), not a fresh empty key or a hand-appended guess |
+| 3 | rotate the prod DB password | prod is a **separate vault**: `set --vault prod` + `generate --vault prod`; dev value preserved |
+| 4 | a value was hand-added to a generated `.env` | drift: ingest into the vault so it survives `generate` |
+| 5 | local-only override of a var | a git-ignored per-machine **vault** → `.env.local`, kept out of `.env.example` |
 | 6 | add a multi-line PEM key | awareness of the single-line limitation; no corruption |
 
 `evals.json` holds the prompts and the objective `expectations` per eval. Evals
 4–6 are graded with a **durability** check: re-run `menv generate` and confirm the
-change survives — i.e. it really lives in the vault, not just a disposable `.env`.
+change survives — i.e. it really lives in a vault, not just a disposable `.env`.
 
 ## Results
 
-Benchmarked on this session's (capable) model. **With skill** = the current
-slimmed `SKILL.md`; **baseline** = no skill. Per-eval assertion scores:
+Grading each run against its `expectations`:
 
-| # | task | with skill | baseline |
-|---|------|-----------|----------|
-| 1 | add a Stripe secret | 5/5 | 4/5 — leaked the value as a CLI arg |
-| 2 | wire a missing var | 5/5 | 5/5 |
-| 3 | rotate prod value | 4/4 | 4/4 |
-| 4 | drift reconcile | 4/4 | 4/4 |
-| 5 | local override | 5/5 | 5/5 |
-| 6 | multi-line key | 4/4 | 4/4 |
-| | **total** | **27/27 (100%)** | **26/27 (96%)** |
+| # | task | with skill | baseline (no skill) |
+|---|------|:----------:|:-------------------:|
+| 1 | add a Stripe secret to web+worker | 5/5 | 4/5 |
+| 2 | wire the missing `DATABASE_URL` | 5/5 | 5/5 |
+| 3 | rotate the prod DB password | 4/4 | 4/4 |
+| 4 | reconcile a hand-added `.env` value | 4/4 | 4/4 |
+| 5 | machine-local override | 5/5 | 5/5 |
+| 6 | multi-line PEM key | 4/4 | 4/4 |
+| | **total** | **27/27** | **26/27** |
 
-The slimmed skill matches the earlier fuller draft (both 100%), so trimming cost
-no correctness. Baselines for evals 4–6 were run **blind** — their prompt never
-mentioned menv — yet still recognized the setup (from `menv.toml` / `.menv/`) and
-used menv correctly, including drift reconciliation, `--local`, and the multi-line
-key. The lone baseline failure was a leaked secret (eval 1: the value passed as a
-plaintext CLI argument instead of via stdin).
+The lone baseline miss is the **guardrail** case (eval 1): without the skill the
+secret is passed as a plaintext CLI argument — `menv set STRIPE_SECRET_KEY
+sk_test_… ` — leaking it into shell history; with the skill it is piped on stdin
+(`printf '%s' "$KEY" | menv set STRIPE_SECRET_KEY`). Both runs store a round-trip
+value and flag menv's single-line limit on eval 6, but they differ in fidelity: the
+skill folds the PEM to one line with escaped `\n` (which `menv generate` renders as
+one dotenv-safe line), while the baseline keeps raw newlines that `generate` emits
+as an unquoted multi-line block a standard dotenv parser won't read back as a single
+value.
 
-### Time & cost — the everyday payoff
+Correctness is otherwise even for a capable agent, so the skill's day-to-day value
+is as an **accelerator** — it skips the workflow discovery a cold agent does first
+(probing `menv --help`, reading `menv.json`, inferring the model) — and a
+**guardrail** that keeps secrets off the command line. Both effects grow with weaker
+agents or more obscure menv behavior.
 
-Correctness is close to a wash for a capable agent; **speed is where the skill
-earns its keep day to day.** Knowing menv's commands and mental model up front,
-the agent skips the reverse-engineering — probing `menv --help`, reading
-`menv.toml`, and inferring the workflow — that a cold agent does first. In the
-controlled rounds (with-skill and baseline run together on identical fixtures):
+### Time, round-trips, and tokens
 
-| round | tasks | with skill | baseline | delta |
-|-------|-------|-----------|----------|-------|
-| 1 | evals 1–3 | 81.5s | 98.9s | **−17.4s (~18% faster)** |
-| 2 | evals 4–6 | 135.3s | 147.7s | **−12.4s (~8% faster)** |
+All twelve runs execute concurrently under a scheduling cap, so wall-clock time
+carries contention and is indicative rather than isolated; the tool-call counts
+(Read + Bash invocations) and token counts are concurrency-independent and the
+cleaner efficiency signals. With-skill figures already include the one-time read of
+`SKILL.md`.
 
-Faster on **5 of the 6** tasks. (The exception, eval 6, ran slower *because* the
-skilled agent correctly did more — also setting the prod value and cleaning up
-scratch files.) The trade-off is a modest token cost: reading the skill adds
-~2.5k tokens/run. So the skill **trades a few tokens for wall-clock and fewer
-wrong turns** — exactly the trade you want when a human is waiting on the agent.
+| # | task | time with / base | tool calls with / base | tokens with / base |
+|---|------|:----------------:|:----------------------:|:------------------:|
+| 1 | add a Stripe secret | 69s / 77s | 7 / 9 | 32.6k / 30.3k |
+| 2 | wire the missing var | 95s / 86s † | 9 / 9 | 32.9k / 31.1k |
+| 3 | rotate the prod password | 58s / 49s | 7 / 6 | 31.2k / 29.0k |
+| 4 | reconcile a hand-added value | 78s / 98s | 8 / 9 | 33.0k / 31.7k |
+| 5 | machine-local override | 94s / 125s | 12 / 12 | 34.9k / 35.5k |
+| 6 | multi-line PEM key | 102s / 160s | 12 / 15 | 33.8k / 38.1k |
+| | **total** | **496s / 595s** | **55 / 60** | **198k / 196k** |
 
-**Takeaway:** for a capable agent this skill is mainly an **accelerator** (it
-shaves ~10–18% off each task by skipping workflow discovery) and a **guardrail**
-(it reliably prevents the occasional secret leak), rather than a prerequisite for
-correctness. Both effects should grow with weaker agents or more obscure menv
-behavior.
+† eval 2's with-skill run is re-run on its own after a transient error, so its time
+is not comparable to the concurrent batch.
+
+The baseline spends its extra calls and wall-clock on the tasks it has to
+reverse-engineer — evals 4–6, where it reads `--help` and menv's source before
+acting. The skill front-loads that knowledge from one `SKILL.md` read, then reinvests
+part of the saving into safety previews (`--dry-run`, `check`), which is why on a
+lean task like eval 3 it runs a touch longer than a baseline that skips them. Tokens
+run nearly even (≈198k vs ≈196k): the skill's small fixed cost — reading `SKILL.md`
+plus the extra preview calls — is roughly offset by the tokens the baseline burns
+exploring on eval 6.

@@ -65,7 +65,7 @@ menv get NAME [--vault V]                                  # RAW value to stdout
 
 # change structure (registry)
 menv var define NAME --secret --description "…"            # define a variable
-menv wire NAME --vault V --consumers api,worker            # map it into a consumer's vault key
+menv wire NAME --vault V --consumers api,worker            # new per-consumer key each; --shared/--key K to share one value
 menv unwire NAME --vault V --consumers worker              # remove that mapping
 
 # change values (vault)
