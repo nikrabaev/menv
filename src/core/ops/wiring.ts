@@ -12,6 +12,13 @@ export interface WireInput {
   shared?: boolean;
   key?: string;
   newKey: () => string; // injected (crypto.randomUUID in production) for deterministic tests
+  // With --key, an already-wired consumer is RE-KEYED onto that existing key
+  // (rather than erroring), so it shares storage with the key's other holders.
+  // A re-key can vacate the consumer's old key; if no consumer of this variable
+  // still references it, it is orphaned — removed only when removeOrphans is set
+  // and the vault is openable, otherwise kept with an ORPHANED_KEYS warning.
+  removeOrphans?: boolean;
+  openable?: Set<string>;
 }
 
 export function planWire(registry: Registry, input: WireInput): OpResult {
@@ -22,8 +29,11 @@ export function planWire(registry: Registry, input: WireInput): OpResult {
     throw new MenvError("VALIDATION", "--shared and --key are mutually exclusive");
   }
   const existing = registry.variables[input.name]?.vaultMapping[input.vault] ?? {};
+  // Re-keying an already-wired consumer is only allowed in --key (join) mode;
+  // the fresh/shared modes still demand an explicit unwire first.
+  const rekeying = input.key !== undefined;
   const already = input.consumers.filter((c) => existing[c] !== undefined);
-  if (already.length > 0) {
+  if (!rekeying && already.length > 0) {
     throw new MenvError(
       "VALIDATION",
       `"${input.name}" is already wired to ${already.join(", ")} in vault "${input.vault}" (unwire first)`,
@@ -35,17 +45,61 @@ export function planWire(registry: Registry, input: WireInput): OpResult {
   const plan = newPlan();
   if (def !== undefined) {
     const mapping = def.vaultMapping[input.vault] ?? {};
+    const vacated = new Set<string>();
     for (const c of input.consumers) {
-      mapping[c] = { key: sharedKey ?? input.newKey() };
-      plan.registry.push({
-        action: "set",
-        path: `variables.${input.name}.vaultMapping.${input.vault}.${c}`,
-        summary: `wire "${input.name}" → "${c}" (vault "${input.vault}")`,
-      });
+      const prev = mapping[c];
+      const key = sharedKey ?? input.newKey();
+      if (prev !== undefined) {
+        if (prev.key === key) continue; // already on the target key — nothing to do
+        vacated.add(prev.key);
+        mapping[c] = { key, ...(prev.disabled === true ? { disabled: true } : {}) }; // preserve disabled
+        plan.registry.push({
+          action: "set",
+          path: `variables.${input.name}.vaultMapping.${input.vault}.${c}.key`,
+          summary: `re-key "${input.name}" → "${c}" to share key (vault "${input.vault}")`,
+        });
+      } else {
+        mapping[c] = { key };
+        plan.registry.push({
+          action: "set",
+          path: `variables.${input.name}.vaultMapping.${input.vault}.${c}`,
+          summary: `wire "${input.name}" → "${c}" (vault "${input.vault}")`,
+        });
+      }
     }
     def.vaultMapping[input.vault] = mapping;
+    const surviving = new Set(Object.values(mapping).map((e) => e.key));
+    for (const key of [...vacated].sort()) {
+      if (surviving.has(key)) continue;
+      collectOrphan(plan, input.vault, key, input.name, input.removeOrphans === true, input.openable);
+    }
   }
   return { next, plan };
+}
+
+// Shared orphaned-key policy: drop it only when removeOrphans is set and the
+// vault can be opened; otherwise leave it and surface an ORPHANED_KEYS warning.
+function collectOrphan(
+  plan: OpResult["plan"],
+  vault: string,
+  key: string,
+  name: string,
+  removeOrphans: boolean,
+  openable: Set<string> | undefined,
+): void {
+  if (!removeOrphans) {
+    plan.warnings.push({
+      code: "ORPHANED_KEYS",
+      message: `key "${key}" for "${name}" is now unused in vault "${vault}" — left in place (use --remove-orphans to drop it)`,
+    });
+  } else if (openable?.has(vault) === true) {
+    plan.vaults.push({ vault, action: "remove", key });
+  } else {
+    plan.warnings.push({
+      code: "ORPHANED_KEYS",
+      message: `vault "${vault}" could not be opened — orphaned key "${key}" remains (menv check will report it)`,
+    });
+  }
 }
 
 export interface UnwireInput {
@@ -55,6 +109,9 @@ export interface UnwireInput {
   records: ValueRecord[]; // pre-collected from `vault`
   unverified: string[];
   openable: Set<string>;
+  // Orphaned keys (no surviving consumer of this variable) are dropped only when
+  // set and the vault is openable; otherwise kept with an ORPHANED_KEYS warning.
+  removeOrphans?: boolean;
 }
 
 export function planUnwire(registry: Registry, input: UnwireInput): OpResult {
@@ -107,14 +164,7 @@ export function planUnwire(registry: Registry, input: UnwireInput): OpResult {
     const survivingKeys = new Set(Object.values(nextMapping).map((e) => e.key));
     for (const key of [...removedKeys].sort()) {
       if (survivingKeys.has(key)) continue;
-      if (input.openable.has(input.vault)) {
-        plan.vaults.push({ vault: input.vault, action: "remove", key });
-      } else {
-        plan.warnings.push({
-          code: "ORPHANED_KEYS",
-          message: `vault "${input.vault}" could not be opened — orphaned key remains (menv check will report it)`,
-        });
-      }
+      collectOrphan(plan, input.vault, key, input.name, input.removeOrphans === true, input.openable);
     }
     if (Object.keys(nextMapping).length === 0) delete nextDef.vaultMapping[input.vault];
   }

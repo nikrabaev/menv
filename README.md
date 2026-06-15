@@ -111,8 +111,8 @@ Each manages an entity group; all sub-verbs accept the global flags.
 | `var remove <name>` | delete a definition |
 | `var list [--vault <v>] [--consumer <c>] [--group <key>]` | list variables (secrets masked) |
 | `var show <name>` | inspect one variable (secrets masked) |
-| `wire <name> --vault <v> --consumers <list> [--shared] [--key <key>]` | map a variable into a vault key for consumers |
-| `unwire <name> --vault <v> --consumers <list>` | remove that mapping |
+| `wire <name> --vault <v> --consumers <list> [--shared] [--key <key>] [--remove-orphans]` | map a variable into a vault key for consumers; `--key` on an already-wired consumer re-keys it onto that key |
+| `unwire <name> --vault <v> --consumers <list> [--remove-orphans]` | remove that mapping |
 | `enable / disable <name> --vault <v> --consumer <c>` | uncomment / comment-out a wired line |
 | `set <name> [value] [--vault <v>] [--consumer <c>]` | set a value (arg, stdin, or masked prompt) |
 | `get <name> [--vault <v>] [--consumer <c>]` | print the raw value (pipeable) |
@@ -151,6 +151,18 @@ wizard instead.
   locked (encrypted) vault prompts for its passphrase in a masked modal — the
   passphrase stays in memory for the session, never on disk. `--vault-auth
   <vault>=<secret>` pre-unlocks.
+- **`H` toggles "human" mode**: it hides the inspector and renders each variable
+  as a card — a name/description header (the description scrolls to reveal the
+  rest when the card is active) above a full-width `consumer · value` table,
+  grouped so the most-shared values come first. `⏎` focuses the table, `↑↓` pick
+  a row, and `⏎` on a row opens an editor where you can **type a unique value**
+  (isolating that consumer onto a private key), **adopt a key** another consumer
+  uses (sharing its storage and value), or flip `disabled`. When a re-key leaves
+  a vault key with no remaining consumer, you're asked whether to drop it — all
+  through the same plan→confirm gate.
+- **Orphaned keys are opt-in to remove.** `unwire` and a `wire --key` re-key
+  leave a now-unused vault key in place unless you pass `--remove-orphans` (the
+  TUI prompts instead); `menv check` reports any that linger.
 
 ## Values & secrets
 

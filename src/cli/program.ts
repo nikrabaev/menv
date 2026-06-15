@@ -497,9 +497,13 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
     .requiredOption("--vault <vault>")
     .requiredOption("--consumers <list>", "comma-separated consumer names")
     .option("--shared", "one shared key for all listed consumers")
-    .option("--key <key>", "use this existing vault key instead of allocating")
+    .option("--key <key>", "use this existing vault key (re-keys an already-wired consumer onto it)")
+    .option("--remove-orphans", "drop a vault key left unused after re-keying")
     .action(async (name, o) => {
       const registry = await reg();
+      const removeOrphans = o.removeOrphans === true;
+      // Removing the vacated key needs an open session; skip the scan otherwise.
+      const scan = removeOrphans ? await collectValueRecords(root, registry, [o.vault], flags(), prompt) : undefined;
       const op = planWire(registry, {
         name,
         vault: o.vault,
@@ -507,13 +511,16 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
         shared: o.shared,
         key: o.key,
         newKey: deps.newKey,
+        removeOrphans,
+        openable: scan?.openable,
       });
-      await runMutation(root, registry, op, flags(), io, new Map(), {}, prompt);
+      await runMutation(root, registry, op, flags(), io, scan?.sessions ?? new Map(), {}, prompt);
     });
   program
     .command("unwire <name>")
     .requiredOption("--vault <vault>")
     .requiredOption("--consumers <list>")
+    .option("--remove-orphans", "drop vault keys left unused after the unwire")
     .action(async (name, o) => {
       const registry = await reg();
       const scan = await collectValueRecords(root, registry, [o.vault], flags(), prompt);
@@ -524,6 +531,7 @@ export function buildProgram(root: string, io: Io, deps: ProgramDeps = { newKey:
         records: scan.records,
         unverified: scan.unverified,
         openable: scan.openable,
+        removeOrphans: o.removeOrphans === true,
       });
       await runMutation(root, registry, op, flags(), io, scan.sessions, {}, prompt);
     });

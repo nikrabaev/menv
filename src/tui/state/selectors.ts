@@ -125,6 +125,95 @@ export function wiringRows(
   return rows;
 }
 
+// ── human-mode variable rows ─────────────────────────────────────────────────
+
+export interface HumanVarRow {
+  consumer: string;
+  key: string;
+  value: string | undefined; // raw value (undefined when locked or missing)
+  disabled: boolean;
+  hasValue: boolean | undefined; // undefined when the vault is locked
+}
+
+// One row per consumer wired to `def` in `vault`, grouped so the most-shared
+// values rise to the top: groups ordered by descending consumer count (ties
+// broken by value string ascending, the no-value group last), consumers within
+// a group alphabetical. A locked vault (values === null) has no value knowledge,
+// so every row lands in one bucket and the order is plain alphabetical.
+export function humanVarRows(
+  def: VariableDef,
+  vault: string,
+  values: Record<string, string> | null,
+): HumanVarRow[] {
+  const mapping = def.vaultMapping[vault] ?? {};
+  const rows: HumanVarRow[] = Object.entries(mapping).map(([consumer, entry]) => ({
+    consumer,
+    key: entry.key,
+    value: values === null ? undefined : values[entry.key],
+    disabled: entry.disabled === true,
+    hasValue: values === null ? undefined : values[entry.key] !== undefined,
+  }));
+  const byValue = new Map<string | undefined, HumanVarRow[]>();
+  for (const row of rows) {
+    const bucket = byValue.get(row.value) ?? [];
+    bucket.push(row);
+    byValue.set(row.value, bucket);
+  }
+  const groups = [...byValue.entries()].sort((a, b) => {
+    if (a[0] === undefined) return 1; // no-value group always last
+    if (b[0] === undefined) return -1;
+    if (b[1].length !== a[1].length) return b[1].length - a[1].length; // count desc
+    return a[0].localeCompare(b[0]); // tie: value string asc
+  });
+  return groups.flatMap(([, members]) => members.sort((x, y) => x.consumer.localeCompare(y.consumer)));
+}
+
+// A scrolling window onto `text` of `width` columns at a given step. step 0 is
+// the head; each step advances one column until the tail is fully revealed,
+// then clamps (it never loops back to the start).
+export function marqueeSlice(text: string, width: number, step: number): string {
+  const max = Math.max(0, text.length - width);
+  const start = Math.min(Math.max(0, step), max);
+  return text.slice(start, start + width);
+}
+
+export interface CardWindow {
+  offset: number;
+  count: number;
+  above: number;
+  below: number;
+}
+
+// Variable-height analogue of ScrollList's windowing: pick a contiguous run of
+// whole cards that fits `available` lines and contains `selected`, growing
+// outward (below first, then above) so the cursor drifts toward the top. A
+// single card taller than the budget is still shown (clipped).
+export function cardWindow(heights: number[], selected: number, available: number): CardWindow {
+  const n = heights.length;
+  if (n === 0) return { offset: 0, count: 0, above: 0, below: 0 };
+  const total = heights.reduce((a, b) => a + b, 0);
+  if (total <= available) return { offset: 0, count: n, above: 0, below: 0 };
+  const sel = Math.min(Math.max(0, selected), n - 1);
+  let lo = sel;
+  let hi = sel;
+  let used = heights[sel] ?? 0;
+  for (let grew = true; grew; ) {
+    grew = false;
+    if (hi + 1 < n && used + (heights[hi + 1] ?? 0) <= available) {
+      hi += 1;
+      used += heights[hi] ?? 0;
+      grew = true;
+    }
+    if (lo - 1 >= 0 && used + (heights[lo - 1] ?? 0) <= available) {
+      lo -= 1;
+      used += heights[lo] ?? 0;
+      grew = true;
+    }
+  }
+  const count = hi - lo + 1;
+  return { offset: lo, count, above: lo, below: n - (lo + count) };
+}
+
 // ── vault badges ─────────────────────────────────────────────────────────────
 
 export interface VaultBadge {

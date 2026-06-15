@@ -17,10 +17,16 @@ export function ListRow({
   segments,
   selected,
   focused,
+  lead,
 }: {
   segments: Segment[];
   selected: boolean;
   focused: boolean;
+  // Overrides the 2-char leading bar glyph. The human-mode card uses this to run
+  // a ┃ rail down every row of the active card, not just the header. On an
+  // unselected row it also sets the bar's color; on the selected row only the
+  // glyph is taken (the row keeps its own focused/blurred bar color + band).
+  lead?: { text: string; color?: ThemeColor; bold?: boolean };
 }): React.ReactElement {
   // Fast path for the common (unselected) row: a single truncating Text — no
   // band, so no need for the full-width Box wrappers. Nested Text are inline
@@ -30,7 +36,9 @@ export function ListRow({
   if (!selected) {
     return (
       <Text wrap="truncate">
-        <Text color={theme.muted}>{"  "}</Text>
+        <Text color={lead?.color ?? theme.muted} bold={lead?.bold === true}>
+          {lead?.text ?? "  "}
+        </Text>
         {segments.map((s, i) => (
           <Text key={`${i}:${s.text}`} color={s.color} bold={s.bold === true} dimColor={s.dim === true}>
             {s.text}
@@ -44,7 +52,7 @@ export function ListRow({
   return (
     <Box backgroundColor={theme.selectionBand}>
       <Text color={focused ? theme.selectionBar : theme.muted} bold={focused}>
-        {"▌ "}
+        {lead?.text ?? "▌ "}
       </Text>
       <Box flexGrow={1} flexShrink={1} overflow="hidden">
         <Text wrap="truncate">

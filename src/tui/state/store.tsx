@@ -34,6 +34,8 @@ export type Modal =
   | { kind: "consumerPick"; title: string; consumers: string[]; onPick: (consumer: string) => void }
   | { kind: "findings" }
   | { kind: "generate" }
+  | { kind: "valueEdit"; name: string; vault: string; consumer: string }
+  | { kind: "orphanPrompt"; vault: string; keys: string[]; onChoose: (remove: boolean) => void }
   | { kind: "detail" }; // narrow-terminal inspector modal
 
 // A generic field-list form rendered by modals/formModal.tsx.
@@ -65,6 +67,9 @@ export interface AppState {
   consumerFilter: string | null;
   focus: PaneId;
   tab: MainTab;
+  humanMode: boolean; // 'human' presentation: cards + value table, no inspector
+  humanRowFocus: boolean; // navigating the selected card's consumer/value table
+  humanRowIndex: number; // selected table row within the focused card
   sidebarIndex: number;
   mainIndex: Record<MainTab, number>;
   inspectorIndex: number;
@@ -85,6 +90,9 @@ export function initialState(registry: Registry): AppState {
     consumerFilter: null,
     focus: "main",
     tab: "variables",
+    humanMode: false,
+    humanRowFocus: false,
+    humanRowIndex: 0,
     sidebarIndex: 1, // 0 is the VAULTS header; a valid registry always has a vault below it
     mainIndex: { variables: 0, globals: 0, groups: 0, compose: 0, backups: 0 },
     inspectorIndex: 0,
@@ -103,6 +111,9 @@ export type Action =
   | { type: "registry"; registry: Registry }
   | { type: "focus"; pane: PaneId }
   | { type: "tab"; tab: MainTab }
+  | { type: "humanMode"; enabled: boolean }
+  | { type: "humanRowFocus"; focused: boolean }
+  | { type: "humanRowIndex"; index: number }
   | { type: "sidebarIndex"; index: number }
   | { type: "mainIndex"; tab: MainTab; index: number }
   | { type: "inspectorIndex"; index: number }
@@ -135,10 +146,31 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, focus: action.pane };
     case "tab":
       return { ...state, tab: action.tab };
+    case "humanMode":
+      // Toggling the mode drops any in-card row focus; enabling it also moves
+      // focus off the (now-hidden) inspector.
+      return {
+        ...state,
+        humanMode: action.enabled,
+        humanRowFocus: false,
+        humanRowIndex: 0,
+        focus: action.enabled && state.focus === "inspector" ? "main" : state.focus,
+      };
+    case "humanRowFocus":
+      return { ...state, humanRowFocus: action.focused, humanRowIndex: action.focused ? state.humanRowIndex : 0 };
+    case "humanRowIndex":
+      return { ...state, humanRowIndex: action.index };
     case "sidebarIndex":
       return { ...state, sidebarIndex: action.index };
     case "mainIndex":
-      return { ...state, mainIndex: { ...state.mainIndex, [action.tab]: action.index }, inspectorIndex: 0 };
+      // Moving to another card/row resets both the inspector and the in-card table.
+      return {
+        ...state,
+        mainIndex: { ...state.mainIndex, [action.tab]: action.index },
+        inspectorIndex: 0,
+        humanRowFocus: false,
+        humanRowIndex: 0,
+      };
     case "inspectorIndex":
       return { ...state, inspectorIndex: action.index };
     case "filter":

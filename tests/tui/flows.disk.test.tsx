@@ -32,15 +32,18 @@ describe("wiring flows", () => {
     rig.ui.unmount();
   });
 
-  test("unwire API_URL from both consumers deletes orphaned keys", async () => {
+  test("unwire API_URL from both consumers prompts to drop orphaned keys, then deletes them", async () => {
     const rig = await renderApp();
     await rig.type(ARROW_DOWN); // API_URL
     await rig.type("u");
     await tick(50);
     expect(rig.frame()).toContain("Unwire API_URL (vault local)");
     await rig.type(ENTER); // consumers field prefilled "api,web"
-    await rig.type(ENTER); // submit
-    await tick(150); // dependency scan
+    await rig.type(ENTER); // submit form
+    await tick(150); // value scan + orphan detection
+    expect(rig.frame()).toContain("Drop now-unused vault key"); // opt-in orphan prompt
+    await rig.type("y"); // drop them
+    await tick(50);
     const plan = rig.frame();
     expect(plan).toContain("plan: unwire API_URL");
     expect(plan).toContain("remove key");
@@ -49,6 +52,24 @@ describe("wiring flows", () => {
     const registry = await loadRegistry(rig.root);
     expect(registry.variables.API_URL?.vaultMapping.local).toBeUndefined();
     expect((await vaultJson(rig.root))["k-api"]).toBeUndefined(); // orphan removed
+    rig.ui.unmount();
+  });
+
+  test("unwire keeps orphaned keys when the prompt is declined", async () => {
+    const rig = await renderApp();
+    await rig.type(ARROW_DOWN); // API_URL
+    await rig.type("u");
+    await tick(50);
+    await rig.type(ENTER); // consumers prefilled
+    await rig.type(ENTER); // submit
+    await tick(150);
+    expect(rig.frame()).toContain("Drop now-unused vault key");
+    await rig.type("n"); // keep the keys
+    await tick(50);
+    expect(rig.frame()).toContain("plan: unwire API_URL");
+    await rig.type(ENTER); // apply
+    await tick(150);
+    expect((await vaultJson(rig.root))["k-api"]).toBe("https://api.example.com"); // value kept
     rig.ui.unmount();
   });
 

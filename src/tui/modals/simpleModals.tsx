@@ -62,6 +62,53 @@ export function QuitModal({ isTop, onClose }: { isTop: boolean; onClose: () => v
   );
 }
 
+// Asked when a re-key or unwire leaves a vault key with no remaining consumer.
+// y/⏎ drops it, n keeps it (both proceed to the plan), esc abandons the action.
+export function OrphanPromptModal({
+  vault,
+  keys,
+  onChoose,
+  isTop,
+  onClose,
+}: {
+  vault: string;
+  keys: string[];
+  onChoose: (remove: boolean) => void;
+  isTop: boolean;
+  onClose: () => void;
+}): React.ReactElement {
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        onClose();
+        return;
+      }
+      if (input === "y" || key.return) {
+        onClose();
+        onChoose(true);
+      } else if (input === "n") {
+        onClose();
+        onChoose(false);
+      }
+    },
+    { isActive: isTop },
+  );
+  return (
+    <ModalFrame title="Drop now-unused vault key?" hints="y/⏎ remove · n keep · esc cancel">
+      <Text wrap="wrap">
+        {keys.length === 1 ? "This key is" : `These ${keys.length} keys are`} no longer referenced by any consumer in vault "{vault}":
+      </Text>
+      {keys.map((k) => (
+        <Text key={k} color={theme.muted}>
+          {"  "}
+          {k}
+        </Text>
+      ))}
+      <Text color={theme.muted}>Removing drops the stored value; keeping leaves it for `menv check` to report.</Text>
+    </ModalFrame>
+  );
+}
+
 export function UnlockModal({
   store,
   ctx,

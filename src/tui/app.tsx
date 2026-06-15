@@ -15,6 +15,7 @@ import { ModalHost } from "./modals/host.tsx";
 import type { TuiContext } from "./state/data.ts";
 import { loadAllVaults, loadBackupList, loadFindings } from "./state/data.ts";
 import { selectedSidebarEntry } from "./state/lists.ts";
+import type { AppState } from "./state/store.tsx";
 import { StoreProvider, useStore } from "./state/store.tsx";
 import { theme } from "./theme.ts";
 import { InitWizard } from "./views/initWizard.tsx";
@@ -22,11 +23,12 @@ import { Inspector } from "./views/inspector.tsx";
 import { MainPane } from "./views/mainPane.tsx";
 import { Sidebar } from "./views/sidebar.tsx";
 
-function keyContext(stateFocus: string, tab: string, sidebarKind: string | undefined, modalOpen: boolean): KeyContext {
+function keyContext(state: AppState, sidebarKind: string | undefined, modalOpen: boolean): KeyContext {
   if (modalOpen) return "modal";
-  if (stateFocus === "sidebar") return sidebarKind === "consumer" ? "sidebar-consumer" : "sidebar-vault";
-  if (stateFocus === "inspector") return "inspector";
-  return tab as KeyContext;
+  if (state.focus === "sidebar") return sidebarKind === "consumer" ? "sidebar-consumer" : "sidebar-vault";
+  if (state.focus === "inspector") return "inspector";
+  if (state.tab === "variables" && state.humanMode) return state.humanRowFocus ? "variables-rows" : "variables-human";
+  return state.tab as KeyContext;
 }
 
 function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
@@ -77,6 +79,9 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
   const inspectorWidth = columns >= 130 ? 66 : 36;
   const roomy = rows >= 24; // breathing room above the floor; dropped at 80×20
   const entry = selectedSidebarEntry(state);
+  // Human mode drops the inspector entirely; its width goes to the main pane.
+  const showInspector = !narrow && !state.humanMode;
+  const mainContentWidth = columns - sidebarWidth - (showInspector ? inspectorWidth : 0) - 4; // border + paddingX
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
@@ -88,12 +93,12 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
       ) : (
         <Box flexGrow={1}>
           <Sidebar state={state} height={listHeight} width={sidebarWidth} roomy={roomy} />
-          <MainPane store={store} height={paneHeight - 2} narrow={narrow} roomy={roomy} />
-          {narrow ? null : <Inspector state={state} width={inspectorWidth} roomy={roomy} />}
+          <MainPane store={store} height={paneHeight - 2} width={mainContentWidth} narrow={narrow} roomy={roomy} />
+          {showInspector ? <Inspector state={state} width={inspectorWidth} roomy={roomy} /> : null}
         </Box>
       )}
       <StatusBar state={state} />
-      <Footer context={keyContext(state.focus, state.tab, entry?.kind, modalOpen)} />
+      <Footer context={keyContext(state, entry?.kind, modalOpen)} />
     </Box>
   );
 }

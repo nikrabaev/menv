@@ -12,6 +12,8 @@ export type KeyContext =
   | "sidebar-vault"
   | "sidebar-consumer"
   | "variables"
+  | "variables-human"
+  | "variables-rows"
   | "globals"
   | "groups"
   | "compose"
@@ -28,6 +30,7 @@ export const KEYMAP: Record<KeyContext, KeyHint[]> = {
     { key: "c", label: "check" },
     { key: "i", label: "import" },
     { key: "R", label: "reload" },
+    { key: "H", label: "human mode" },
     { key: "?", label: "help" },
     { key: "q", label: "quit" },
   ],
@@ -55,6 +58,19 @@ export const KEYMAP: Record<KeyContext, KeyHint[]> = {
     { key: "r", label: "reveal" },
     { key: "d", label: "en/disable" },
     { key: "x", label: "remove" },
+  ],
+  "variables-human": [
+    { key: "⏎", label: "open table" },
+    { key: "n", label: "new" },
+    { key: "e", label: "edit" },
+    { key: "w", label: "wire" },
+    { key: "u", label: "unwire" },
+    { key: "x", label: "remove" },
+  ],
+  "variables-rows": [
+    { key: "j/k", label: "rows" },
+    { key: "⏎", label: "edit value" },
+    { key: "esc", label: "back" },
   ],
   globals: [
     { key: "n", label: "new" },
@@ -98,6 +114,8 @@ export const HELP_SECTIONS: { title: string; context: KeyContext }[] = [
   { title: "Vaults (sidebar)", context: "sidebar-vault" },
   { title: "Consumers (sidebar)", context: "sidebar-consumer" },
   { title: "Variables", context: "variables" },
+  { title: "Variables (human)", context: "variables-human" },
+  { title: "Variables · row", context: "variables-rows" },
   { title: "Globals", context: "globals" },
   { title: "Groups", context: "groups" },
   { title: "Compose", context: "compose" },

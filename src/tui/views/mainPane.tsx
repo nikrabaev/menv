@@ -10,6 +10,7 @@ import { cellGlyph, cellState, truncate, variableCount } from "../state/selector
 import type { AppState, MainTab, Store } from "../state/store.tsx";
 import { MAIN_TABS } from "../state/store.tsx";
 import { theme } from "../theme.ts";
+import { HumanVariablesTab } from "./humanVariables.tsx";
 
 // The tab strip. The active tab is a filled pill: half-block caps ▐…▌ wrap the
 // label on an accent fill. The caps are real glyphs, so under NO_COLOR (which
@@ -233,11 +234,13 @@ function BackupsTab({ state, height }: { state: AppState; height: number }): Rea
 export function MainPane({
   store,
   height,
+  width,
   narrow,
   roomy,
 }: {
   store: Store;
   height: number;
+  width: number;
   narrow: boolean;
   roomy: boolean;
 }): React.ReactElement {
@@ -255,7 +258,11 @@ export function MainPane({
   const body = (() => {
     switch (state.tab) {
       case "variables":
-        return <VariablesTab state={state} height={listHeight} />;
+        return state.humanMode ? (
+          <HumanVariablesTab state={state} height={listHeight} width={width} />
+        ) : (
+          <VariablesTab state={state} height={listHeight} />
+        );
       case "globals":
         return <GlobalsTab state={state} height={listHeight} />;
       case "groups":

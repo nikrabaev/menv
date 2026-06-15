@@ -12,10 +12,12 @@ import {
   DetailModal,
   FindingsModal,
   HelpModal,
+  OrphanPromptModal,
   QuitModal,
   RevealModal,
   UnlockModal,
 } from "./simpleModals.tsx";
+import { ValueEditModal } from "./valueEditModal.tsx";
 
 export function ModalHost({ store, ctx }: { store: Store; ctx: TuiContext }): React.ReactElement | null {
   const modals = store.state.modals;
@@ -43,6 +45,10 @@ export function ModalHost({ store, ctx }: { store: Store; ctx: TuiContext }): Re
       return <FindingsModal store={store} isTop onClose={onClose} />;
     case "generate":
       return <GenerateModal store={store} ctx={ctx} isTop onClose={onClose} />;
+    case "valueEdit":
+      return <ValueEditModal store={store} ctx={ctx} name={top.name} vault={top.vault} consumer={top.consumer} isTop onClose={onClose} />;
+    case "orphanPrompt":
+      return <OrphanPromptModal vault={top.vault} keys={top.keys} onChoose={top.onChoose} isTop onClose={onClose} />;
     case "detail":
       return <DetailModal store={store} isTop onClose={onClose} />;
   }

@@ -28,13 +28,13 @@ export function PlanView({ plan }: { plan: Plan }): React.ReactElement {
           <Text color={op.action === "delete" ? theme.error : theme.warning}>file</Text> {op.action} {op.path}
         </Text>
       ))}
-      {plan.warnings.map((w) => (
-        <Text key={`w:${w.code}:${w.message}`} color={theme.warning} wrap="truncate">
+      {plan.warnings.map((w, i) => (
+        <Text key={`w:${i}:${w.code}`} color={theme.warning} wrap="truncate">
           ⚠ {w.code}: {w.message}
         </Text>
       ))}
-      {plan.blockers.map((b) => (
-        <Text key={`b:${b.code}:${b.message}`} color={theme.error} wrap="truncate">
+      {plan.blockers.map((b, i) => (
+        <Text key={`b:${i}:${b.code}`} color={theme.error} wrap="truncate">
           ✖ {b.code}: {b.message}
         </Text>
       ))}

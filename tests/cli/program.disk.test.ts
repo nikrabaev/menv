@@ -238,7 +238,19 @@ describe("program — command coverage", () => {
     }
   });
 
-  test("unwire removes the mapping and the orphaned vault key's value", async () => {
+  test("unwire --remove-orphans removes the mapping and the orphaned vault key's value", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X"]);
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api"]);
+    await run(root, ["set", "X", "v"]);
+    const key = (await loadRegistry(root)).variables.X?.vaultMapping.local?.api?.key as string;
+    await run(root, ["unwire", "X", "--vault", "local", "--consumers", "api", "--remove-orphans"]);
+    expect((await loadRegistry(root)).variables.X?.vaultMapping.local).toBeUndefined();
+    expect((await readVault(root))[key]).toBeUndefined();
+  });
+
+  test("unwire keeps the orphaned key by default (opt-in via --remove-orphans)", async () => {
     const root = await tmpRepo(makeRegistry());
     roots.push(root);
     await run(root, ["var", "define", "X"]);
@@ -246,8 +258,27 @@ describe("program — command coverage", () => {
     await run(root, ["set", "X", "v"]);
     const key = (await loadRegistry(root)).variables.X?.vaultMapping.local?.api?.key as string;
     await run(root, ["unwire", "X", "--vault", "local", "--consumers", "api"]);
-    expect((await loadRegistry(root)).variables.X?.vaultMapping.local).toBeUndefined();
-    expect((await readVault(root))[key]).toBeUndefined();
+    expect((await loadRegistry(root)).variables.X?.vaultMapping.local).toBeUndefined(); // mapping still removed
+    expect((await readVault(root))[key]).toBe("v"); // value kept (no --remove-orphans)
+  });
+
+  test("wire --key re-keys a wired consumer to share a key; --remove-orphans drops the vacated key", async () => {
+    const root = await tmpRepo(makeRegistry());
+    roots.push(root);
+    await run(root, ["var", "define", "X"]);
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api,web"]); // fresh key each
+    await run(root, ["set", "X", "va", "--consumer", "api"]);
+    await run(root, ["set", "X", "vw", "--consumer", "web"]);
+    const before = await loadRegistry(root);
+    const apiKey = before.variables.X?.vaultMapping.local?.api?.key as string;
+    const webKey = before.variables.X?.vaultMapping.local?.web?.key as string;
+    await run(root, ["wire", "X", "--vault", "local", "--consumers", "api", "--key", webKey, "--remove-orphans"]);
+    const after = await loadRegistry(root);
+    expect(after.variables.X?.vaultMapping.local?.api?.key).toBe(webKey); // api now shares web's key
+    expect(after.variables.X?.vaultMapping.local?.web?.key).toBe(webKey);
+    const vault = await readVault(root);
+    expect(vault[apiKey]).toBeUndefined(); // api's old key orphaned → removed
+    expect(vault[webKey]).toBe("vw"); // shared value intact
   });
 
   test("consumer remove drops the mapping and cleans the orphaned key", async () => {

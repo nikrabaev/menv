@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { VariableDef } from "../../src/registry/types.ts";
 import {
+  cardWindow,
   cellGlyph,
   cellState,
+  humanVarRows,
+  marqueeSlice,
   maskValue,
   matches,
   truncate,
@@ -101,6 +104,80 @@ describe("wiringRows", () => {
     expect(rows.map((r) => `${r.vault}/${r.consumer}`)).toEqual(["local/api", "local/web", "production/api"]);
     expect(rows[0]?.cell.shared).toBe(true);
     expect(rows[2]?.cell.hasValue).toBeUndefined(); // locked production
+  });
+});
+
+describe("humanVarRows", () => {
+  test("groups by value, most-shared first, alphabetical within a group", () => {
+    const d = def({
+      local: {
+        consumer_1: { key: "k1" },
+        consumer_2: { key: "k2" },
+        consumer_3: { key: "k3" },
+        consumer_4: { key: "k4" },
+        consumer_5: { key: "k5" },
+        consumer_6: { key: "k6" },
+      },
+    });
+    const values = { k1: "value_A", k2: "value_B", k3: "value_A", k4: "value_A", k5: "value_C", k6: "value_B" };
+    const rows = humanVarRows(d, "local", values);
+    expect(rows.map((r) => `${r.consumer};${r.value}`)).toEqual([
+      "consumer_1;value_A",
+      "consumer_3;value_A",
+      "consumer_4;value_A",
+      "consumer_2;value_B",
+      "consumer_6;value_B",
+      "consumer_5;value_C",
+    ]);
+  });
+
+  test("equal counts break ties by value string; missing-value group goes last", () => {
+    const d = def({ local: { a: { key: "ka" }, b: { key: "kb" }, c: { key: "kc" } } });
+    const rows = humanVarRows(d, "local", { ka: "zeta", kb: "alpha" }); // kc has no value
+    expect(rows.map((r) => `${r.consumer};${r.value ?? "∅"}`)).toEqual(["b;alpha", "a;zeta", "c;∅"]);
+    expect(rows[2]?.hasValue).toBe(false);
+  });
+
+  test("carries the disabled flag per consumer", () => {
+    const d = def({ local: { a: { key: "k", disabled: true }, b: { key: "k" } } });
+    const rows = humanVarRows(d, "local", { k: "v" });
+    expect(rows.find((r) => r.consumer === "a")?.disabled).toBe(true);
+    expect(rows.find((r) => r.consumer === "b")?.disabled).toBe(false);
+  });
+
+  test("locked vault: values unknown, rows fall back to alphabetical", () => {
+    const d = def({ local: { web: { key: "kw" }, api: { key: "ka" } } });
+    const rows = humanVarRows(d, "local", null);
+    expect(rows.map((r) => r.consumer)).toEqual(["api", "web"]);
+    expect(rows.every((r) => r.value === undefined && r.hasValue === undefined)).toBe(true);
+  });
+});
+
+describe("marqueeSlice", () => {
+  test("step 0 shows the head; advancing scrolls; clamps at the end", () => {
+    expect(marqueeSlice("hello world", 5, 0)).toBe("hello");
+    expect(marqueeSlice("hello world", 5, 2)).toBe("llo w");
+    expect(marqueeSlice("hello world", 5, 100)).toBe("world"); // never loops past the end
+  });
+
+  test("text shorter than the window is returned whole", () => {
+    expect(marqueeSlice("hi", 5, 3)).toBe("hi");
+  });
+});
+
+describe("cardWindow", () => {
+  test("everything fits → no scrolling", () => {
+    expect(cardWindow([2, 2, 2], 0, 10)).toEqual({ offset: 0, count: 3, above: 0, below: 0 });
+  });
+
+  test("keeps the selected card visible, filling the line budget", () => {
+    expect(cardWindow([2, 2, 2, 2, 2], 0, 6)).toEqual({ offset: 0, count: 3, above: 0, below: 2 });
+    expect(cardWindow([2, 2, 2, 2, 2], 4, 6)).toEqual({ offset: 2, count: 3, above: 2, below: 0 });
+    expect(cardWindow([2, 2, 2, 2, 2], 2, 6)).toEqual({ offset: 1, count: 3, above: 1, below: 1 });
+  });
+
+  test("a single oversized card is still shown (clipped)", () => {
+    expect(cardWindow([10, 2, 2], 0, 6)).toEqual({ offset: 0, count: 1, above: 0, below: 2 });
   });
 });
 

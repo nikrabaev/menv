@@ -35,6 +35,7 @@ import {
   startReveal,
   startSetValue,
   startUnwire,
+  startValueEdit,
   startVarDefine,
   startVarEdit,
   startVarRemove,
@@ -45,7 +46,7 @@ import {
   vaultRemove,
   vaultSetDefault,
 } from "./state/mutations.ts";
-import { wiringRows } from "./state/selectors.ts";
+import { humanVarRows, wiringRows } from "./state/selectors.ts";
 import type { MainTab, PaneId, Store } from "./state/store.tsx";
 import { MAIN_TABS } from "./state/store.tsx";
 
@@ -109,8 +110,36 @@ function handleSidebarKey(store: Store, ctx: TuiContext, input: string, key: Key
   }
 }
 
+// Human mode: navigating the selected card's consumer/value table. ⏎ on a row
+// opens the value editor; esc returns to card navigation.
+function handleHumanRowKey(store: Store, ctx: TuiContext, input: string, key: Key): void {
+  const state = store.getState();
+  if (key.escape) {
+    store.dispatch({ type: "humanRowFocus", focused: false });
+    return;
+  }
+  const name = selectedVariable(state);
+  const def = name !== undefined ? state.registry.variables[name] : undefined;
+  if (name === undefined || def === undefined) return;
+  const values = state.vaults[state.activeVault]?.values ?? null;
+  const rows = humanVarRows(def, state.activeVault, values);
+  if (rows.length === 0) return;
+  if (key.upArrow || input === "k") {
+    store.dispatch({ type: "humanRowIndex", index: Math.max(0, state.humanRowIndex - 1) });
+  } else if (key.downArrow || input === "j") {
+    store.dispatch({ type: "humanRowIndex", index: Math.min(rows.length - 1, state.humanRowIndex + 1) });
+  } else if (key.return) {
+    const row = rows[Math.min(state.humanRowIndex, rows.length - 1)];
+    if (row !== undefined) startValueEdit(store, ctx, name, state.activeVault, row.consumer);
+  }
+}
+
 function handleMainKey(store: Store, ctx: TuiContext, narrow: boolean, input: string, key: Key): void {
   const state = store.getState();
+  if (state.humanMode && state.tab === "variables" && state.humanRowFocus) {
+    handleHumanRowKey(store, ctx, input, key);
+    return;
+  }
   if (key.upArrow || input === "k") {
     moveMain(store, -1);
     return;
@@ -142,7 +171,13 @@ function handleMainKey(store: Store, ctx: TuiContext, narrow: boolean, input: st
       if (name === undefined) return;
       const consumer = state.consumerFilter ?? undefined;
       if (key.return) {
-        if (narrow) store.dispatch({ type: "pushModal", modal: { kind: "detail" } });
+        if (state.humanMode) {
+          const def = state.registry.variables[name];
+          const values = state.vaults[state.activeVault]?.values ?? null;
+          const rows = def !== undefined ? humanVarRows(def, state.activeVault, values) : [];
+          if (rows.length > 0) store.dispatch({ type: "humanRowFocus", focused: true });
+          else setStatus(store, "info", `"${name}" is not wired in vault "${state.activeVault}" — press w to wire`);
+        } else if (narrow) store.dispatch({ type: "pushModal", modal: { kind: "detail" } });
         else store.dispatch({ type: "focus", pane: "inspector" });
       } else if (input === "e") startVarEdit(store, ctx, name);
       else if (input === "x") startVarRemove(store, ctx, name);
@@ -239,6 +274,10 @@ export function handlePaneKey(store: Store, ctx: TuiContext, narrow: boolean, in
     reloadAll(store, ctx);
     return;
   }
+  if (input === "H") {
+    store.dispatch({ type: "humanMode", enabled: !state.humanMode });
+    return;
+  }
   if (input === "i" && state.tab !== "variables") {
     startImport(store, ctx);
     return;
@@ -266,12 +305,13 @@ export function handlePaneKey(store: Store, ctx: TuiContext, narrow: boolean, in
     store.dispatch({ type: "focus", pane: "main" });
     return;
   }
-  if (input === "3" && !narrow) {
+  const hideInspector = narrow || state.humanMode;
+  if (input === "3" && !hideInspector) {
     store.dispatch({ type: "focus", pane: "inspector" });
     return;
   }
   if (key.tab) {
-    const order = narrow ? PANE_ORDER.slice(0, 2) : PANE_ORDER;
+    const order = hideInspector ? PANE_ORDER.slice(0, 2) : PANE_ORDER;
     const at = order.indexOf(state.focus);
     const next = order[(at + (key.shift ? order.length - 1 : 1)) % order.length] as PaneId;
     store.dispatch({ type: "focus", pane: next });

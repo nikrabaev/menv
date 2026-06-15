@@ -21,6 +21,20 @@ export function newPlan(): Plan {
   return emptyPlan();
 }
 
+// Concatenate two plans section-by-section, in order, without mutating either.
+// Used to surface several composed ops (e.g. re-key + set value + en/disable)
+// behind a single confirm. Callers must build `b` from `a`'s `next` registry so
+// the registry ops stay consistent.
+export function mergePlans(a: Plan, b: Plan): Plan {
+  return {
+    registry: [...a.registry, ...b.registry],
+    vaults: [...a.vaults, ...b.vaults],
+    files: [...a.files, ...b.files],
+    blockers: [...a.blockers, ...b.blockers],
+    warnings: [...a.warnings, ...b.warnings],
+  };
+}
+
 const known = (names: string[]) => (names.length > 0 ? names.sort().join(", ") : "none");
 
 export function requireVault(r: Registry, name: string): VaultDef {

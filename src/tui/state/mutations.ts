@@ -11,7 +11,8 @@ import { planGlobalDefine, planGlobalRemove, planGlobalUpdate } from "../../core
 import { planGroupAdd, planGroupRemove, planGroupUpdate } from "../../core/ops/group.ts";
 import { planImportEntries } from "../../core/ops/importOps.ts";
 import type { OpResult } from "../../core/ops/util.ts";
-import { planSetValue, resolveMappingKey } from "../../core/ops/value.ts";
+import { mergePlans, newPlan } from "../../core/ops/util.ts";
+import { planSetUniqueValue, planSetValue, resolveMappingKey } from "../../core/ops/value.ts";
 import { planVarDefine, planVarRemove, planVarUpdate } from "../../core/ops/variable.ts";
 import { planVaultAdd, planVaultRemove, planVaultUpdate } from "../../core/ops/vault.ts";
 import { planSetDisabled, planUnwire, planWire } from "../../core/ops/wiring.ts";
@@ -588,17 +589,21 @@ export function startUnwire(store: Store, ctx: TuiContext, name: string, vault: 
   const plansFor = (consumers: string[]): void => {
     void runAction(store, `unwire ${name}`, async () => {
       const scan = await scanValues(store, ctx, [vault]);
-      const op = planUnwire(store.getState().registry, {
-        name,
-        vault,
-        consumers,
-        records: scan.records,
-        unverified: scan.unverified,
-        openable: scan.openable,
-      });
-      requestPlan(store, ctx, `unwire ${name} (vault ${vault})`, op, {
-        danger: "deletes the orphaned vault key when its last reference goes",
-      });
+      const finish = (removeOrphans: boolean): void => {
+        const op = planUnwire(store.getState().registry, {
+          name,
+          vault,
+          consumers,
+          records: scan.records,
+          unverified: scan.unverified,
+          openable: scan.openable,
+          removeOrphans,
+        });
+        requestPlan(store, ctx, `unwire ${name} (vault ${vault})`, op);
+      };
+      const orphans = orphanedKeys(store.getState().registry, vault, name, consumers);
+      if (orphans.length > 0 && scan.openable.has(vault)) promptOrphans(store, vault, orphans, finish);
+      else finish(false);
     });
   };
   if (consumer !== undefined) {
@@ -684,6 +689,91 @@ export function startSetValue(store: Store, ctx: TuiContext, name: string, vault
       type: "pushModal",
       modal: { kind: "consumerPick", title: `${name} holds different values per consumer — set which?`, consumers: Object.keys(mapping).sort(), onPick: ask },
     });
+}
+
+// Human-mode value editing: a single consumer's (consumer, value) row. Unlock
+// first so the modal can show the current value and the values held by other
+// consumers, then open the dedicated editor.
+export function startValueEdit(store: Store, ctx: TuiContext, name: string, vault: string, consumer: string): void {
+  const entry = store.getState().registry.variables[name]?.vaultMapping[vault]?.[consumer];
+  if (entry === undefined) {
+    setStatus(store, "error", `"${name}" is not wired to "${consumer}" in vault "${vault}"`);
+    return;
+  }
+  ensureUnlocked(store, ctx, vault, () => {
+    store.dispatch({ type: "pushModal", modal: { kind: "valueEdit", name, vault, consumer } });
+  });
+}
+
+// Keys this variable's mapping would leave unreferenced in `vault` once
+// `consumers` are removed (the orphan check `planUnwire`/`planWire` apply).
+function orphanedKeys(registry: Store["state"]["registry"], vault: string, name: string, leaving: string[], rekeyTo?: string): string[] {
+  const mapping = registry.variables[name]?.vaultMapping[vault] ?? {};
+  const freed = new Set(leaving.map((c) => mapping[c]?.key).filter((k): k is string => k !== undefined));
+  const surviving = new Set<string>();
+  for (const [c, e] of Object.entries(mapping)) {
+    if (leaving.includes(c)) continue;
+    surviving.add(e.key);
+  }
+  if (rekeyTo !== undefined) surviving.add(rekeyTo); // the re-keyed consumer now holds this
+  return [...freed].filter((k) => !surviving.has(k) && k !== rekeyTo).sort();
+}
+
+function promptOrphans(store: Store, vault: string, keys: string[], onChoose: (remove: boolean) => void): void {
+  store.dispatch({ type: "pushModal", modal: { kind: "orphanPrompt", vault, keys, onChoose } });
+}
+
+// Compose the value-editor's result into one confirm. Three mutually-exclusive
+// value moves: adopt a key (share storage with its holders), set a unique value
+// (isolate onto a private key), or leave the value alone — plus the disabled
+// flag. Adopting can orphan the consumer's old key; we prompt before dropping it.
+export function applyValueEdit(
+  store: Store,
+  ctx: TuiContext,
+  name: string,
+  vault: string,
+  consumer: string,
+  change: { adoptKey?: string; value?: string; disabled: boolean },
+): void {
+  const registry = store.getState().registry;
+  const entry = registry.variables[name]?.vaultMapping[vault]?.[consumer];
+  if (entry === undefined) {
+    setStatus(store, "error", `"${name}" is not wired to "${consumer}" in vault "${vault}"`);
+    return;
+  }
+
+  const withDisabled = (valueOp: OpResult | null): OpResult => {
+    const base = valueOp?.next ?? registry;
+    const wasDisabled = base.variables[name]?.vaultMapping[vault]?.[consumer]?.disabled === true;
+    const disabledOp = change.disabled !== wasDisabled ? planSetDisabled(base, { name, vault, consumer, disabled: change.disabled }) : null;
+    return {
+      next: disabledOp?.next ?? valueOp?.next ?? registry,
+      plan: mergePlans(valueOp?.plan ?? newPlan(), disabledOp?.plan ?? newPlan()),
+    };
+  };
+  const title = `edit ${name} · ${consumer} (vault ${vault})`;
+
+  if (change.adoptKey !== undefined && change.adoptKey !== entry.key) {
+    const orphans = orphanedKeys(registry, vault, name, [consumer], change.adoptKey);
+    const finish = (removeOrphans: boolean): void => {
+      const wireOp = planWire(registry, {
+        name,
+        vault,
+        consumers: [consumer],
+        key: change.adoptKey,
+        newKey,
+        removeOrphans,
+        openable: new Set([vault]),
+      });
+      requestPlan(store, ctx, title, withDisabled(wireOp));
+    };
+    if (orphans.length > 0) promptOrphans(store, vault, orphans, finish);
+    else finish(false);
+    return;
+  }
+
+  const valueOp = change.value !== undefined ? planSetUniqueValue(registry, { name, vault, consumer, value: change.value, newKey }) : null;
+  requestPlan(store, ctx, title, withDisabled(valueOp));
 }
 
 export function startReveal(store: Store, ctx: TuiContext, name: string, vault: string, consumer?: string): void {
