@@ -93,7 +93,7 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
       ) : (
         <Box flexGrow={1}>
           <Sidebar state={state} height={listHeight} width={sidebarWidth} roomy={roomy} />
-          <MainPane store={store} height={paneHeight - 2} width={mainContentWidth} narrow={narrow} roomy={roomy} />
+          <MainPane store={store} height={paneHeight} width={mainContentWidth} narrow={narrow} roomy={roomy} />
           {showInspector ? <Inspector state={state} width={inspectorWidth} roomy={roomy} /> : null}
         </Box>
       )}

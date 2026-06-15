@@ -12,8 +12,9 @@ import { cardWindow, humanVarRows, maskValue, truncate } from "../state/selector
 import type { AppState } from "../state/store.tsx";
 import { theme } from "../theme.ts";
 
-// header line + table rows (min one "not wired" line) + a trailing spacer line.
-const cardHeight = (rowCount: number): number => 1 + Math.max(1, rowCount) + 1;
+// header line + table rows (min one "not wired" line). Must equal what VarCard
+// actually renders — the window budgets from this, so an over-count under-fills.
+const cardHeight = (rowCount: number): number => 1 + Math.max(1, rowCount);
 
 function columns(width: number): { consumer: number; value: number } {
   const usable = Math.max(20, width - 4); // leading bar/indent
@@ -30,6 +31,7 @@ function VarCard({
   focused,
   rowFocus,
   rowIndex,
+  cardIndex,
   width,
 }: {
   name: string;
@@ -39,7 +41,8 @@ function VarCard({
   selected: boolean;
   focused: boolean;
   rowFocus: boolean;
-  rowIndex: number;
+  rowIndex: number; // cursor row within THIS card's table (only meaningful when rowFocus)
+  cardIndex: number; // this card's ordinal among cards (for zebra striping)
   width: number;
 }): React.ReactElement {
   const secret = def.secret === true;
@@ -56,7 +59,7 @@ function VarCard({
   const lead = selected ? { text: "┃ ", color: barColor, bold: true } : undefined;
 
   return (
-    <Box flexDirection="column" backgroundColor={(rowIndex % 2 === 0) ? "black" : ""}>
+    <Box flexDirection="column" backgroundColor={cardIndex % 2 === 0 ? "black" : undefined}>
       <Text wrap="truncate">
         <Text color={barColor} bold={selected}>
           {selected ? "┃ " : "  "}
@@ -125,6 +128,14 @@ export function HumanVariablesTab({
   const heights = rows.map((r) =>
     r.type === "header" ? 1 : cardHeight(humanVarRows(r.def, state.activeVault, values).length),
   );
+  // stable per-card ordinal (group headers don't count) so zebra striping keeps
+  // its parity as the window scrolls instead of flipping with the visible slice
+  const cardOrdinals: number[] = [];
+  let cardCount = 0;
+  for (const r of rows) {
+    cardOrdinals.push(cardCount);
+    if (r.type !== "header") cardCount += 1;
+  }
 
   const winFull = cardWindow(heights, selected, height);
   const overflow = winFull.above > 0 || winFull.below > 0;
@@ -158,6 +169,7 @@ export function HumanVariablesTab({
             focused={focused}
             rowFocus={state.humanRowFocus && idx === selected}
             rowIndex={state.humanRowIndex}
+            cardIndex={cardOrdinals[idx] ?? 0}
             width={width}
           />
         );

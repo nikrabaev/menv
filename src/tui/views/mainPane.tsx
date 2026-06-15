@@ -254,7 +254,11 @@ export function MainPane({
     backups: [backupsList(state).length, state.backups.length],
   };
   const [count, total] = counts[state.tab];
-  const listHeight = Math.max(1, height - 3); // tab bar + filter line + legend slack
+  // `height` is the pane's interior. The Pane draws a title (+ a roomy spacer
+  // when tall), and we add a tab bar (+ a filter line only when filtering) above
+  // the body — subtract exactly those so the list fills the rest, no more.
+  const filterVisible = state.filterEditing || (state.filters[state.tab] ?? "") !== "";
+  const listHeight = Math.max(1, height - 1 - (roomy ? 1 : 0) - 1 - (filterVisible ? 1 : 0));
   const body = (() => {
     switch (state.tab) {
       case "variables":

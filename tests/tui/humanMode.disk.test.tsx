@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { loadRegistry } from "../../src/registry/persist.ts";
 import { makeRegistry } from "../helpers/fixtures.ts";
-import { ARROW_DOWN, ENTER, renderApp, tick } from "./helpers.tsx";
+import { ARROW_DOWN, ENTER, ESC, renderApp, tick } from "./helpers.tsx";
 
 const vaultJson = async (root: string): Promise<Record<string, string>> =>
   JSON.parse(await Bun.file(join(root, ".menv/vault.json")).text()) as Record<string, string>;
@@ -109,6 +109,47 @@ describe("human mode", () => {
     expect(lines[headerIdx]).toContain("┃");
     expect(lines[headerIdx + 1]).toContain("┃");
     expect(lines[headerIdx + 2]).toContain("┃");
+    rig.ui.unmount();
+  });
+
+  test("the card list fills the pane — cards are hidden only when truly out of room", async () => {
+    // 25 single-row cards (2 rendered lines each) at the default 130×40.
+    const registry = makeRegistry();
+    registry.variables = {};
+    const values: Record<string, string> = {};
+    for (let i = 0; i < 25; i++) {
+      const k = `k${i}`;
+      registry.variables[`VAR_${String(i).padStart(2, "0")}`] = { vaultMapping: { local: { api: { key: k } } } };
+      values[k] = `v${i}`;
+    }
+    const rig = await renderApp(registry, values);
+    await rig.type("H");
+    // Each visible card shows its name once (the header "VAR_NN" line).
+    const visibleCards = (rig.frame().match(/VAR_\d\d/g) ?? []).length;
+    // The body is ~32 lines, so well over a dozen 2-line cards fit. The bug this
+    // guards: a stale per-card +1 in cardHeight (and an under-counted height
+    // budget) left ~11 lines blank while showing only ~9 cards.
+    expect(visibleCards).toBeGreaterThanOrEqual(12);
+    rig.ui.unmount();
+  });
+
+  test("esc backs out of the entered var before it clears the filter", async () => {
+    const rig = await renderApp();
+    await rig.type("H"); // human mode
+    await rig.type("/"); // filter the list down to API_URL
+    await rig.type("api");
+    await rig.type(ENTER);
+    expect(rig.frame()).toContain("(1/3)");
+    await rig.type(ENTER); // enter API_URL's table (row focus)
+    expect(rig.frame()).toContain("edit value");
+
+    await rig.type(ESC); // 1st esc: exit the var, KEEP the filter
+    const afterFirst = rig.frame();
+    expect(afterFirst).not.toContain("edit value"); // back to card navigation
+    expect(afterFirst).toContain("(1/3)"); // filter still applied
+
+    await rig.type(ESC); // 2nd esc: now the filter clears
+    expect(rig.frame()).not.toContain("(1/3)");
     rig.ui.unmount();
   });
 

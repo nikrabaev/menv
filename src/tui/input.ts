@@ -286,7 +286,11 @@ export function handlePaneKey(store: Store, ctx: TuiContext, narrow: boolean, in
     store.dispatch({ type: "filterEditing", editing: true });
     return;
   }
-  if (key.escape && state.focus === "main" && state.filters[state.tab] !== "") {
+  // esc backs out the most specific state first: when a human-mode var is
+  // entered (its table is focused), the first esc exits the var (handled below
+  // in handleHumanRowKey) and only a later esc clears the filter.
+  const insideEnteredVar = state.humanMode && state.tab === "variables" && state.humanRowFocus;
+  if (key.escape && state.focus === "main" && state.filters[state.tab] !== "" && !insideEnteredVar) {
     store.dispatch({ type: "filter", tab: state.tab, value: "" });
     return;
   }
