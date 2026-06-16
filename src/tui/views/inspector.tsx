@@ -115,7 +115,10 @@ export function VariableDetail({
           const valueText =
             rt === undefined || !rt.unlocked
               ? "locked"
-              : maskValue(def.secret === true, row.cell.key !== undefined ? rt.values?.[row.cell.key] : undefined);
+              : maskValue(
+                  def.secret === true && !state.revealSecrets,
+                  row.cell.key !== undefined ? rt.values?.[row.cell.key] : undefined,
+                );
           const isSelected = showWiringCursor && i === wiringSelected;
           const segments: Segment[] = [
             { text: `${glyph.char} `, color: glyph.color },

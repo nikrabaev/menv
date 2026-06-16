@@ -153,7 +153,8 @@ export function ValueEditModal({
           {options.map((o, i) => {
             const row = i + 1;
             const on = adoptKey === o.key;
-            const preview = o.value === undefined ? "∅" : secret ? "***" : truncate(o.value, 28);
+            const preview =
+              o.value === undefined ? "∅" : secret && !store.state.revealSecrets ? "***" : truncate(o.value, 28);
             return (
               <Text key={o.key} color={cursor === row ? theme.accent : undefined} bold={cursor === row}>
                 {cursor === row ? "› " : "  "}

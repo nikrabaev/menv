@@ -32,6 +32,7 @@ function VarCard({
   rowFocus,
   rowIndex,
   cardIndex,
+  revealed,
   width,
 }: {
   name: string;
@@ -43,6 +44,7 @@ function VarCard({
   rowFocus: boolean;
   rowIndex: number; // cursor row within THIS card's table (only meaningful when rowFocus)
   cardIndex: number; // this card's ordinal among cards (for zebra striping)
+  revealed: boolean; // global reveal: show flagged secrets in plaintext
   width: number;
 }): React.ReactElement {
   const secret = def.secret === true;
@@ -80,7 +82,7 @@ function VarCard({
       ) : (
         rows.map((row, i) => {
           const valueText =
-            row.hasValue === undefined ? "⚿ locked" : maskValue(secret, row.value);
+            row.hasValue === undefined ? "⚿ locked" : maskValue(secret && !revealed, row.value);
           const segments: Segment[] = [
             { text: `  ${truncate(row.consumer, cols.consumer).padEnd(cols.consumer)}`, color: theme.muted, dim: true },
             {
@@ -170,6 +172,7 @@ export function HumanVariablesTab({
             rowFocus={state.humanRowFocus && idx === selected}
             rowIndex={state.humanRowIndex}
             cardIndex={cardOrdinals[idx] ?? 0}
+            revealed={state.revealSecrets}
             width={width}
           />
         );

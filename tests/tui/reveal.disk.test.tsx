@@ -36,3 +36,30 @@ describe("global reveal — behavior", () => {
     rig.ui.unmount();
   });
 });
+
+describe("global reveal — masking", () => {
+  test("ctrl+r unmasks secret values in the inspector, then re-masks", async () => {
+    const rig = await renderApp(undefined, {
+      "k-db": "SHORTSECRET",
+      "k-api": "https://api.example.com",
+    });
+    // The masked placeholder shows on the (shared-key) wiring rows; the bare
+    // "***" in the inspector legend is excluded by keying off "*** ⧉shared".
+    expect(rig.frame()).toContain("*** ⧉shared"); // DATABASE_URL masked in the inspector
+    expect(rig.frame()).not.toContain("SHORTSECRET");
+
+    await rig.type(CTRL_R);
+    await tick(25);
+    expect(rig.frame()).not.toContain("SHORTSECRET"); // still masked behind the confirm
+    await rig.type("y");
+    await tick(25);
+    expect(rig.frame()).toContain("SHORTSECRET"); // revealed
+    expect(rig.frame()).not.toContain("*** ⧉shared");
+
+    await rig.type(CTRL_R); // hide again
+    await tick(25);
+    expect(rig.frame()).not.toContain("SHORTSECRET");
+    expect(rig.frame()).toContain("*** ⧉shared");
+    rig.ui.unmount();
+  });
+});
