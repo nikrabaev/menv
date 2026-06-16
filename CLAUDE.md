@@ -100,6 +100,7 @@ lines between hand-authored `# <menv:consumer>` … `# </menv>` markers.
 
 ## Boundaries
 
+- 🤝 **Git:** committing locally does **not** require per-commit approval — commit freely as work lands (still never commit a plaintext secret; see 🚫 below). Pushing to a remote is outward-facing — confirm first.
 - ✅ **Always:** run `bun test` (whole suite) before claiming done. Keep explicit `.ts` extensions and named exports. When a command/flag, on-disk layout, vault provider, or the registry schema changes, update `README.md` in the **same** change (the completion script regenerates from the command tree — keep the drift-guard test passing).
 - ⚠️ **Ask first:** changing `menv.json`'s `schemaVersion` or shape (existing repos need migration). Bumping core deps (`bun`, `commander`, `age-encryption`). Anything in `src/vault/` that changes encryption or the provider contract.
 - 🚫 **Never:** commit a plaintext `.env`/`.env.*` or a plaintext vault file; print a real secret in code, tests, logs, or a plan (secrets are stripped from `planToJson` for a reason). Hand-edit a generated file — it's an output. Add a default export or reach for a Node API where a Bun one exists.
