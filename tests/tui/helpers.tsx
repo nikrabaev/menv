@@ -16,6 +16,7 @@ export const ARROW_RIGHT = "\u001B[C";
 export const ENTER = "\r";
 export const ESC = "\u001B";
 export const TAB = "\t";
+export const CTRL_R = "\u0012"; // ctrl+r (DC2) — Ink decodes to { input: "r", ctrl: true }
 
 export function tick(ms = 25): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

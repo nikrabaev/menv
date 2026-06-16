@@ -43,6 +43,7 @@ import {
   startVaultEdit,
   startWire,
   toggleDisabled,
+  toggleReveal,
   vaultRemove,
   vaultSetDefault,
 } from "./state/mutations.ts";
@@ -184,8 +185,10 @@ function handleMainKey(store: Store, ctx: TuiContext, narrow: boolean, input: st
       else if (input === "w") startWire(store, ctx, name);
       else if (input === "u") startUnwire(store, ctx, name, state.activeVault, consumer);
       else if (input === "s") startSetValue(store, ctx, name, state.activeVault, consumer);
-      else if (input === "r") startReveal(store, ctx, name, state.activeVault, consumer);
-      else if (input === "d") toggleDisabled(store, ctx, name, state.activeVault, consumer);
+      else if (input === "r") {
+        if (state.revealSecrets) setStatus(store, "info", "secrets already revealed — ^r to hide");
+        else startReveal(store, ctx, name, state.activeVault, consumer);
+      } else if (input === "d") toggleDisabled(store, ctx, name, state.activeVault, consumer);
       return;
     }
     case "globals": {
@@ -240,8 +243,10 @@ function handleInspectorKey(store: Store, ctx: TuiContext, input: string, key: K
   else if (input === "w") startWire(store, ctx, name);
   else if (row !== undefined) {
     if (input === "s") startSetValue(store, ctx, name, row.vault, row.consumer);
-    else if (input === "r") startReveal(store, ctx, name, row.vault, row.consumer);
-    else if (input === "d") toggleDisabled(store, ctx, name, row.vault, row.consumer);
+    else if (input === "r") {
+      if (state.revealSecrets) setStatus(store, "info", "secrets already revealed — ^r to hide");
+      else startReveal(store, ctx, name, row.vault, row.consumer);
+    } else if (input === "d") toggleDisabled(store, ctx, name, row.vault, row.consumer);
     else if (input === "u") startUnwire(store, ctx, name, row.vault, row.consumer);
   }
 }
@@ -252,6 +257,10 @@ export function handlePaneKey(store: Store, ctx: TuiContext, narrow: boolean, in
   const state = store.getState();
 
   // global chords first
+  if (key.ctrl && input === "r") {
+    toggleReveal(store);
+    return;
+  }
   if (input === "q") {
     store.dispatch({ type: "pushModal", modal: { kind: "quit" } });
     return;
