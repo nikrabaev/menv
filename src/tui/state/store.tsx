@@ -70,6 +70,8 @@ export interface AppState {
   humanMode: boolean; // 'human' presentation: cards + value table, no inspector
   humanRowFocus: boolean; // navigating the selected card's consumer/value table
   humanRowIndex: number; // selected table row within the focused card
+  revealSecrets: boolean; // session-wide: show flagged secrets in plaintext
+  revealConfirmed: boolean; // user confirmed a reveal at least once this session
   sidebarIndex: number;
   mainIndex: Record<MainTab, number>;
   inspectorIndex: number;
@@ -93,6 +95,8 @@ export function initialState(registry: Registry): AppState {
     humanMode: false,
     humanRowFocus: false,
     humanRowIndex: 0,
+    revealSecrets: false,
+    revealConfirmed: false,
     sidebarIndex: 1, // 0 is the VAULTS header; a valid registry always has a vault below it
     mainIndex: { variables: 0, globals: 0, groups: 0, compose: 0, backups: 0 },
     inspectorIndex: 0,
@@ -114,6 +118,7 @@ export type Action =
   | { type: "humanMode"; enabled: boolean }
   | { type: "humanRowFocus"; focused: boolean }
   | { type: "humanRowIndex"; index: number }
+  | { type: "revealSecrets"; revealed: boolean }
   | { type: "sidebarIndex"; index: number }
   | { type: "mainIndex"; tab: MainTab; index: number }
   | { type: "inspectorIndex"; index: number }
@@ -160,6 +165,12 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, humanRowFocus: action.focused, humanRowIndex: action.focused ? state.humanRowIndex : 0 };
     case "humanRowIndex":
       return { ...state, humanRowIndex: action.index };
+    case "revealSecrets":
+      return {
+        ...state,
+        revealSecrets: action.revealed,
+        revealConfirmed: state.revealConfirmed || action.revealed,
+      };
     case "sidebarIndex":
       return { ...state, sidebarIndex: action.index };
     case "mainIndex":

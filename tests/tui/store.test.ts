@@ -31,3 +31,19 @@ describe("reducer · human mode", () => {
     expect(s.humanRowIndex).toBe(0);
   });
 });
+
+describe("reducer · reveal secrets", () => {
+  test("reveal flags default off", () => {
+    const s = base();
+    expect(s.revealSecrets).toBe(false);
+    expect(s.revealConfirmed).toBe(false);
+  });
+
+  test("revealing sets both flags; hiding keeps the session confirmation", () => {
+    let s = base();
+    s = reducer(s, { type: "revealSecrets", revealed: true });
+    expect(s).toMatchObject({ revealSecrets: true, revealConfirmed: true });
+    s = reducer(s, { type: "revealSecrets", revealed: false });
+    expect(s).toMatchObject({ revealSecrets: false, revealConfirmed: true });
+  });
+});
