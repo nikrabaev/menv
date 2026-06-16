@@ -31,6 +31,7 @@ export const KEYMAP: Record<KeyContext, KeyHint[]> = {
     { key: "i", label: "import" },
     { key: "R", label: "reload" },
     { key: "H", label: "human mode" },
+    { key: "^r", label: "reveal secrets" },
     { key: "?", label: "help" },
     { key: "q", label: "quit" },
   ],
@@ -103,9 +104,20 @@ export const KEYMAP: Record<KeyContext, KeyHint[]> = {
   ],
 };
 
+// Hints for a context with runtime suppressions applied. While secrets are
+// globally revealed, the per-value `r` peek is unavailable, so its hint is
+// dropped from the contexts that offer it.
+export function contextHints(context: KeyContext, revealSecrets = false): KeyHint[] {
+  const hints = KEYMAP[context];
+  if (revealSecrets && (context === "variables" || context === "inspector")) {
+    return hints.filter((h) => h.key !== "r");
+  }
+  return hints;
+}
+
 // The 3–8 hints shown in the footer for a focused context (global tail kept short).
-export function footerHints(context: KeyContext): KeyHint[] {
-  const own = KEYMAP[context].slice(0, 6);
+export function footerHints(context: KeyContext, revealSecrets = false): KeyHint[] {
+  const own = contextHints(context, revealSecrets).slice(0, 6);
   return [...own, { key: "?", label: "help" }, { key: "q", label: "quit" }];
 }
 

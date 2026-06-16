@@ -2,7 +2,7 @@
 // the two derivations honest.
 import { describe, expect, test } from "bun:test";
 import type { KeyContext } from "../../src/tui/keys.ts";
-import { footerHints, HELP_SECTIONS, KEYMAP } from "../../src/tui/keys.ts";
+import { contextHints, footerHints, HELP_SECTIONS, KEYMAP } from "../../src/tui/keys.ts";
 
 describe("keymap", () => {
   test("every context is reachable from the help overlay", () => {
@@ -26,5 +26,22 @@ describe("keymap", () => {
     expect(global).toContain("q");
     expect(global).toContain("?");
     expect(global).toContain("/");
+  });
+});
+
+describe("reveal suppresses the peek hint", () => {
+  test("contextHints drops r when secrets are revealed", () => {
+    expect(contextHints("inspector", true).some((h) => h.key === "r")).toBe(false);
+    expect(contextHints("inspector", false).some((h) => h.key === "r")).toBe(true);
+    expect(contextHints("variables", true).some((h) => h.key === "r")).toBe(false);
+  });
+
+  test("footerHints honors the reveal flag", () => {
+    expect(footerHints("inspector", true).some((h) => h.key === "r")).toBe(false);
+    expect(footerHints("inspector").some((h) => h.key === "r")).toBe(true);
+  });
+
+  test("ctrl+r is registered as a global chord", () => {
+    expect(KEYMAP.global.some((h) => h.key === "^r")).toBe(true);
   });
 });
