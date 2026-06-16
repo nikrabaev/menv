@@ -136,8 +136,8 @@ backups`), and the **inspector** (full wiring matrix of the selection; below 110
 columns it becomes a detail view on `⏎`). An uninitialized repo opens the init
 wizard instead.
 
-- Navigate: `tab`/`1`–`3` panes · `[` `]` tabs · `↑↓`/`jk` · `/` filter · `?`
-  full key reference · `q` quit.
+- Navigate: `tab`/`1`–`3` panes · `[` `]` tabs · `↑↓`/`jk` · `/` filter · `^r`
+  reveal secrets · `?` full key reference · `q` quit.
 - Scope: `⏎` on a vault makes it active (the environment everything reads
   from); `⏎` on a consumer narrows the variable list.
 - Act (variables tab): `n` define · `e` edit · `w` wire · `u` unwire · `s` set
@@ -147,10 +147,13 @@ wizard instead.
   never values), file ops, warnings, blockers — and applies on `⏎`; blockers
   require arming force (`f`) explicitly. This is `--dry-run`/`--force` made
   visual.
-- Secrets render `***` everywhere; reveal is per-value behind a confirm. A
-  locked (encrypted) vault prompts for its passphrase in a masked modal — the
-  passphrase stays in memory for the session, never on disk. `--vault-auth
-  <vault>=<secret>` pre-unlocks.
+- Secrets render `***` everywhere. `^r` toggles a session-wide reveal of all
+  secrets — the first reveal each session asks to confirm; hiding never does —
+  and a red "secrets shown" badge marks the header while revealed. While
+  revealed, the per-value `r` peek is unavailable; with secrets hidden, `r`
+  reveals a single value behind its own confirm. A locked (encrypted) vault
+  prompts for its passphrase in a masked modal — the passphrase stays in memory
+  for the session, never on disk. `--vault-auth <vault>=<secret>` pre-unlocks.
 - **`H` toggles "human" mode**: it hides the inspector and renders each variable
   as a card — a name/description header (the description scrolls to reveal the
   rest when the card is active) above a full-width `consumer · value` table,
