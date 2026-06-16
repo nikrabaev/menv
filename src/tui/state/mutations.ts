@@ -776,6 +776,37 @@ export function applyValueEdit(
   requestPlan(store, ctx, title, withDisabled(valueOp));
 }
 
+// Global session-wide reveal of all flagged secrets. Hiding never asks; the
+// first reveal of the session asks for confirmation, after which revealConfirmed
+// is latched on and the toggle flips freely. It changes only the masking layer —
+// it does not unlock vaults.
+export function toggleReveal(store: Store): void {
+  const state = store.getState();
+  if (state.revealSecrets) {
+    store.dispatch({ type: "revealSecrets", revealed: false });
+    setStatus(store, "info", "secrets hidden");
+    return;
+  }
+  const reveal = (): void => {
+    store.dispatch({ type: "revealSecrets", revealed: true });
+    setStatus(store, "info", "secrets revealed — ^r to hide");
+  };
+  if (state.revealConfirmed) {
+    reveal();
+    return;
+  }
+  store.dispatch({
+    type: "pushModal",
+    modal: {
+      kind: "confirm",
+      title: "Reveal all secrets",
+      body: "Show every secret value in plaintext across the TUI? (^r hides them again)",
+      danger: true,
+      onConfirm: reveal,
+    },
+  });
+}
+
 export function startReveal(store: Store, ctx: TuiContext, name: string, vault: string, consumer?: string): void {
   const state = store.getState();
   const def = state.registry.variables[name];
