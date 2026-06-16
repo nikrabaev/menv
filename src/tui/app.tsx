@@ -98,7 +98,7 @@ function AppBody({ ctx }: { ctx: TuiContext }): React.ReactElement {
         </Box>
       )}
       <StatusBar state={state} />
-      <Footer context={keyContext(state, entry?.kind, modalOpen)} />
+      <Footer context={keyContext(state, entry?.kind, modalOpen)} revealSecrets={state.revealSecrets} />
     </Box>
   );
 }

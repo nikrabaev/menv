@@ -26,7 +26,7 @@ export function ModalHost({ store, ctx }: { store: Store; ctx: TuiContext }): Re
   const onClose = (): void => store.dispatch({ type: "popModal" });
   switch (top.kind) {
     case "help":
-      return <HelpModal isTop onClose={onClose} />;
+      return <HelpModal revealSecrets={store.state.revealSecrets} isTop onClose={onClose} />;
     case "quit":
       return <QuitModal isTop onClose={onClose} />;
     case "plan":

@@ -63,3 +63,29 @@ describe("global reveal — masking", () => {
     rig.ui.unmount();
   });
 });
+
+describe("global reveal — chrome", () => {
+  test("header badge appears while revealed", async () => {
+    const rig = await renderApp();
+    expect(rig.frame()).not.toContain("SECRETS SHOWN");
+    await rig.type(CTRL_R);
+    await tick(25);
+    await rig.type("y");
+    await tick(25);
+    expect(rig.frame()).toContain("SECRETS SHOWN"); // @inkjs/ui Badge uppercases
+    rig.ui.unmount();
+  });
+
+  test("the inspector footer drops the r peek hint while revealed", async () => {
+    const rig = await renderApp();
+    await rig.type("3"); // focus the inspector (wide layout)
+    await tick(25);
+    expect(rig.frame()).toContain("r reveal"); // peek hint present
+    await rig.type(CTRL_R);
+    await tick(25);
+    await rig.type("y");
+    await tick(25);
+    expect(rig.frame()).not.toContain("r reveal"); // filtered out
+    rig.ui.unmount();
+  });
+});

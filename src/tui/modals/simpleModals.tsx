@@ -6,7 +6,7 @@ import type React from "react";
 import { useState } from "react";
 import { MenvError } from "../../core/errors.ts";
 import { ScrollList } from "../components/scrollList.tsx";
-import { HELP_SECTIONS, KEYMAP } from "../keys.ts";
+import { contextHints, HELP_SECTIONS } from "../keys.ts";
 import type { TuiContext } from "../state/data.ts";
 import { tryUnlock } from "../state/mutations.ts";
 import type { Store } from "../state/store.tsx";
@@ -270,7 +270,15 @@ export function FindingsModal({ store, isTop, onClose }: { store: Store; isTop: 
   );
 }
 
-export function HelpModal({ isTop, onClose }: { isTop: boolean; onClose: () => void }): React.ReactElement {
+export function HelpModal({
+  revealSecrets,
+  isTop,
+  onClose,
+}: {
+  revealSecrets: boolean;
+  isTop: boolean;
+  onClose: () => void;
+}): React.ReactElement {
   const [offset, setOffset] = useState(0);
   const lines: React.ReactElement[] = [];
   for (const section of HELP_SECTIONS) {
@@ -279,7 +287,7 @@ export function HelpModal({ isTop, onClose }: { isTop: boolean; onClose: () => v
         {section.title}
       </Text>,
     );
-    for (const hint of KEYMAP[section.context]) {
+    for (const hint of contextHints(section.context, revealSecrets)) {
       lines.push(
         <Text key={`${section.title}:${hint.key}:${hint.label}`}>
           {"  "}

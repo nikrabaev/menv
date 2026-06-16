@@ -37,6 +37,7 @@ export function Header({ state, repoName }: { state: AppState; repoName: string 
           {state.consumerFilter ?? "all"}
         </Text>
       </Text>
+      {state.revealSecrets ? <Badge color={theme.error}>secrets shown</Badge> : null}
     </Box>
   );
 }
@@ -73,8 +74,8 @@ export function StatusBar({ state }: { state: AppState }): React.ReactElement {
   );
 }
 
-export function Footer({ context }: { context: KeyContext }): React.ReactElement {
-  const hints = footerHints(context);
+export function Footer({ context, revealSecrets }: { context: KeyContext; revealSecrets: boolean }): React.ReactElement {
+  const hints = footerHints(context, revealSecrets);
   return (
     <Box paddingX={1}>
       <Text wrap="truncate" color={theme.muted}>
