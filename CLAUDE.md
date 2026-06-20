@@ -22,6 +22,7 @@ bun test tests/cli/program.disk.test.ts   # a single file
 bun run lint           # Biome: lint + import-sort (read-only)
 bun run lint:fix       # Biome: apply safe fixes
 bun run build          # compile a standalone ./menv binary
+bun run build:npm      # cross-compile all targets + assemble npm packages (release)
 ```
 
 Full CLI grammar and concepts live in `README.md`. The command set (`init`;
@@ -98,12 +99,29 @@ strips the marker (releasing the file) by default; `--delete-files` deletes it.
 Registered compose files are the exception — user-owned, menv only rewrites the
 lines between hand-authored `# <menv:consumer>` … `# </menv>` markers.
 
+## Releases & distribution
+
+Automated: Conventional-commit merges to `main` drive **release-please**
+(`release-please-config.json`) → release PR bumps `package.json` + `CHANGELOG.md`
+→ merging it tags `vX.Y.Z` → `.github/workflows/release.yml` builds + publishes.
+The version is **single-sourced** from `package.json` (`src/cli/program.ts`
+imports it; Bun inlines it into the compiled binary) — never hard-code a version.
+
+`bun run build:npm` (`npm/build-npm.ts`) cross-compiles per-platform binaries and
+assembles the npm packages: a launcher `@nikrabaev/menv` (plain-Node
+`npm/launcher/bin/menv.js` — the one deliberate non-Bun file; it must run without
+Bun on end-user machines) over `os`/`cpu`-gated platform packages. Channels: npm,
+GitHub Releases (binaries + `checksums.txt`), Homebrew
+(`scripts/update-homebrew.ts` → the `nikrabaev/homebrew-tap` repo). One-time setup
+(npm trusted publishing, the tap repo + token, repo Actions settings) is in the
+release plan, not here.
+
 ## Boundaries
 
 - 🤝 **Git:** committing locally does **not** require per-commit approval — commit freely as work lands (still never commit a plaintext secret; see 🚫 below). Pushing to a remote is outward-facing — confirm first.
 - ✅ **Always:** run `bun test` (whole suite) before claiming done. Keep explicit `.ts` extensions and named exports. When a command/flag, on-disk layout, vault provider, or the registry schema changes, update `README.md` in the **same** change (the completion script regenerates from the command tree — keep the drift-guard test passing).
 - ⚠️ **Ask first:** changing `menv.json`'s `schemaVersion` or shape (existing repos need migration). Bumping core deps (`bun`, `commander`, `age-encryption`). Anything in `src/vault/` that changes encryption or the provider contract.
-- 🚫 **Never:** commit a plaintext `.env`/`.env.*` or a plaintext vault file; print a real secret in code, tests, logs, or a plan (secrets are stripped from `planToJson` for a reason). Hand-edit a generated file — it's an output. Add a default export or reach for a Node API where a Bun one exists.
+- 🚫 **Never:** commit a plaintext `.env`/`.env.*` or a plaintext vault file; print a real secret in code, tests, logs, or a plan (secrets are stripped from `planToJson` for a reason). Hand-edit a generated file — it's an output. Add a default export or reach for a Node API where a Bun one exists (the sole exception is `npm/launcher/bin/menv.js`, the npm shim that must run under plain Node).
 
 ---
 Source of truth: `src/` (behavior), `package.json` (commands/deps), `biome.json`

@@ -1,13 +1,37 @@
 {
   "name": "menv",
-  "version": "2.0.0-dev",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Keyboard-friendly CLI + TUI for managing environment variables across a monorepo, with age-encrypted vaults and generated .env files.",
   "type": "module",
+  "license": "MIT",
+  "author": "Nikita Rabaev",
+  "homepage": "https://github.com/nikrabaev/menv#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikrabaev/menv.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nikrabaev/menv/issues"
+  },
+  "keywords": [
+    "env",
+    "environment-variables",
+    "dotenv",
+    "secrets",
+    "vault",
+    "age-encryption",
+    "monorepo",
+    "cli",
+    "tui"
+  ],
   "bin": {
     "menv": "./src/index.ts"
   },
   "scripts": {
     "menv": "bun run src/index.ts",
     "build": "bun build --compile --outfile menv src/index.ts",
+    "build:npm": "bun run npm/build-npm.ts",
     "test": "bun test",
     "lint": "biome check",
     "lint:fix": "biome check --write",

@@ -1,5 +1,10 @@
 # menv
 
+[![npm](https://img.shields.io/npm/v/%40nikrabaev%2Fmenv?logo=npm)](https://www.npmjs.com/package/@nikrabaev/menv)
+[![release](https://img.shields.io/github/v/release/nikrabaev/menv?logo=github)](https://github.com/nikrabaev/menv/releases/latest)
+[![ci](https://github.com/nikrabaev/menv/actions/workflows/ci.yml/badge.svg)](https://github.com/nikrabaev/menv/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A keyboard-friendly **CLI** for managing environment variables across a monorepo.
 
 menv keeps the *structure* of your environment — which variables exist, who
@@ -13,12 +18,32 @@ The mental model: edit *structure* in the registry and *values* in a vault via t
 CLI. Never hand-edit a generated `.env` — it is an output. menv flags any drift
 with `menv check`.
 
+## Install
+
+menv ships as a self-contained binary — **no Bun or Node runtime is required to
+run it**.
+
+```bash
+# npm — installs the `menv` binary on your PATH (also works with pnpm/bun add -g)
+npm install -g @nikrabaev/menv
+
+# Homebrew (macOS / Linux)
+brew install nikrabaev/tap/menv
+```
+
+Or download a binary directly from the
+[latest release](https://github.com/nikrabaev/menv/releases/latest) for your
+platform (`menv-darwin-arm64`, `menv-linux-x64`, `menv-windows-x64.exe`, …),
+verify it against `checksums.txt`, `chmod +x`, and put it on your `PATH`.
+Building from source instead? See [Development](#development).
+
+> **Windows:** the binary runs, but the macOS Keychain / 1Password / clipboard
+> integrations shell out to Unix tooling and are unavailable there — use the
+> `password` vault backend.
+
 ## Quick start
 
 ```bash
-bun install              # install deps
-bun link                 # (optional) put `menv` on your PATH; equals `bun run menv`
-
 menv init                # create menv.json + an encrypted local vault
 # menv init --no-encrypt   # plaintext local vault instead (stays git-ignored)
 
@@ -302,7 +327,18 @@ bun test tests/cli/program.disk.test.ts   # a single file
 bun run lint           # Biome: lint + import-sort (read-only)
 bun run lint:fix       # Biome: apply safe fixes
 bun run build          # compile a standalone ./menv binary
+bun run build:npm      # cross-compile all targets + assemble the npm packages
 ```
+
+### Releases
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please).
+Land [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
+`feat!:`) on `main`; release-please opens a release PR that bumps the version and
+updates `CHANGELOG.md`. Merging it tags `vX.Y.Z`, then CI cross-compiles the
+per-platform binaries and publishes them to the GitHub Release, npm
+(`@nikrabaev/menv`), and the Homebrew tap. The version is single-sourced from
+`package.json` — the binary reads it at build time, so never hard-code it elsewhere.
 
 ## Security model
 

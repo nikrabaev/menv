@@ -1,0 +1,36 @@
+class Menv < Formula
+  desc "Keyboard-friendly CLI + TUI for managing env vars across a monorepo"
+  homepage "https://github.com/nikrabaev/menv"
+  version "{{VERSION}}"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/nikrabaev/menv/releases/download/v{{VERSION}}/menv-darwin-arm64"
+      sha256 "{{SHA_DARWIN_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/nikrabaev/menv/releases/download/v{{VERSION}}/menv-darwin-x64"
+      sha256 "{{SHA_DARWIN_X64}}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/nikrabaev/menv/releases/download/v{{VERSION}}/menv-linux-arm64"
+      sha256 "{{SHA_LINUX_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/nikrabaev/menv/releases/download/v{{VERSION}}/menv-linux-x64"
+      sha256 "{{SHA_LINUX_X64}}"
+    end
+  end
+
+  def install
+    bin.install Dir["menv-*"].first => "menv"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/menv --version")
+  end
+end

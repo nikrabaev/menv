@@ -1,0 +1,18 @@
+{
+  "name": "{{NAME}}",
+  "version": "{{VERSION}}",
+  "description": "menv prebuilt binary for {{OS}} {{CPU}}. Installed automatically as an optional dependency of @nikrabaev/menv.",
+  "os": ["{{OS}}"],
+  "cpu": ["{{CPU}}"],
+  "files": ["bin/{{EXE}}"],
+  "license": "MIT",
+  "homepage": "https://github.com/nikrabaev/menv#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikrabaev/menv.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

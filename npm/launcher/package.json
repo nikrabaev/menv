@@ -1,0 +1,47 @@
+{
+  "name": "@nikrabaev/menv",
+  "version": "0.0.0-managed",
+  "description": "Keyboard-friendly CLI + TUI for managing environment variables across a monorepo, with age-encrypted vaults and generated .env files.",
+  "type": "commonjs",
+  "bin": {
+    "menv": "bin/menv.js"
+  },
+  "files": [
+    "bin/menv.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/nikrabaev/menv#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikrabaev/menv.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nikrabaev/menv/issues"
+  },
+  "keywords": [
+    "env",
+    "environment-variables",
+    "dotenv",
+    "secrets",
+    "vault",
+    "age-encryption",
+    "monorepo",
+    "cli",
+    "tui"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "optionalDependencies": {
+    "@nikrabaev/menv-darwin-arm64": "0.0.0-managed",
+    "@nikrabaev/menv-darwin-x64": "0.0.0-managed",
+    "@nikrabaev/menv-linux-arm64": "0.0.0-managed",
+    "@nikrabaev/menv-linux-x64": "0.0.0-managed",
+    "@nikrabaev/menv-win32-x64": "0.0.0-managed"
+  }
+}
