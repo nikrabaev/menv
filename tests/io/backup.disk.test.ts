@@ -1,67 +1,68 @@
-import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { afterEach, describe, expect, test } from "bun:test";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { backupExists, backupFiles, createBackup, listBackups, restoreBackup } from "../../src/io/backup.ts";
+import { runGenerate } from "../../src/cli/generate.ts";
+import { openVaultSession } from "../../src/cli/run.ts";
+import { backupKey, collectBackupPaths, createBackup, listBackups, restoreBackup } from "../../src/io/backup.ts";
+import { makeRegistry, tmpRepo } from "../helpers/fixtures.ts";
 
-async function setupRepo(): Promise<string> {
-  const root = mkdtempSync(join(tmpdir(), "menv-"));
-  await Bun.write(join(root, ".env"), "ROOT=1\n");
-  await mkdir(join(root, "apps", "api"), { recursive: true });
-  await Bun.write(join(root, "apps", "api", ".env"), "PORT=3000\n");
-  await Bun.write(join(root, "apps", "api", ".env.example"), "PORT=\n");
-  return root;
-}
+const roots: string[] = [];
+afterEach(async () => {
+  for (const r of roots.splice(0)) await rm(r, { recursive: true, force: true });
+});
+const FLAGS = { dryRun: false, force: false, mode: "json" as const, vaultAuth: {}, env: {} };
 
-test("createBackup preserves the relative layout under .menv/backups/<key>", async () => {
-  const root = await setupRepo();
-  const files = await createBackup(root, "k1");
-  expect(files).toEqual([".env", "apps/api/.env", "apps/api/.env.example"]);
-  expect(existsSync(join(root, ".menv", "backups", "k1", ".env"))).toBe(true);
-  expect(await Bun.file(join(root, ".menv", "backups", "k1", "apps", "api", ".env")).text()).toBe("PORT=3000\n");
+describe("backupKey", () => {
+  test("formats a stable sortable timestamp", () => {
+    expect(backupKey(new Date(Date.UTC(2026, 5, 12, 9, 8, 7)))).toMatch(/^2026061[12]-\d{6}$/);
+  });
 });
 
-test("createBackup makes the key dir even when there are no env files", async () => {
-  const root = mkdtempSync(join(tmpdir(), "menv-"));
-  expect(await createBackup(root, "empty")).toEqual([]);
-  expect(existsSync(join(root, ".menv", "backups", "empty"))).toBe(true);
-});
+describe("collect / create / restore", () => {
+  async function repo() {
+    const registry = makeRegistry();
+    registry.variables = { PORT: { vaultMapping: { local: { api: { key: "k" } } } } };
+    const root = await tmpRepo(registry);
+    roots.push(root);
+    const s = await openVaultSession(root, registry, "local", FLAGS);
+    await s.set("k", "3000");
+    await s.close();
+    await runGenerate(root, registry, {}, FLAGS, { stdout() {}, stderr() {} });
+    return { root, registry };
+  }
 
-test("listBackups returns dirs newest-first and [] when absent", async () => {
-  const root = mkdtempSync(join(tmpdir(), "menv-"));
-  expect(await listBackups(root)).toEqual([]);
-  await createBackup(root, "20260101000000");
-  await createBackup(root, "20260102000000");
-  expect(await listBackups(root)).toEqual(["20260102000000", "20260101000000"]);
-});
+  test("captures registry, vault file, and marker-bearing generated files only", async () => {
+    const { root, registry } = await repo();
+    await Bun.write(join(root, "apps/api/STRAY.txt"), "ignore me\n");
+    const paths = await collectBackupPaths(root, registry);
+    expect(paths).toContain("menv.json");
+    expect(paths).toContain(".menv/vault.json");
+    expect(paths).toContain("apps/api/.env");
+    expect(paths).not.toContain("apps/api/STRAY.txt");
+  });
 
-test("backupExists reflects presence", async () => {
-  const root = await setupRepo();
-  await createBackup(root, "k1");
-  expect(await backupExists(root, "k1")).toBe(true);
-  expect(await backupExists(root, "nope")).toBe(false);
-});
+  test("restore brings back overwritten files", async () => {
+    const { root, registry } = await repo();
+    const key = backupKey(new Date());
+    await createBackup(root, key, await collectBackupPaths(root, registry));
+    expect(await listBackups(root)).toContain(key);
+    await Bun.write(join(root, "apps/api/.env"), "WIPED=1\n");
+    const restored = await restoreBackup(root, key);
+    expect(restored).toContain("apps/api/.env");
+    expect(await Bun.file(join(root, "apps/api/.env")).text()).not.toBe("WIPED=1\n");
+  });
 
-test("backupFiles recurses into nested dirs", async () => {
-  const root = await setupRepo();
-  await createBackup(root, "k1");
-  expect(await backupFiles(root, "k1")).toEqual([".env", "apps/api/.env", "apps/api/.env.example"]);
-});
-
-test("restoreBackup honors decide, restores non-existing files, and recreates a deleted parent dir", async () => {
-  const root = await setupRepo();
-  await createBackup(root, "k1");
-  // Mutate the root file, then delete the whole app dir.
-  await Bun.write(join(root, ".env"), "ROOT=changed\n");
-  rmSync(join(root, "apps", "api"), { recursive: true, force: true });
-
-  // Keep the changed root file; everything else (now missing) restores regardless.
-  const result = await restoreBackup(root, "k1", (rel) => rel !== ".env");
-
-  expect(await Bun.file(join(root, ".env")).text()).toBe("ROOT=changed\n");
-  expect(result.skipped).toEqual([".env"]);
-  expect(existsSync(join(root, "apps", "api", ".env"))).toBe(true);
-  expect(await Bun.file(join(root, "apps", "api", ".env")).text()).toBe("PORT=3000\n");
-  expect(result.restored).toEqual(["apps/api/.env", "apps/api/.env.example"]);
+  test("restore reproduces exact content, including the nested vault file", async () => {
+    const { root, registry } = await repo();
+    const key = backupKey(new Date());
+    await createBackup(root, key, await collectBackupPaths(root, registry));
+    const envBefore = await Bun.file(join(root, "apps/api/.env")).text();
+    const vaultBefore = await Bun.file(join(root, ".menv/vault.json")).text();
+    await Bun.write(join(root, "apps/api/.env"), "WIPED=1\n");
+    await Bun.write(join(root, ".menv/vault.json"), "{}\n");
+    const restored = await restoreBackup(root, key);
+    expect(restored).toContain(".menv/vault.json"); // exercises the nested-directory walk
+    expect(await Bun.file(join(root, "apps/api/.env")).text()).toBe(envBefore); // byte-for-byte
+    expect(await Bun.file(join(root, ".menv/vault.json")).text()).toBe(vaultBefore);
+  });
 });

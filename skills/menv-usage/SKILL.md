@@ -1,82 +1,83 @@
 ---
 name: menv-usage
 description: >-
-  Use when working in a repo managed by menv — environment variables and secrets
-  live in an age-encrypted vault (a menv.toml + .menv/ at the root) and the .env
-  files are GENERATED, not authored. Trigger whenever a task touches env vars,
-  secrets, API keys, database URLs, or .env / .env.<env> / .env.example files in
-  such a repo: adding or changing a variable, wiring one to an app, reading a
-  value, setting a per-environment or local value, or "my .env is empty / out of
-  date". ESPECIALLY before editing any .env by hand — in a menv repo that edit is
-  the wrong move and gets silently overwritten. If you see a menv.toml or a .menv/
-  directory, this skill applies.
+  Use when working in a repo managed by menv — the structure of environment
+  variables lives in a committed registry (menv.json at the root) and the VALUES
+  live in pluggable vaults; the .env files are GENERATED, not authored. Trigger
+  whenever a task touches env vars, secrets, API keys, database URLs, or
+  .env / .env.example / .env.compose files in such a repo: adding or changing a
+  variable, wiring one to a consumer, reading or setting a value, or "my .env is
+  empty / out of date". ESPECIALLY before editing any .env by hand — in a menv
+  repo that edit is the wrong move and gets silently overwritten by
+  `menv generate`. If you see a menv.json or a .menv/ directory, this skill
+  applies.
 ---
 
 # Using menv
 
-`menv` keeps every environment variable and secret for a repo in one
-age-encrypted **vault** (committed as ciphertext) and **generates** the plaintext
-`.env` files on demand. A repo uses it if there's a `menv.toml` and a `.menv/`
-directory at the root. Run `menv --help` to confirm it's installed; if a bare
-`menv` isn't found, check the project's `package.json` scripts / `./bin/` / README
-for how it's invoked (e.g. `bun run menv`) and substitute that below.
+`menv` keeps the *structure* of a repo's environment in one committed
+**registry** (`menv.json`) and the *values* in pluggable **vaults** (the bundled
+`menv-local` vault age-encrypts them). It **generates** the plaintext `.env`
+files on demand. A repo uses it if there's a `menv.json` at the root. Run
+`menv --help` to confirm it's installed; if a bare `menv` isn't found, check the
+project's `package.json` scripts / README for how it's invoked (e.g.
+`bun run menv`) and substitute that below.
 
 ## The one rule
 
-**The vault is the source of truth. Every `.env`, `.env.<env>`, and `.env.local`
-is a disposable, git-ignored *output*.** Change variables through the `menv` CLI;
-the affected files regenerate for you.
+**The registry is the source of truth for structure; values live in vaults —
+never in the registry, and never in a `.env`.** Every `.env`, `.env.example`, and
+`.env.compose` is a generated *output*.
 
 Never hand-edit a generated `.env`, and never `git add` one. A hand edit isn't a
-real change — the next `menv generate` (or any mutating command) rewrites that
-file from the vault, so the edit silently vanishes. If a value is wrong, fix it
-*in the vault* (`menv set`). If you find a value that exists only in a `.env`
-(someone added it by hand), import it into the vault so it survives regeneration —
-don't leave it in the file.
+real change — the next `menv generate` rewrites that file from the vault, so the
+edit silently vanishes. Change *structure* through registry commands and *values*
+through `menv set`, then run `menv generate`. `menv check` flags any drift between
+the registry/vault and the files on disk.
 
 ## Gotchas that bite (the part worth reading)
 
 - **Keep secret values out of shell history and logs.** Pipe them on stdin
   (`printf '%s' "$V" | menv set NAME`) or omit the value and let `menv set`
   prompt. Never pass a secret as a literal CLI argument. `menv get` prints the
-  *raw* value (secrets included) — don't `echo`/log it; `menv list` masks them.
+  *raw* value (secrets included) — don't `echo`/log it; `var list` / `var show`
+  and any `--output json` plan mask them.
+- **Prefer machine-readable output and previews.** Use `--output json` for results
+  you parse, and `--dry-run` to preview *any* mutation before applying it.
+- **Run `menv check` after a batch of changes.** `menv check --output json`; exit
+  **1** means problems (broken interpolation refs, stale generated files, a
+  plaintext vault or `.env` tracked by git).
+- **Vault auth must be non-interactive in scripts.** Supply it via
+  `MENV_VAULT_AUTH_<VAULT>` (upper-cased vault name) or a `.menv/auth.local.json`
+  entry. Off a TTY, menv never prompts — a missing key is a hard error (exit 3).
 - **Values are single-line.** A multi-line value (e.g. a PEM key) isn't supported
-  — put it on one line with escaped `\n`, or keep it out of the vault. Pasting a
-  raw multi-line blob risks a corrupted `.env`.
-- **The `password` key backend needs `MENV_PASSPHRASE`** for any headless run
-  (`MENV_PASSPHRASE=… menv generate`). The `keychain` / `1password` backends use
-  the ambient credential and need nothing extra.
-- **Ambiguous names need `--scope`.** If a name exists with more than one value,
-  menv reports the conflict rather than guessing — re-run with a scope it names.
-- **There is no separate "save".** Every mutating command (`define`, `set`,
-  `wire`, `unwire`, `rm`) re-encrypts the vault and regenerates the affected
-  files. Wiring a variable to an app that had no `.env` *materializes* one.
+  — put it on one line with escaped `\n`, or keep it out of the vault.
+- **Mutations never write outputs.** `set`, `wire`, `var define`, … only touch the
+  registry/vault. `menv generate` is the only writer of `.env` files.
 
 ## Command cheatsheet
 
 ```bash
-# read
-menv list                       # overview (secrets ***, unset empty, locals tagged)
-menv list --scope web --json    # filter to one app + machine-readable records
-menv get NAME [--env prod]       # RAW value to stdout — pipeable, don't log secrets
+# read (structure + masked values)
+menv var list [--vault V] [--consumer C] [--output json]   # variables, secrets masked
+menv var show NAME                                         # one variable, secrets masked
+menv get NAME [--vault V]                                  # RAW value to stdout — don't log secrets
 
-# change / add   (define = shape + wiring;  set = value)
-menv set NAME [value] [--env prod]              # value via arg, stdin, or prompt
-menv define NAME --secret --scope web,worker,root --description "…"
-printf '%s' "$V" | menv set NAME                # a secret, via stdin
+# change structure (registry)
+menv var define NAME --secret --description "…"            # define a variable
+menv wire NAME --vault V --consumers api,worker            # new per-consumer key each; --shared/--key K to share one value
+menv unwire NAME --vault V --consumers worker              # remove that mapping
 
-# wiring — which consumers receive it ("root" = the repo-root .env)
-menv wire NAME api     ·     menv unwire NAME worker     ·     menv rm NAME
+# change values (vault)
+menv set NAME [value] [--vault V] [--consumer C]          # value via arg, stdin, or masked prompt
+printf '%s' "$V" | menv set NAME                          # a secret, via stdin
 
-# regenerate (headless / CI) — password backend reads MENV_PASSPHRASE
-menv generate [--env prod]
-
-# environments & local overrides
-menv set NAME … --env prod           # a per-environment value
-menv <define|set|get|rm> NAME --local  # the .env.local override: a SEPARATE variable,
-                                       # generated into .local, kept out of .env.example
-menv mode <app> single|perenv        # one .env  vs  one .env.<env> per environment
+# generate + validate (the only writer of outputs; the CI gate)
+menv generate [--vault V] [--consumer C]                  # rewrite .env / .env.example / .env.compose
+menv check --output json || exit 1                        # exit 1 ⇒ problems
 ```
 
-When unsure what exists or how something is wired, `menv list --json` shows the
-full picture before you mutate anything.
+Every mutating command takes the global `--dry-run`, `--output pretty|json`,
+`--force`, and `--vault-auth <vault>=<secret>` flags. When unsure what exists or
+how something is wired, `menv var list --output json` shows the picture before you
+mutate anything.

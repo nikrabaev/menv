@@ -1,0 +1,216 @@
+import { dirname, join } from "node:path";
+import { MenvError } from "../core/errors.ts";
+import { findMarkerRegions } from "../generate/compose.ts";
+import { previewGenerate, scopeEntries } from "../generate/generate.ts";
+import { hasOwnershipMarker, headerVault } from "../generate/ownership.ts";
+import { consumerPaths, envTargets } from "../generate/paths.ts";
+import type { Registry } from "../registry/types.ts";
+import { resolveVaultAuthOptional } from "../vault/auth.ts";
+import type { VaultSession } from "../vault/provider.ts";
+import { getProvider } from "../vault/registry.ts";
+import type { Io } from "./output.ts";
+import { emitResult } from "./output.ts";
+import type { MutationFlags } from "./run.ts";
+
+export interface Finding {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+}
+const err = (code: string, message: string): Finding => ({ severity: "error", code, message });
+const warn = (code: string, message: string): Finding => ({ severity: "warning", code, message });
+
+async function gitTracked(root: string): Promise<Set<string> | null> {
+  try {
+    // -z: NUL-separated, unquoted output — otherwise git quotes/escapes
+    // non-ASCII paths and the tracked-set lookups silently miss them.
+    const proc = Bun.spawn(["git", "-C", root, "ls-files", "-z"], { stdout: "pipe", stderr: "ignore" });
+    if ((await proc.exited) !== 0) return null;
+    const text = await new Response(proc.stdout).text();
+    return new Set(text.split("\0").filter((l) => l !== ""));
+  } catch {
+    return null;
+  }
+}
+
+export interface CheckAuth {
+  vaultAuth: Record<string, string>;
+  env: Record<string, string | undefined>;
+}
+
+// Read-only findings collection — shared by the CLI gate and the TUI. Collects
+// every finding; never throws on auth failures (→ UNVERIFIED_VAULT).
+export async function collectFindings(root: string, registry: Registry, auth: CheckAuth): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const sessions = new Map<string, VaultSession>();
+  try {
+    // Open every vault inside the try so the finally always closes whatever was
+    // opened, even if a later vault throws a non-auth error.
+    for (const [name, def] of Object.entries(registry.vaults)) {
+      try {
+        const resolved = await resolveVaultAuthOptional(name, { root, flag: auth.vaultAuth[name], env: auth.env });
+        sessions.set(name, await getProvider(def.vaultType).init(def.vaultConfig, { root, auth: resolved }));
+      } catch (e) {
+        if (e instanceof MenvError && (e.code === "AUTH_MISSING" || e.code === "AUTH_FAILED")) {
+          findings.push(warn("UNVERIFIED_VAULT", `vault "${name}" could not be opened — checks against it skipped`));
+        } else throw e;
+      }
+    }
+
+    // Interpolation, missing values, key existence (MISSING_VALUE) per scope.
+    // Remember which (consumer, vault) scopes failed interpolation so the
+    // staleness loop below doesn't double-report — and, crucially, so it can
+    // report a recorded vault the scope loop never validated.
+    const interpolationFailed = new Set<string>();
+    for (const target of envTargets(registry.consumers, registry.defaults, {})) {
+      const session = sessions.get(target.vault);
+      if (session === undefined) continue;
+      const w: { code: string; message: string }[] = [];
+      try {
+        await scopeEntries(registry, target.consumer, target.vault, session, w);
+      } catch (e) {
+        if (!(e instanceof MenvError)) throw e;
+        findings.push(err("INTERPOLATION", `${target.consumer}/${target.vault}: ${e.message}`));
+        interpolationFailed.add(`${target.consumer}|${target.vault}`);
+      }
+      for (const mv of w) findings.push(warn(mv.code, mv.message));
+    }
+
+    // Staleness / foreign files, judged against each file's recorded vault.
+    const previewCache = new Map<string, Awaited<ReturnType<typeof previewGenerate>>>();
+    for (const [consumer, def] of Object.entries(registry.consumers)) {
+      const paths = consumerPaths(def);
+      const allPaths = [...paths.main, ...paths.local, ...(paths.example !== undefined ? [paths.example] : [])];
+      for (const rel of allPaths) {
+        const file = Bun.file(`${root}/${rel}`);
+        if (!(await file.exists())) continue;
+        const content = await file.text();
+        if (!hasOwnershipMarker(content)) {
+          findings.push(err("FOREIGN_FILE", `${rel} exists but is not menv-managed (no marker)`));
+          continue;
+        }
+        let vault = headerVault(content) ?? registry.defaults.vault;
+        if (rel === paths.example) {
+          // The example records no vault and is vault-independent (the union of
+          // wired names, values-free). A per-vault consumer may have no target
+          // in defaults.vault, so regenerate it against any vault that does have
+          // a target — otherwise previewGenerate yields nothing and drift hides.
+          const target = envTargets(registry.consumers, registry.defaults, { consumer }).find((t) => sessions.has(t.vault));
+          if (target !== undefined) vault = target.vault;
+        }
+        const key = `${consumer}|${vault}`;
+        let preview = previewCache.get(key);
+        if (preview === undefined) {
+          try {
+            preview = await previewGenerate(root, registry, { consumer, vault }, sessions);
+          } catch (e) {
+            if (!(e instanceof MenvError)) throw e;
+            // A broken ref/cycle. The scope loop validates only defaults.vault
+            // targets, so a file recording a different vault (generate --vault X)
+            // may not have been flagged — record it here so the gate never
+            // silently passes a file whose generate would throw.
+            if (!interpolationFailed.has(key)) {
+              findings.push(err("INTERPOLATION", `${consumer}/${vault}: ${e.message}`));
+              interpolationFailed.add(key);
+            }
+            continue;
+          }
+          previewCache.set(key, preview);
+        }
+        if (preview.writes.some((wr) => wr.path === rel)) findings.push(err("STALE", `${rel} differs from what generate would write`));
+      }
+    }
+
+    // Compose markers ↔ registry.
+    for (const cfile of registry.compose.files) {
+      const cf = Bun.file(`${root}/${cfile}`);
+      if (!(await cf.exists())) {
+        findings.push(err("MISSING_COMPOSE_FILE", `registered compose file not found: ${cfile}`));
+        continue;
+      }
+      const { regions, errors } = findMarkerRegions(await cf.text());
+      for (const e of errors) findings.push(err("COMPOSE_MARKER", `${cfile}: ${e}`));
+      if (regions.length === 0) findings.push(warn("COMPOSE_NO_MARKERS", `${cfile}: bound but has no menv markers`));
+      for (const r of regions) {
+        if (registry.consumers[r.consumer] === undefined) {
+          findings.push(err("COMPOSE_UNKNOWN_CONSUMER", `${cfile}: marker names unknown consumer "${r.consumer}"`));
+        }
+      }
+    }
+
+    // Git-tracking violations.
+    const tracked = await gitTracked(root);
+    if (tracked === null) {
+      findings.push(warn("GIT_UNAVAILABLE", "git not available — tracking checks skipped"));
+    } else {
+      for (const [name, def] of Object.entries(registry.vaults)) {
+        const cfg = def.vaultConfig as { filename?: string; encryption?: boolean };
+        if (def.vaultType === "menv-local" && cfg.encryption === false && typeof cfg.filename === "string" && tracked.has(cfg.filename)) {
+          findings.push(err("PLAINTEXT_VAULT_TRACKED", `plaintext vault "${name}" file ${cfg.filename} is tracked by git`));
+        }
+      }
+      for (const [consumer, def] of Object.entries(registry.consumers)) {
+        const hasSecret = Object.values(registry.variables).some(
+          (v) => v.secret === true && Object.values(v.vaultMapping).some((m) => m[consumer] !== undefined),
+        );
+        if (!hasSecret) continue;
+        const paths = consumerPaths(def);
+        const split = def.strategyConfig.secretsAsLocalOverrides === true;
+        const risky = split ? paths.local : paths.main; // secrets live in .local when split, else in main
+        for (const p of risky) {
+          if (tracked.has(p)) findings.push(err("SECRET_FILE_TRACKED", `${p} may contain secret values and is tracked by git`));
+        }
+      }
+      // A bound file's sibling .env.compose carries decrypted values too.
+      const composeEnvSeen = new Set<string>();
+      for (const cfile of registry.compose.files) {
+        const dir = dirname(cfile) === "." ? "" : dirname(cfile);
+        const envCompose = join(dir, ".env.compose");
+        if (composeEnvSeen.has(envCompose)) continue;
+        composeEnvSeen.add(envCompose);
+        if (tracked.has(envCompose)) {
+          findings.push(err("SECRET_FILE_TRACKED", `${envCompose} may contain secret values and is tracked by git`));
+        }
+      }
+    }
+
+    // Orphaned vault keys: present in a vault but referenced by no variable —
+    // a leftover from removing a wiring/variable/consumer. A warning, never a
+    // gate failure (the keys are harmless, just unreachable).
+    for (const [name, session] of sessions) {
+      const referenced = new Set<string>();
+      for (const v of Object.values(registry.variables)) {
+        for (const entry of Object.values(v.vaultMapping[name] ?? {})) referenced.add(entry.key);
+      }
+      let keys: string[];
+      try {
+        keys = await session.list();
+      } catch {
+        continue; // a provider that cannot list — skip, not an error
+      }
+      for (const k of keys) {
+        if (!referenced.has(k)) findings.push(warn("ORPHANED_KEY", `vault "${name}" key "${k}" is referenced by no variable`));
+      }
+    }
+  } finally {
+    await Promise.allSettled([...sessions.values()].map((s) => s.close()));
+  }
+  return findings;
+}
+
+// The CLI gate: exits 1 if any finding is an error (the entry point maps the
+// thrown VALIDATION → exit 1, carrying the full findings list in details).
+// Warnings never fail the gate.
+export async function runCheck(root: string, registry: Registry, flags: MutationFlags, io: Io): Promise<void> {
+  const findings = await collectFindings(root, registry, flags);
+  const errors = findings.filter((f) => f.severity === "error");
+  const pretty =
+    findings.length === 0
+      ? "all checks passed"
+      : findings.map((f) => `${f.severity === "error" ? "✖" : "⚠"} ${f.code}: ${f.message}`).join("\n");
+  if (errors.length > 0) {
+    if (flags.mode === "pretty") io.stdout(`${pretty}\n`);
+    throw new MenvError("VALIDATION", `check found ${errors.length} error(s)`, findings);
+  }
+  emitResult(io, flags.mode, { findings }, pretty);
+}
