@@ -1,0 +1,44 @@
+version: 2
+
+project_name: menv
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: menv
+    main: ./cmd/menv
+    binary: menv
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: menv
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  mode: keep-existing
+
+changelog:
+  disable: true
