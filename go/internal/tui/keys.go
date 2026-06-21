@@ -1,160 +1,183 @@
 package tui
 
-import "fmt"
+import (
+	"charm.land/bubbles/v2/key"
+)
 
-// KeyHint is one entry in the footer hint bar.
-type KeyHint struct {
-	Key  string
-	Desc string
+// keymap holds every binding. Footer hints and the help screen are derived from
+// these so there is one source of truth for "what key does what".
+type keymap struct {
+	// movement / panes
+	up, down, enter, esc key.Binding
+	tab, prevTab, nextTab key.Binding
+	pane1, pane2, pane3   key.Binding
+	// global
+	help, quit, reveal, check, generate, reload, human, importDotenv, filter key.Binding
+	// entity actions
+	add, edit, remove, define, wire, unwire, setVal, getReveal, toggle key.Binding
+	setDefault, unlock                                                   key.Binding
+	newItem, restore                                                     key.Binding
 }
 
-// FooterHints returns the key hints appropriate for the current state.
-func FooterHints(s *AppState) []KeyHint {
-	if s.FilterEditing {
-		return []KeyHint{
-			{Key: "enter/esc", Desc: "done"},
-		}
+func newKeymap() keymap {
+	b := func(keys string, help string, k ...string) key.Binding {
+		return key.NewBinding(key.WithKeys(k...), key.WithHelp(keys, help))
 	}
-	if top := s.topModal(); top != nil {
-		switch top.(type) {
-		case PlanModal:
-			return []KeyHint{
-				{Key: "enter", Desc: "apply"},
-				{Key: "f", Desc: "force"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case ConfirmModal:
-			return []KeyHint{
-				{Key: "enter", Desc: "confirm"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case UnlockModal:
-			return []KeyHint{
-				{Key: "enter", Desc: "unlock"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case FormModal:
-			return []KeyHint{
-				{Key: "tab", Desc: "next field"},
-				{Key: "enter", Desc: "submit"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case RevealModal:
-			return []KeyHint{
-				{Key: "esc", Desc: "close"},
-			}
-		case FindingsModal:
-			return []KeyHint{
-				{Key: "j/k", Desc: "scroll"},
-				{Key: "esc", Desc: "close"},
-			}
-		case GenerateModal:
-			return []KeyHint{
-				{Key: "enter", Desc: "apply"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case HelpModal:
-			return []KeyHint{{Key: "esc", Desc: "close"}}
-		case QuitModal:
-			return []KeyHint{
-				{Key: "enter", Desc: "quit"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case ConsumerPickModal:
-			return []KeyHint{
-				{Key: "j/k", Desc: "pick"},
-				{Key: "enter", Desc: "select"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		case OrphanPromptModal:
-			return []KeyHint{
-				{Key: "d", Desc: "delete"},
-				{Key: "k", Desc: "keep"},
-				{Key: "esc", Desc: "cancel"},
-			}
-		}
-	}
+	return keymap{
+		up:      b("↑/k", "up", "up", "k"),
+		down:    b("↓/j", "down", "down", "j"),
+		enter:   b("⏎", "select", "enter"),
+		esc:     b("esc", "back", "esc"),
+		tab:     b("tab", "cycle pane", "tab"),
+		prevTab: b("[", "prev tab", "["),
+		nextTab: b("]", "next tab", "]"),
+		pane1:   b("1", "sidebar", "1"),
+		pane2:   b("2", "main", "2"),
+		pane3:   b("3", "inspector", "3"),
 
-	// Pane-specific hints.
-	base := []KeyHint{
-		{Key: "tab", Desc: "pane"},
-		{Key: "[/]", Desc: "tab"},
-		{Key: "?", Desc: "help"},
-		{Key: "q", Desc: "quit"},
-	}
+		help:         b("?", "help", "?"),
+		quit:         b("q", "quit", "q"),
+		reveal:       b("^r", "reveal", "ctrl+r"),
+		check:        b("c", "check", "c"),
+		generate:     b("g", "generate", "g"),
+		reload:       b("R", "reload", "R"),
+		human:        b("H", "layout", "H"),
+		importDotenv: b("i", "import", "i"),
+		filter:       b("/", "filter", "/"),
 
-	switch s.Focus {
-	case PaneSidebar:
-		return append([]KeyHint{
-			{Key: "j/k", Desc: "move"},
-			{Key: "a", Desc: "add"},
-			{Key: "e", Desc: "edit"},
-			{Key: "x", Desc: "remove"},
-			{Key: "u", Desc: "unlock"},
-		}, base...)
-	case PaneMain:
-		switch s.Tab {
-		case TabVariables:
-			return append([]KeyHint{
-				{Key: "j/k", Desc: "move"},
-				{Key: "/", Desc: "filter"},
-				{Key: "n", Desc: "new"},
-				{Key: "s", Desc: "set"},
-				{Key: "w", Desc: "wire"},
-				{Key: "e", Desc: "edit"},
-				{Key: "x", Desc: "remove"},
-				{Key: "g", Desc: "generate"},
-			}, base...)
-		case TabGlobals:
-			return append([]KeyHint{
-				{Key: "j/k", Desc: "move"},
-				{Key: "n", Desc: "new"},
-				{Key: "e", Desc: "edit"},
-				{Key: "x", Desc: "remove"},
-			}, base...)
-		case TabGroups:
-			return append([]KeyHint{
-				{Key: "j/k", Desc: "move"},
-				{Key: "n", Desc: "new"},
-				{Key: "e", Desc: "edit"},
-				{Key: "x", Desc: "remove"},
-			}, base...)
-		case TabCompose:
-			return append([]KeyHint{
-				{Key: "j/k", Desc: "move"},
-				{Key: "n", Desc: "bind"},
-				{Key: "x", Desc: "unbind"},
-			}, base...)
-		case TabBackups:
-			return append([]KeyHint{
-				{Key: "j/k", Desc: "move"},
-				{Key: "n", Desc: "backup"},
-				{Key: "enter", Desc: "restore"},
-			}, base...)
-		}
-	case PaneInspector:
-		return append([]KeyHint{
-			{Key: "j/k", Desc: "row"},
-			{Key: "s", Desc: "set"},
-			{Key: "d", Desc: "disable"},
-			{Key: "u", Desc: "unwire"},
-			{Key: "esc", Desc: "back"},
-		}, base...)
+		add:        b("a", "add", "a"),
+		edit:       b("e", "edit", "e"),
+		remove:     b("x", "remove", "x"),
+		define:     b("n", "define", "n"),
+		wire:       b("w", "wire", "w"),
+		unwire:     b("u", "unwire", "u"),
+		setVal:     b("s", "set", "s"),
+		getReveal:  b("r", "reveal", "r"),
+		toggle:     b("d", "disable", "d"),
+		setDefault: b("D", "default", "D"),
+		unlock:     b("u", "unlock", "u"),
+		newItem:    b("n", "new", "n"),
+		restore:    b("⏎", "restore", "enter"),
 	}
-	return base
 }
 
-// FormatHints renders hints as "key desc · key desc …" for the footer.
-func FormatHints(hints []KeyHint) string {
-	out := ""
-	for i, h := range hints {
-		if i > 0 {
-			out += "  "
+// footerBindings returns up to ~6 context-sensitive hints; help/quit are always
+// appended by the renderer. The reveal hint is suppressed once secrets are
+// already revealed.
+func (a *App) footerBindings() []key.Binding {
+	k := a.keys
+	var out []key.Binding
+
+	switch {
+	case a.filterEditing:
+		return []key.Binding{a.keys.enter, a.keys.esc}
+	case a.focus == paneSidebar:
+		item := a.currentSidebarItem()
+		switch item.kind {
+		case sbVault:
+			out = []key.Binding{k.enter, k.unlock, k.add, k.edit, k.setDefault, k.remove}
+		case sbConsumer:
+			out = []key.Binding{k.enter, k.add, k.edit, k.remove}
+		default:
+			out = []key.Binding{k.add}
 		}
-		out += fmt.Sprintf("%s %s",
-			styleKeyName.Render(h.Key),
-			styleKeyHint.Render(h.Desc),
-		)
+	case a.focus == paneMain:
+		switch a.tab {
+		case tabVariables:
+			if a.humanMode {
+				out = []key.Binding{k.define, k.wire, k.setVal, k.getReveal, k.toggle, k.human}
+			} else {
+				out = []key.Binding{k.define, k.edit, k.wire, k.setVal, k.getReveal, k.enter}
+			}
+		case tabGlobals, tabGroups:
+			out = []key.Binding{k.define, k.edit, k.remove}
+		case tabCompose:
+			out = []key.Binding{k.define, k.remove}
+		case tabBackups:
+			out = []key.Binding{k.newItem, k.restore}
+		}
+	case a.focus == paneInspector:
+		out = []key.Binding{k.setVal, k.getReveal, k.toggle, k.unwire, k.wire, k.esc}
 	}
+
+	// global affordances
+	out = append(out, k.generate, k.check)
+	if !a.revealSecrets {
+		out = append(out, k.reveal)
+	}
+	out = append(out, k.help, k.quit)
 	return out
+}
+
+// helpSections returns the grouped keybinding reference for the help modal.
+func helpSections() []struct {
+	title string
+	rows  [][2]string
+} {
+	return []struct {
+		title string
+		rows  [][2]string
+	}{
+		{"Panes & navigation", [][2]string{
+			{"tab", "cycle sidebar → main → inspector"},
+			{"1 / 2 / 3", "jump to sidebar / main / inspector"},
+			{"[ / ]", "previous / next tab"},
+			{"↑/k ↓/j", "move cursor"},
+			{"⏎", "select / open / drill in"},
+			{"esc", "back / cancel"},
+			{"/", "filter the current tab"},
+		}},
+		{"Global", [][2]string{
+			{"^r", "toggle reveal secrets"},
+			{"g", "generate .env files"},
+			{"c", "run menv check"},
+			{"R", "reload from disk"},
+			{"H", "toggle variable layout (matrix / cards)"},
+			{"i", "import a dotenv file"},
+			{"? ", "this help"},
+			{"q", "quit"},
+		}},
+		{"Sidebar — vault", [][2]string{
+			{"⏎", "make active vault"},
+			{"u", "unlock"},
+			{"a / e", "add / edit vault"},
+			{"D", "set as default"},
+			{"x", "remove"},
+		}},
+		{"Sidebar — consumer", [][2]string{
+			{"⏎", "toggle consumer filter"},
+			{"a / e / x", "add / edit / remove"},
+		}},
+		{"Variables", [][2]string{
+			{"n", "define"},
+			{"e", "edit metadata"},
+			{"x", "remove"},
+			{"w / u", "wire / unwire"},
+			{"s", "set value"},
+			{"r", "reveal value"},
+			{"d", "toggle disabled"},
+		}},
+		{"Globals / Groups / Compose", [][2]string{
+			{"n", "define / add / bind"},
+			{"e", "edit"},
+			{"x", "remove / unbind"},
+		}},
+		{"Backups", [][2]string{
+			{"n", "create a backup now"},
+			{"⏎", "restore the selected backup"},
+		}},
+	}
+}
+
+// glyphLegend documents the matrix glyphs.
+func glyphLegend() [][2]string {
+	return [][2]string{
+		{glyphUnwired, "unwired"},
+		{glyphNoValue, "wired, no value"},
+		{glyphHasValue, "wired, has value"},
+		{glyphShared, "shared key"},
+		{glyphDisabled, "disabled"},
+		{glyphLocked, "vault locked"},
+		{glyphSecret, "secret"},
+	}
 }

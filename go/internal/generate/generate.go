@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // GenerateOpts selects which consumers/vaults to generate for.

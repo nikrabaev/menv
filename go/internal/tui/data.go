@@ -1,93 +1,170 @@
 package tui
 
 import (
-	"fmt"
+	tea "charm.land/bubbletea/v2"
 
-	"github.com/nikrabaev/menv/internal/cli"
-	"github.com/nikrabaev/menv/internal/core"
-	menvio "github.com/nikrabaev/menv/internal/io"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/internal/vault"
+	"github.com/nikrabaev/menv/go/internal/cli"
+	"github.com/nikrabaev/menv/go/internal/core"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
-// TuiContext is the immutable session context for the TUI.
-// Passphrases live only in Auth; they are never written to disk, logs, or state.
-type TuiContext struct {
-	Root string
-	Env  map[string]string
-	Auth map[string]string // vault name → secret (in-memory only)
+// ── async messages ──────────────────────────────────────────────────────────
+
+type vaultsLoadedMsg struct{ runtimes map[string]*vaultRuntime }
+
+type findingsMsg struct {
+	findings  []cli.Finding
+	err       error
+	openModal bool // when true, open the findings modal on receipt
 }
 
-// OpenSession opens a vault session using only what's in ctx.Auth (no TTY prompt).
-func OpenSession(ctx *TuiContext, reg registry.Registry, vaultName string) (core.VaultSession, error) {
-	def, ok := reg.Vaults[vaultName]
-	if !ok {
-		return nil, &core.MenvError{Code: core.ErrNotFound, Message: fmt.Sprintf("unknown vault %q", vaultName)}
-	}
-	p, err := vault.GetProvider(def.VaultType)
-	if err != nil {
-		return nil, err
-	}
-	auth := vault.VaultAuth{}
-	if secret, ok := ctx.Auth[vaultName]; ok {
-		auth = vault.VaultAuth{Secret: secret, HasSecret: true}
-	} else {
-		resolved, err := vault.ResolveVaultAuthOptional(vaultName, ctx.Root, ctx.Env)
-		if err != nil {
-			return nil, err
-		}
-		auth = resolved
-	}
-	return p.Init(def.VaultConfig, vault.VaultInitContext{Root: ctx.Root, Auth: auth})
+type backupsMsg struct{ keys []string }
+
+type registryReloadedMsg struct {
+	reg registry.Registry
+	err error
 }
 
-// LoadVaultRuntime snapshots all values in a vault into VaultRuntime.
-// If the vault can't be opened, returns an unlocked=false runtime (not an error).
-func LoadVaultRuntime(ctx *TuiContext, reg registry.Registry, vaultName string) VaultRuntime {
-	sess, err := OpenSession(ctx, reg, vaultName)
+// unlockResultMsg reports the outcome of an attempted vault unlock.
+type unlockResultMsg struct {
+	vault  string
+	secret string
+	values map[string]string
+	ok     bool
+	err    error
+}
+
+// appliedMsg reports the outcome of executing a plan.
+type appliedMsg struct {
+	label string // human label, e.g. "applied", "wired DATABASE_URL"
+	err   error
+}
+
+// genPreviewMsg / genAppliedMsg drive the generate modal.
+type genPreviewMsg struct {
+	preview generatePreview
+	err     error
+}
+
+type genAppliedMsg struct {
+	count int
+	err   error
+}
+
+// snapshot of a generate preview the modal renders.
+type generatePreview struct {
+	writes    []string
+	unchanged []string
+	refused   []string
+	warnings  []core.PlanIssue
+	allWrites []writeOp // path+content, kept for apply
+}
+
+type writeOp struct {
+	path    string
+	content string
+}
+
+// backupCreatedMsg / restoredMsg report backup operations.
+type backupCreatedMsg struct {
+	key   string
+	count int
+	err   error
+}
+
+type restoredMsg struct {
+	count int
+	err   error
+}
+
+// statusOnlyMsg lets a Cmd set a transient status without other side effects.
+type statusOnlyMsg struct {
+	kind statusKind
+	text string
+}
+
+// ── loaders ─────────────────────────────────────────────────────────────────
+
+// readVault opens a vault read-only and snapshots its values, degrading to a
+// locked runtime when it cannot be opened.
+func readVault(root string, reg registry.Registry, name string, auth map[string]string) *vaultRuntime {
+	flags := cli.MutationFlags{VaultAuth: auth, Mode: cli.ModePretty}
+	sess, err := cli.OpenVaultSession(root, reg, name, flags, nil)
 	if err != nil {
-		return VaultRuntime{}
+		return &vaultRuntime{unlocked: false}
 	}
 	defer sess.Close()
-
-	values := map[string]string{}
-	// Collect all referenced keys.
-	for _, vdef := range reg.Variables {
-		byConsumer, ok := vdef.VaultMapping[vaultName]
-		if !ok {
-			continue
-		}
-		for _, entry := range byConsumer {
-			if _, already := values[entry.Key]; already {
-				continue
-			}
-			val, found, err := sess.Get(entry.Key)
-			if err == nil && found {
-				values[entry.Key] = val
+	vals := map[string]string{}
+	if keys, e := sess.List(); e == nil {
+		for _, k := range keys {
+			if v, ok, _ := sess.Get(k); ok {
+				vals[k] = v
 			}
 		}
 	}
-	return VaultRuntime{Unlocked: true, Values: values}
+	return &vaultRuntime{unlocked: true, values: vals}
 }
 
-// LoadAllVaults loads runtime state for all vaults in the registry.
-func LoadAllVaults(ctx *TuiContext, reg registry.Registry) map[string]VaultRuntime {
-	result := map[string]VaultRuntime{}
-	for name := range reg.Vaults {
-		result[name] = LoadVaultRuntime(ctx, reg, name)
+func (a *App) loadVaultsCmd() tea.Cmd {
+	root := a.ctx.Root
+	reg := a.reg
+	auth := a.ctx.authCopy()
+	return func() tea.Msg {
+		runtimes := map[string]*vaultRuntime{}
+		for name := range reg.Vaults {
+			runtimes[name] = readVault(root, reg, name, auth)
+		}
+		return vaultsLoadedMsg{runtimes: runtimes}
 	}
-	return result
 }
 
-// LoadFindings runs the check gate and returns findings.
-func LoadFindings(ctx *TuiContext, reg registry.Registry) []cli.Finding {
-	flags := cli.MutationFlags{}
-	findings, _ := cli.CollectFindings(ctx.Root, reg, flags)
-	return findings
+func (a *App) loadFindingsCmd() tea.Cmd {
+	root := a.ctx.Root
+	reg := a.reg
+	flags := cli.MutationFlags{VaultAuth: a.ctx.authCopy(), Mode: cli.ModePretty}
+	return func() tea.Msg {
+		f, err := cli.CollectFindings(root, reg, flags)
+		return findingsMsg{findings: f, err: err}
+	}
 }
 
-// LoadBackups returns available backup keys.
-func LoadBackups(ctx *TuiContext) []string {
-	backups, _ := menvio.ListBackups(ctx.Root)
-	return backups
+func (a *App) loadBackupsCmd() tea.Cmd {
+	root := a.ctx.Root
+	return func() tea.Msg {
+		keys, _ := menvio.ListBackups(root)
+		return backupsMsg{keys: keys}
+	}
+}
+
+func (a *App) reloadRegistryCmd() tea.Cmd {
+	root := a.ctx.Root
+	return func() tea.Msg {
+		reg, err := registry.LoadRegistry(root)
+		return registryReloadedMsg{reg: reg, err: err}
+	}
+}
+
+// tryUnlockCmd attempts to open a vault with secret (scrypt is deliberately
+// slow, hence a background Cmd) and snapshots its values on success.
+func (a *App) tryUnlockCmd(vault, secret string) tea.Cmd {
+	root := a.ctx.Root
+	reg := a.reg
+	flags := cli.MutationFlags{VaultAuth: map[string]string{vault: secret}, Mode: cli.ModePretty}
+	return func() tea.Msg {
+		sess, err := cli.OpenVaultSession(root, reg, vault, flags, nil)
+		if err != nil {
+			return unlockResultMsg{vault: vault, ok: false, err: err}
+		}
+		defer sess.Close()
+		vals := map[string]string{}
+		if keys, e := sess.List(); e == nil {
+			for _, k := range keys {
+				if v, ok, _ := sess.Get(k); ok {
+					vals[k] = v
+				}
+			}
+		}
+		return unlockResultMsg{vault: vault, secret: secret, values: vals, ok: true}
+	}
 }

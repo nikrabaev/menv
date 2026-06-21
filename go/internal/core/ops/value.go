@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // KeyQuery locates a mapping entry for get/set operations.

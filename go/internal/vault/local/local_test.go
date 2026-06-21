@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/vault"
-	_ "github.com/nikrabaev/menv/internal/vault/local"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/vault"
+	_ "github.com/nikrabaev/menv/go/internal/vault/local"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

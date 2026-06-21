@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // OpResult is the return type of every op planner: the would-be next registry

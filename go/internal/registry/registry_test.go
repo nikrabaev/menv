@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/tests/helpers"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/tests/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

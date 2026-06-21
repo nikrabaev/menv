@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	menvio "github.com/nikrabaev/menv/internal/io"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

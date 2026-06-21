@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // RenderEntry is one variable ready for rendering into a .env file.

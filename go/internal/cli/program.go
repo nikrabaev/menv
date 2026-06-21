@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/core/ops"
-	"github.com/nikrabaev/menv/internal/generate"
-	menvio "github.com/nikrabaev/menv/internal/io"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/internal/vault"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core/ops"
+	"github.com/nikrabaev/menv/go/internal/generate"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/vault"
 	"github.com/spf13/cobra"
 )
 

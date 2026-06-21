@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/nikrabaev/menv/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core"
 )
 
 var providers = map[string]VaultProvider{}

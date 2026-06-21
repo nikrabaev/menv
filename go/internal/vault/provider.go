@@ -3,7 +3,7 @@ package vault
 import (
 	"encoding/json"
 
-	"github.com/nikrabaev/menv/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core"
 )
 
 // VaultAuth is the resolved auth material for one vault. Interpretation is

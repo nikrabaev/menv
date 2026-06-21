@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/generate"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/internal/vault"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/generate"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/vault"
 )
 
 // Finding is one item in the check report.

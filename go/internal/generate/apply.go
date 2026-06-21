@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nikrabaev/menv/internal/core"
-	menvio "github.com/nikrabaev/menv/internal/io"
+	"github.com/nikrabaev/menv/go/internal/core"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
 )
 
 // ApplyFileOp applies a release or delete FileOp under the ownership rule.

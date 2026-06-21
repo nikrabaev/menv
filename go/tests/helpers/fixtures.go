@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // MakeRegistry returns a baseline 2-vault, 2-consumer, 1-group registry.

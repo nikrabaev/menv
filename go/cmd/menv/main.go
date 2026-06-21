@@ -6,14 +6,14 @@ import (
 	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
-	"github.com/nikrabaev/menv/internal/cli"
-	"github.com/nikrabaev/menv/internal/core"
-	menvio "github.com/nikrabaev/menv/internal/io"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/internal/tui"
-	_ "github.com/nikrabaev/menv/internal/vault/local" // register menv-local provider
+	"github.com/nikrabaev/menv/go/internal/cli"
+	"github.com/nikrabaev/menv/go/internal/core"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/tui"
+	_ "github.com/nikrabaev/menv/go/internal/vault/local" // register menv-local provider
 	"github.com/spf13/cobra"
 )
 
@@ -38,17 +38,24 @@ func main() {
 		Short: "interactive terminal UI",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			reg, err := registry.LoadRegistry(root)
-			if err != nil {
-				return err
-			}
 			ctx := &tui.TuiContext{
 				Root: root,
 				Env:  osEnv(),
 				Auth: map[string]string{},
 			}
-			m := tui.NewAppModel(ctx, reg)
-			p := tea.NewProgram(m, tea.WithAltScreen())
+			// A missing registry is not fatal here — the TUI shows an init
+			// wizard instead. Any other load error (corrupt/invalid) is fatal.
+			reg, err := registry.LoadRegistry(root)
+			loaded := err == nil
+			if err != nil {
+				var me *core.MenvError
+				if !errors.As(err, &me) || me.Code != core.ErrNotFound {
+					return err
+				}
+			}
+			m := tui.NewAppModel(ctx, reg, loaded)
+			// Alt screen is requested declaratively via the View in v2.
+			p := tea.NewProgram(m)
 			_, err = p.Run()
 			return err
 		},

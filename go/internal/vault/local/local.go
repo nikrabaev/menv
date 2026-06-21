@@ -9,9 +9,9 @@ import (
 	"sort"
 
 	"filippo.io/age"
-	"github.com/nikrabaev/menv/internal/core"
-	menvio "github.com/nikrabaev/menv/internal/io"
-	"github.com/nikrabaev/menv/internal/vault"
+	"github.com/nikrabaev/menv/go/internal/core"
+	menvio "github.com/nikrabaev/menv/go/internal/io"
+	"github.com/nikrabaev/menv/go/internal/vault"
 )
 
 func init() {

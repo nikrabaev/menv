@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // VaultAddInput holds the parameters for PlanVaultAdd.

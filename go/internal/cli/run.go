@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/core/ops"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/internal/vault"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core/ops"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/vault"
 )
 
 // MutationFlags bundles global flags every mutating command needs.

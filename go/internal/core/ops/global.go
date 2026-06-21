@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/registry"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
 // GlobalWriteInput holds the parameters for PlanGlobalDefine and PlanGlobalUpdate.

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core"
 )
 
 // OutputMode controls how results are emitted.

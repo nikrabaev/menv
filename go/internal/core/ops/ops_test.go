@@ -3,10 +3,10 @@ package ops_test
 import (
 	"testing"
 
-	"github.com/nikrabaev/menv/internal/core"
-	"github.com/nikrabaev/menv/internal/core/ops"
-	"github.com/nikrabaev/menv/internal/registry"
-	"github.com/nikrabaev/menv/tests/helpers"
+	"github.com/nikrabaev/menv/go/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core/ops"
+	"github.com/nikrabaev/menv/go/internal/registry"
+	"github.com/nikrabaev/menv/go/tests/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

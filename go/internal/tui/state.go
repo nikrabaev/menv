@@ -1,255 +1,225 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/nikrabaev/menv/internal/cli"
-	"github.com/nikrabaev/menv/internal/core/ops"
-	"github.com/nikrabaev/menv/internal/registry"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/nikrabaev/menv/go/internal/cli"
+	"github.com/nikrabaev/menv/go/internal/registry"
 )
 
-// PaneId identifies which pane has focus.
-type PaneId string
+// pane identifies which of the three panes owns the keyboard.
+type pane int
 
 const (
-	PaneSidebar   PaneId = "sidebar"
-	PaneMain      PaneId = "main"
-	PaneInspector PaneId = "inspector"
+	paneSidebar pane = iota
+	paneMain
+	paneInspector
 )
 
-// MainTab identifies the active tab in the main pane.
-type MainTab string
+// mainTab identifies the active tab in the centre pane.
+type mainTab int
 
 const (
-	TabVariables MainTab = "variables"
-	TabGlobals   MainTab = "globals"
-	TabGroups    MainTab = "groups"
-	TabCompose   MainTab = "compose"
-	TabBackups   MainTab = "backups"
+	tabVariables mainTab = iota
+	tabGlobals
+	tabGroups
+	tabCompose
+	tabBackups
 )
 
-var allTabs = []MainTab{TabVariables, TabGlobals, TabGroups, TabCompose, TabBackups}
+var allTabs = []mainTab{tabVariables, tabGlobals, tabGroups, tabCompose, tabBackups}
 
-// VaultRuntime holds runtime state for one vault (unlocked status + value snapshot).
-type VaultRuntime struct {
-	Unlocked bool
-	Values   map[string]string // nil = locked
-}
-
-// StatusMsg is a transient toast shown below the header.
-type StatusMsg struct {
-	Text  string
-	IsErr bool
-}
-
-// Modal is the interface for all modal types.
-type Modal interface{ isModal() }
-
-type HelpModal struct{}
-
-func (HelpModal) isModal() {}
-
-type QuitModal struct{}
-
-func (QuitModal) isModal() {}
-
-type FindingsModal struct{}
-
-func (FindingsModal) isModal() {}
-
-type GenerateModal struct {
-	Consumer string
-}
-
-func (GenerateModal) isModal() {}
-
-type PlanModal struct {
-	Title  string
-	Op     ops.OpResult
-	Danger bool
-	Forced bool
-}
-
-func (PlanModal) isModal() {}
-
-type ConfirmModal struct {
-	Title     string
-	Body      string
-	Danger    bool
-	OnConfirm func() tea.Cmd
-}
-
-func (ConfirmModal) isModal() {}
-
-type UnlockModal struct {
-	Vault    string
-	Input    textinput.Model
-	ErrText  string
-	Trying   bool
-	OnUnlock func() tea.Cmd // called after success; may be nil
-}
-
-func (UnlockModal) isModal() {}
-
-type FormField struct {
-	Key         string
-	Label       string
-	Placeholder string
-	Required    bool
-	Secret      bool
-	Choices     []string // non-empty = select list
-	Value       string
-}
-
-type FormSpec struct {
-	Title  string
-	Fields []FormField
-	Submit func(values map[string]string) tea.Cmd
-}
-
-type FormModal struct {
-	Spec       FormSpec
-	Inputs     []textinput.Model
-	FocusIndex int
-	ErrText    string
-}
-
-func (FormModal) isModal() {}
-
-type RevealModal struct {
-	Variable string
-	Vault    string
-	Consumer string
-	Value    string
-}
-
-func (RevealModal) isModal() {}
-
-type ConsumerPickModal struct {
-	Title     string
-	Consumers []string
-	Index     int
-	OnPick    func(consumer string) tea.Cmd
-}
-
-func (ConsumerPickModal) isModal() {}
-
-type OrphanPromptModal struct {
-	Vault    string
-	Keys     []string
-	OnChoose func(delete bool) tea.Cmd
-}
-
-func (OrphanPromptModal) isModal() {}
-
-// AppState is the full application state.
-type AppState struct {
-	Registry registry.Registry
-
-	ActiveVault    string
-	ConsumerFilter *string
-	Focus          PaneId
-	Tab            MainTab
-
-	HumanMode     bool
-	HumanRowFocus bool
-	HumanRowIndex int
-
-	RevealSecrets   bool
-	RevealConfirmed bool
-
-	SidebarIndex   int
-	MainIndex      map[MainTab]int
-	InspectorIndex int
-
-	Filters       map[MainTab]string
-	FilterEditing bool
-	FilterInput   textinput.Model
-
-	Vaults map[string]VaultRuntime
-
-	Findings []cli.Finding // nil = never ran
-	Backups  []string
-	Modals   []Modal
-	Status   *StatusMsg
-	Busy     *string
-
-	// Terminal dimensions (set by tea.WindowSizeMsg)
-	Width  int
-	Height int
-
-	// Loaded flag — false until initial vault loads complete
-	Ready bool
-}
-
-// topModal returns the top of the modal stack (nil if empty).
-func (s *AppState) topModal() Modal {
-	if len(s.Modals) == 0 {
-		return nil
+func (t mainTab) title() string {
+	switch t {
+	case tabVariables:
+		return "variables"
+	case tabGlobals:
+		return "globals"
+	case tabGroups:
+		return "groups"
+	case tabCompose:
+		return "compose"
+	case tabBackups:
+		return "backups"
 	}
-	return s.Modals[len(s.Modals)-1]
+	return ""
 }
 
-// pushModal adds a modal to the stack.
-func (s *AppState) pushModal(m Modal) {
-	s.Modals = append(s.Modals, m)
+// vaultRuntime holds the per-vault unlock state and (when unlocked) a snapshot
+// of its key→value store, read once at load time.
+type vaultRuntime struct {
+	unlocked bool
+	values   map[string]string // nil when locked
 }
 
-// popModal removes the top modal.
-func (s *AppState) popModal() {
-	if len(s.Modals) > 0 {
-		s.Modals = s.Modals[:len(s.Modals)-1]
+type statusKind int
+
+const (
+	statusNone statusKind = iota
+	statusOK
+	statusErr
+	statusInfo
+)
+
+type statusMessage struct {
+	kind statusKind
+	text string
+}
+
+// App is the root bubbletea model. A pointer receiver is used throughout so
+// modal continuation closures can mutate state in place.
+type App struct {
+	ctx   *TuiContext
+	style styles
+	keys  keymap
+
+	loaded bool          // whether a menv.json was found
+	wizard *initWizard   // shown when !loaded
+	reg    registry.Registry
+
+	// Selection / view state.
+	activeVault    string
+	consumerFilter string // "" = no filter
+	focus          pane
+	tab            mainTab
+	humanMode      bool
+	humanRowFocus  bool
+	humanRowIndex  int
+	revealSecrets  bool
+	revealConfirmed bool
+
+	sidebarIndex   int
+	mainIndex      map[mainTab]int
+	inspectorIndex int
+
+	filters      map[mainTab]string
+	filterEditing bool
+	filterInput   textinput.Model
+
+	// Runtime data.
+	vaults         map[string]*vaultRuntime
+	findings       []cli.Finding
+	findingsLoaded bool
+	backups        []string
+
+	modals []modal
+	status *statusMessage
+	busy   string
+
+	spinner spinner.Model
+	help    help.Model
+
+	width  int
+	height int
+}
+
+// NewAppModel constructs the root model. When loaded is false the registry is
+// empty and the init wizard is shown instead of the main UI.
+func NewAppModel(ctx *TuiContext, reg registry.Registry, loaded bool) *App {
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+
+	ti := textinput.New()
+	ti.Prompt = "/"
+	ti.Placeholder = "filter…"
+
+	a := &App{
+		ctx:       ctx,
+		style:     newStyles(),
+		keys:      newKeymap(),
+		loaded:    loaded,
+		reg:       reg,
+		focus:     paneMain,
+		tab:       tabVariables,
+		mainIndex: map[mainTab]int{},
+		filters:   map[mainTab]string{},
+		vaults:    map[string]*vaultRuntime{},
+		spinner:   sp,
+		help:      help.New(),
+		filterInput: ti,
+		width:     80,
+		height:    24,
+	}
+	if loaded {
+		a.activeVault = reg.Defaults.Vault
+	} else {
+		a.wizard = newInitWizard()
+	}
+	return a
+}
+
+// Init implements tea.Model.
+func (a *App) Init() tea.Cmd {
+	if !a.loaded {
+		return a.wizard.Init()
+	}
+	a.busy = "loading"
+	return tea.Batch(
+		a.loadVaultsCmd(),
+		a.loadFindingsCmd(),
+		a.loadBackupsCmd(),
+		a.spinner.Tick,
+	)
+}
+
+// ── small helpers ───────────────────────────────────────────────────────────
+
+func (a *App) setStatus(kind statusKind, text string) {
+	a.status = &statusMessage{kind: kind, text: text}
+}
+
+func (a *App) pushModal(m modal) tea.Cmd {
+	a.modals = append(a.modals, m)
+	return m.Init()
+}
+
+func (a *App) popModal() {
+	if n := len(a.modals); n > 0 {
+		a.modals = a.modals[:n-1]
 	}
 }
 
-func newAppState(reg registry.Registry, vaultName string) AppState {
-	mainIdx := map[MainTab]int{}
-	for _, t := range allTabs {
-		mainIdx[t] = 0
+func (a *App) topModal() modal {
+	if n := len(a.modals); n > 0 {
+		return a.modals[n-1]
 	}
-	filters := map[MainTab]string{}
-	for _, t := range allTabs {
-		filters[t] = ""
-	}
-	fi := textinput.New()
-	fi.Placeholder = "filter…"
-	fi.CharLimit = 80
-	vaults := map[string]VaultRuntime{}
-	for name := range reg.Vaults {
-		vaults[name] = VaultRuntime{}
-	}
-	if vaultName == "" {
-		vaultName = reg.Defaults.Vault
-	}
-	return AppState{
-		Registry:     reg,
-		ActiveVault:  vaultName,
-		Focus:        PaneSidebar,
-		Tab:          TabVariables,
-		MainIndex:    mainIdx,
-		Filters:      filters,
-		FilterInput:  fi,
-		Vaults:       vaults,
-	}
+	return nil
 }
 
-type RegistryReloadedMsg struct{ Reg registry.Registry }
+// mainCursor returns the cursor index for the active tab.
+func (a *App) mainCursor() int { return a.mainIndex[a.tab] }
 
-type VaultRuntimeMsg struct {
-	Vault   string
-	Runtime VaultRuntime
+func (a *App) setMainCursor(i int) { a.mainIndex[a.tab] = i }
+
+func (a *App) filter() string { return a.filters[a.tab] }
+
+// vaultUnlocked reports whether the given vault is currently unlocked.
+func (a *App) vaultUnlocked(name string) bool {
+	rt, ok := a.vaults[name]
+	return ok && rt.unlocked
 }
 
-type AllVaultsMsg struct{ Vaults map[string]VaultRuntime }
+// vaultValues returns the unlocked value snapshot for a vault (nil if locked).
+func (a *App) vaultValues(name string) map[string]string {
+	if rt, ok := a.vaults[name]; ok {
+		return rt.values
+	}
+	return nil
+}
 
-type FindingsMsg struct{ Findings []cli.Finding }
-
-type BackupsMsg struct{ Backups []string }
-
-type OpAppliedMsg struct{ Reg registry.Registry }
-
-type ErrMsg struct{ Err error }
-
-type SetStatusMsg struct{ S *StatusMsg }
-
-type BusyMsg struct{ Label *string }
+// validateSelection resets activeVault / consumerFilter if they vanished after
+// a mutation or reload.
+func (a *App) validateSelection() {
+	if _, ok := a.reg.Vaults[a.activeVault]; !ok {
+		a.activeVault = a.reg.Defaults.Vault
+	}
+	if a.consumerFilter != "" {
+		if _, ok := a.reg.Consumers[a.consumerFilter]; !ok {
+			a.consumerFilter = ""
+		}
+	}
+	a.clampCursors()
+}

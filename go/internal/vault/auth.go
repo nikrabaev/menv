@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nikrabaev/menv/internal/core"
+	"github.com/nikrabaev/menv/go/internal/core"
 )
 
 const AuthFileRel = ".menv/auth.local.json"
