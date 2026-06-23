@@ -19,19 +19,19 @@ var (
 // Glyphs. Each pairs with a letter or position so color is never the only
 // signal (NO_COLOR / CVD safe).
 const (
-	glyphUnwired   = "·" // not wired in this vault
-	glyphDisabled  = "#" // wired but disabled
-	glyphNoValue   = "◌" // wired, no value set
-	glyphHasValue  = "●" // wired, value present
-	glyphShared    = "◆" // wired, key shared with another consumer
-	glyphLocked    = "⚿" // vault locked — state unknown
-	glyphSecret    = "S" // variable is secret
-	glyphEmptyVal  = "∅" // no value stored
-	glyphMaskedVal = "***"
-	glyphDefault   = "★" // default vault
-	glyphActive    = "✓" // active consumer filter
-	glyphLockBadge = "🔒"
-	bullet         = "•"
+	glyphUnwired    = "·" // not wired in this vault
+	glyphDisabled   = "#" // wired but disabled
+	glyphNoValue    = "◌" // wired, no value set
+	glyphHasValue   = "●" // wired, value present
+	glyphShared     = "◆" // wired, key shared with another consumer
+	glyphLocked     = "⚿" // vault locked — state unknown / lock badge
+	glyphSecret     = "S" // variable is secret
+	glyphEmptyVal   = "∅" // no value stored
+	glyphMaskedVal  = "***"
+	glyphDefault    = "★" // default vault
+	glyphActive     = "✓" // active consumer filter
+	glyphActiveItem = "●" // sidebar: the active vault / consumer (marker column)
+	bullet          = "•"
 )
 
 // styles bundles the reusable lipgloss styles. Built once and held on the App.
@@ -72,10 +72,12 @@ func newStyles() styles {
 		selectedDim: lipgloss.NewStyle().Reverse(true),
 		paneFocus: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colAccent),
+			BorderForeground(colAccent).
+			Padding(0, 1),
 		paneBlur: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colMuted),
+			BorderForeground(colMuted).
+			Padding(0, 1),
 		secret:     lipgloss.NewStyle().Foreground(colYellow),
 		hasValue:   lipgloss.NewStyle().Foreground(colGreen),
 		noValue:    lipgloss.NewStyle().Foreground(colMuted),

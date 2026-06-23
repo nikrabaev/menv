@@ -74,33 +74,49 @@ func (a *App) renderApp() string {
 	sidebarW := 26
 	inspectorW := 0
 	if a.inspectorVisible() {
-		inspectorW = 36
+		// The inspector scales with the terminal so wiring rows and values fit
+		// without truncation on wide screens, with a comfortable floor.
+		inspectorW = min(48, max(36, a.width/3))
 	}
 	mainW := a.width - sidebarW - inspectorW
 
 	parts := []string{
 		a.renderPane(a.focus == paneSidebar, sidebarW, bodyH, a.renderSidebar()),
-		a.renderPane(a.focus == paneMain, mainW, bodyH, a.renderMainPane(mainW-2, bodyH-2)),
+		a.renderPane(a.focus == paneMain, mainW, bodyH, a.renderMainPane(mainW-paneHFrame, bodyH-paneVFrame)),
 	}
 	if inspectorW > 0 {
-		parts = append(parts, a.renderPane(a.focus == paneInspector, inspectorW, bodyH, a.renderInspector(inspectorW-2)))
+		parts = append(parts, a.renderPane(a.focus == paneInspector, inspectorW, bodyH, a.renderInspector(inspectorW-paneHFrame)))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 	return lipgloss.JoinVertical(lipgloss.Left, header, status, body, footer)
 }
 
+// Pane frame overhead under lipgloss v2 border-box sizing: Width/Height are the
+// *total* including the 1-cell rounded border on each side plus the 1-cell
+// horizontal padding, so the content area is outerW-paneHFrame × outerH-paneVFrame.
+const (
+	paneHFrame = 4 // 2 border + 2 padding
+	paneVFrame = 2 // 2 border (no vertical padding)
+)
+
 func (a *App) renderPane(focused bool, outerW, outerH int, content string) string {
-	innerW, innerH := outerW-2, outerH-2
 	st := a.style.paneBlur
 	if focused {
 		st = a.style.paneFocus
 	}
-	return st.Width(innerW).Height(innerH).Render(clipBlock(content, innerW, innerH))
+	// Clip the content to exactly the inner area so it never wraps (which would
+	// push the pane taller than its siblings) or overflow the frame.
+	return st.Width(outerW).Height(outerH).Render(clipBlock(content, outerW-paneHFrame, outerH-paneVFrame))
 }
 
 // clipBlock truncates each line to w cells (ANSI-aware, no wrapping) and caps
-// the number of lines at h, so pane content never wraps or overflows.
+// the number of lines at h, so pane content never wraps or overflows. A 1-cell
+// margin guards against ambiguous-width glyphs (◆, ⧉) that lipgloss's Width
+// might measure one cell wider than ansi.Truncate, which would force a wrap.
 func clipBlock(s string, w, h int) string {
+	if w > 1 {
+		w--
+	}
 	lines := strings.Split(s, "\n")
 	if len(lines) > h {
 		lines = lines[:h]
@@ -115,7 +131,7 @@ func (a *App) renderHeader() string {
 	left := a.style.title.Render("menv")
 	vault := a.style.muted.Render("vault ") + a.style.subtle.Render(a.activeVault)
 	if !a.vaultUnlocked(a.activeVault) {
-		vault += " " + a.style.badge.Render(glyphLockBadge)
+		vault += " " + a.style.badge.Render(glyphLocked)
 	}
 	if a.consumerFilter != "" {
 		vault += a.style.muted.Render("  consumer ") + a.style.subtle.Render(a.consumerFilter)
@@ -138,17 +154,18 @@ func (a *App) renderTabs() string {
 }
 
 func (a *App) renderStatus() string {
+	clamp := func(s string) string { return lipgloss.NewStyle().MaxWidth(a.width).Render(s) }
 	if a.busy != "" {
-		return a.style.statusBusy.Render(a.spinner.View() + " " + a.busy + "…")
+		return clamp(a.style.statusBusy.Render(a.spinner.View() + " " + a.busy + "…"))
 	}
 	if a.status != nil {
 		switch a.status.kind {
 		case statusOK:
-			return a.style.statusOK.Render("✔ " + a.status.text)
+			return clamp(a.style.statusOK.Render("✔ " + a.status.text))
 		case statusErr:
-			return a.style.statusErr.Render("✖ " + a.status.text)
+			return clamp(a.style.statusErr.Render("✖ " + a.status.text))
 		default:
-			return a.style.muted.Render(a.status.text)
+			return clamp(a.style.muted.Render(a.status.text))
 		}
 	}
 	if a.findingsLoaded {
@@ -159,18 +176,21 @@ func (a *App) renderStatus() string {
 			}
 		}
 		if n > 0 {
-			return a.style.statusErr.Render(fmt.Sprintf("✖ %d error(s) — c to view", n))
+			return clamp(a.style.statusErr.Render(fmt.Sprintf("✖ %d error(s) — c to view", n)))
 		}
-		return a.style.statusOK.Render("✔ all checks passed")
+		return clamp(a.style.statusOK.Render("✔ all checks passed"))
 	}
-	return a.style.muted.Render("ready")
+	return clamp(a.style.muted.Render("ready"))
 }
 
 func (a *App) renderFooter() string {
 	if a.filterEditing {
 		return a.filterInput.View()
 	}
-	return a.help.ShortHelpView(a.footerBindings())
+	// ShortHelpView doesn't truncate to the help width, so clamp it ourselves —
+	// otherwise a long hint bar makes every line as wide as itself (JoinVertical
+	// pads to the widest line) and overflows a narrow terminal.
+	return lipgloss.NewStyle().MaxWidth(a.width).Render(a.help.ShortHelpView(a.footerBindings()))
 }
 
 // ── sidebar ─────────────────────────────────────────────────────────────────
@@ -178,19 +198,29 @@ func (a *App) renderFooter() string {
 func (a *App) renderSidebar() string {
 	var b strings.Builder
 	for i, it := range a.sidebarItems() {
-		var line string
 		switch it.kind {
 		case sbHeader:
-			line = a.style.section.Render(it.text)
+			b.WriteString(a.style.section.Render(it.text) + "\n")
+			continue
 		case sbPlaceholder:
-			line = a.style.muted.Render(it.text)
-		default:
-			line = a.style.subtle.Render(it.text)
+			b.WriteString("  " + a.style.muted.Render(it.text) + "\n")
+			continue
 		}
-		if a.focus == paneSidebar && i == a.sidebarIndex && (it.kind == sbVault || it.kind == sbConsumer) {
-			line = a.style.keyCap.Render("▸ ") + a.style.title.Render(it.text)
+		// Two-cell marker column keeps vault/consumer labels aligned whether or
+		// not a row carries the cursor. The active vault and active consumer
+		// filter stay marked (●, accent) even when the cursor is elsewhere, so
+		// the current selection is always visible.
+		cursor := a.focus == paneSidebar && i == a.sidebarIndex
+		active := (it.kind == sbVault && it.name == a.activeVault) ||
+			(it.kind == sbConsumer && it.name == a.consumerFilter)
+		marker, style := "  ", a.style.subtle
+		switch {
+		case cursor:
+			marker, style = a.style.keyCap.Render("▸ "), a.style.title
+		case active:
+			marker, style = a.style.keyCap.Render(glyphActiveItem+" "), a.style.title
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(marker + style.Render(it.text) + "\n")
 	}
 	return b.String()
 }
@@ -203,49 +233,80 @@ func (a *App) renderMainPane(w, h int) string {
 		if a.humanMode {
 			return a.renderVariablesCards(w, h)
 		}
-		return a.renderVariablesMatrix(w)
+		return a.renderVariablesMatrix(w, h)
 	case tabGlobals:
-		return a.renderGlobals(w)
+		return a.renderGlobals(w, h)
 	case tabGroups:
-		return a.renderGroups(w)
+		return a.renderGroups(w, h)
 	case tabCompose:
-		return a.renderCompose(w)
+		return a.renderCompose(w, h)
 	case tabBackups:
-		return a.renderBackups(w)
+		return a.renderBackups(w, h)
 	}
 	return ""
 }
 
-func (a *App) renderVariablesMatrix(w int) string {
-	consumers := a.activeVaultConsumers()
-	nameW := 22
+// windowBody windows the body `lines` to fit h rows so the line at `sel` stays
+// visible, adding "↑ N more" / "↓ N more" indicators (each costs a row) when
+// lines are clipped. Returns the block with no trailing newline.
+func (a *App) windowBody(lines []string, sel, h int) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	start, end, top, bottom := scrollWindow(len(lines), sel, h)
 	var b strings.Builder
+	if top {
+		b.WriteString(a.style.muted.Render(fmt.Sprintf("↑ %d more", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		b.WriteString(lines[i])
+		if i < end-1 {
+			b.WriteString("\n")
+		}
+	}
+	if bottom {
+		b.WriteString("\n" + a.style.muted.Render(fmt.Sprintf("↓ %d more", len(lines)-end)))
+	}
+	return b.String()
+}
+
+func (a *App) renderVariablesMatrix(w, h int) string {
+	consumers := a.activeVaultConsumers()
+	groups := a.groupedVariables()
+	nameW, colW := matrixColumns(w, consumers, longestVarName(groups))
+	// Left block is "▸ "(2) + name(nameW) + " S "(3); columns follow, colW each.
 	head := "  " + pad("VARIABLE", nameW) + " S "
 	for _, c := range consumers {
-		head += pad(short(c, 2), 3)
+		head += pad(truncStr(c, colW-1), colW)
 	}
-	b.WriteString(a.style.section.Render(head) + "\n")
+	header := a.style.section.Render(head)
 
-	groups := a.groupedVariables()
 	if len(groups) == 0 {
 		msg := "no variables — n to define"
 		if a.filter() != "" || a.consumerFilter != "" {
 			msg = "no variables match — esc clears the filter"
 		}
-		b.WriteString(a.style.muted.Render(msg))
-		return b.String()
+		return header + "\n" + a.style.muted.Render(msg)
 	}
+	// Build every display line (group separators interleaved with rows) and note
+	// which line carries the cursor, so the window can keep it on screen.
+	var lines []string
+	selLine := 0
 	idx := 0
 	for _, g := range groups {
-		b.WriteString(a.style.section.Render("── "+g.title+" ──") + "\n")
+		lines = append(lines, a.style.section.Render("── "+g.title+" ──"))
 		for _, name := range g.vars {
 			def := a.reg.Variables[name]
-			selected := a.focus == paneMain && idx == a.mainCursor()
+			// Highlight the cursor row whenever the inspector mirrors it (focus
+			// on main or inspector), so the variable shown in the inspector is
+			// always marked in the list.
+			selected := a.focus != paneSidebar && idx == a.mainCursor()
 			cursor := "  "
 			nameStyle := a.style.subtle
 			if selected {
 				cursor = a.style.keyCap.Render("▸ ")
 				nameStyle = a.style.title
+				selLine = len(lines)
 			}
 			secret := " "
 			if def.Secret {
@@ -254,13 +315,67 @@ func (a *App) renderVariablesMatrix(w int) string {
 			row := cursor + nameStyle.Render(pad(truncStr(name, nameW), nameW)) + " " + secret + " "
 			for _, c := range consumers {
 				gl, st := a.cellGlyph(name, c)
-				row += " " + st.Render(gl) + " "
+				row += st.Render(pad(gl, colW))
 			}
-			b.WriteString(row + "\n")
+			lines = append(lines, row)
 			idx++
 		}
 	}
-	return b.String()
+	// The header line is pinned; the rest scrolls within the remaining height.
+	return header + "\n" + a.windowBody(lines, selLine, h-1)
+}
+
+// longestVarName returns the longest variable name across the rendered groups,
+// used to size the matrix name column no wider than it needs to be.
+func longestVarName(groups []varGroup) int {
+	m := 0
+	for _, g := range groups {
+		for _, v := range g.vars {
+			if l := len([]rune(v)); l > m {
+				m = l
+			}
+		}
+	}
+	return m
+}
+
+// matrixColumns picks the variable-name width and per-consumer column width for
+// the matrix so consumer names fit as fully as the pane allows. The name column
+// is no wider than the longest variable name (within a [12,22] band), freeing
+// the rest for consumer columns; on a tight pane nameW shrinks further so each
+// column keeps at least a few cells. Each column then grows to fit the longest
+// consumer name, capped so a lone glyph never sits in an absurdly wide column.
+func matrixColumns(w int, consumers []string, maxVarLen int) (nameW, colW int) {
+	nameW = max(12, min(22, maxVarLen))
+	n := len(consumers)
+	if n == 0 {
+		return nameW, 3
+	}
+	maxName := 1
+	for _, c := range consumers {
+		if l := len([]rune(c)); l > maxName {
+			maxName = l
+		}
+	}
+	// Shrink the name column (to a floor of 12) until each consumer column can
+	// have at least 4 cells.
+	for nameW > 12 && (w-(2+nameW+3))/n < 4 {
+		nameW--
+	}
+	colsAvail := w - (2 + nameW + 3)
+	colW = colsAvail / n
+	// Don't grow a column past the longest name it holds (+1 for separation);
+	// the absolute cap only guards pathological single-consumer ultra-wide panes.
+	if desired := maxName + 1; colW > desired {
+		colW = desired
+	}
+	if colW > 24 {
+		colW = 24
+	}
+	if colW < 3 {
+		colW = 3
+	}
+	return nameW, colW
 }
 
 func (a *App) renderVariablesCards(w, h int) string {
@@ -272,29 +387,43 @@ func (a *App) renderVariablesCards(w, h int) string {
 		}
 		return a.style.muted.Render(msg)
 	}
-	per := 5
-	win := h / per
-	if win < 1 {
-		win = 1
+	cursor := clamp(a.mainCursor(), len(vars))
+	// Flatten every card (cards differ in height) into lines, tracking each card's
+	// first line. TrimSuffix drops the card's terminating "\n" so the split's line
+	// count matches the card height.
+	var lines []string
+	cardLo := make([]int, len(vars))
+	for i, name := range vars {
+		cardLo[i] = len(lines)
+		lines = append(lines, strings.Split(strings.TrimSuffix(a.renderCard(name, i == cursor, w), "\n"), "\n")...)
 	}
-	start := a.mainCursor() - win/2
-	if start < 0 {
-		start = 0
+	cardHi := func(i int) int {
+		if i+1 < len(vars) {
+			return cardLo[i+1]
+		}
+		return len(lines)
 	}
-	end := start + win
-	if end > len(vars) {
-		end = len(vars)
-		start = max(0, end-win)
-	}
+	// Window per line so edge cards clip at the pane border and the list fills the
+	// height exactly (whole-card windowing left a partial card's worth of empty
+	// rows). Centre on the cursor card so it is never split; report the hidden
+	// counts in cards, which reads more naturally than lines for this view.
+	sel := (cardLo[cursor] + cardHi(cursor) - 1) / 2
+	start, end, top, bottom := scrollWindow(len(lines), sel, h)
 	var b strings.Builder
-	if start > 0 {
-		b.WriteString(a.style.muted.Render(fmt.Sprintf("↑ %d more", start)) + "\n")
+	if top {
+		above := 0
+		for i := 0; i < len(vars) && cardHi(i) <= start; i++ {
+			above++
+		}
+		b.WriteString(a.style.muted.Render(fmt.Sprintf("↑ %d more", above)) + "\n")
 	}
-	for i := start; i < end; i++ {
-		b.WriteString(a.renderCard(vars[i], i == a.mainCursor(), w))
-	}
-	if end < len(vars) {
-		b.WriteString(a.style.muted.Render(fmt.Sprintf("↓ %d more", len(vars)-end)))
+	b.WriteString(strings.Join(lines[start:end], "\n"))
+	if bottom {
+		below := 0
+		for i := len(vars) - 1; i >= 0 && cardLo[i] >= end; i-- {
+			below++
+		}
+		b.WriteString("\n" + a.style.muted.Render(fmt.Sprintf("↓ %d more", below)))
 	}
 	return b.String()
 }
@@ -347,60 +476,45 @@ func (a *App) cardValue(secret bool, r cardRow) string {
 	return a.style.hasValue.Render(truncStr(r.value, 44))
 }
 
-func (a *App) renderGlobals(w int) string {
+func (a *App) renderGlobals(w, h int) string {
 	names := a.globalNames()
-	var b strings.Builder
-	b.WriteString(a.style.section.Render("  "+pad("GLOBAL", 22)+"SOURCE") + "\n")
+	header := a.style.section.Render("  " + pad("GLOBAL", 22) + "SOURCE")
 	if len(names) == 0 {
-		b.WriteString(a.style.muted.Render("no globals — n to define"))
-		return b.String()
+		return header + "\n" + a.style.muted.Render("no globals — n to define")
 	}
+	rows := make([]string, len(names))
 	for i, n := range names {
-		selected := a.focus == paneMain && i == a.mainCursor()
-		cursor, ns := "  ", a.style.subtle
-		if selected {
-			cursor, ns = a.style.keyCap.Render("▸ "), a.style.title
-		}
-		b.WriteString(cursor + ns.Render(pad(truncStr(n, 22), 22)) + a.style.muted.Render(a.globalSource(n)) + "\n")
+		cursor, ns := a.rowCursor(i)
+		rows[i] = cursor + ns.Render(pad(truncStr(n, 22), 22)) + a.style.muted.Render(a.globalSource(n))
 	}
-	return b.String()
+	return header + "\n" + a.windowBody(rows, a.mainCursor(), h-1)
 }
 
-func (a *App) renderGroups(w int) string {
+func (a *App) renderGroups(w, h int) string {
 	keys := a.groupKeysFiltered()
-	var b strings.Builder
-	b.WriteString(a.style.section.Render("  "+pad("KEY", 16)+pad("TITLE", 24)+"#") + "\n")
+	header := a.style.section.Render("  " + pad("KEY", 16) + pad("TITLE", 24) + "#")
 	if len(keys) == 0 {
-		b.WriteString(a.style.muted.Render("no groups — n to add"))
-		return b.String()
+		return header + "\n" + a.style.muted.Render("no groups — n to add")
 	}
+	rows := make([]string, len(keys))
 	for i, k := range keys {
-		selected := a.focus == paneMain && i == a.mainCursor()
-		cursor, ns := "  ", a.style.subtle
-		if selected {
-			cursor, ns = a.style.keyCap.Render("▸ "), a.style.title
-		}
-		b.WriteString(cursor + ns.Render(pad(truncStr(k, 16), 16)) +
+		cursor, ns := a.rowCursor(i)
+		rows[i] = cursor + ns.Render(pad(truncStr(k, 16), 16)) +
 			a.style.subtle.Render(pad(truncStr(a.reg.Groups[k].Title, 24), 24)) +
-			a.style.muted.Render(fmt.Sprintf("%d", a.groupMemberCount(k))) + "\n")
+			a.style.muted.Render(fmt.Sprintf("%d", a.groupMemberCount(k)))
 	}
-	return b.String()
+	return header + "\n" + a.windowBody(rows, a.mainCursor(), h-1)
 }
 
-func (a *App) renderCompose(w int) string {
+func (a *App) renderCompose(w, h int) string {
 	files := a.composeFiles()
-	var b strings.Builder
-	b.WriteString(a.style.section.Render("  "+pad("FILE", 34)+"STATUS") + "\n")
+	header := a.style.section.Render("  " + pad("FILE", 34) + "STATUS")
 	if len(files) == 0 {
-		b.WriteString(a.style.muted.Render("no compose files bound — n to bind"))
-		return b.String()
+		return header + "\n" + a.style.muted.Render("no compose files bound — n to bind")
 	}
+	rows := make([]string, len(files))
 	for i, f := range files {
-		selected := a.focus == paneMain && i == a.mainCursor()
-		cursor, ns := "  ", a.style.subtle
-		if selected {
-			cursor, ns = a.style.keyCap.Render("▸ "), a.style.title
-		}
+		cursor, ns := a.rowCursor(i)
 		status := a.composeStatus(f)
 		statusStyle := a.style.statusOK
 		if strings.HasPrefix(status, "✖") {
@@ -408,28 +522,32 @@ func (a *App) renderCompose(w int) string {
 		} else if strings.HasPrefix(status, "⚠") {
 			statusStyle = a.style.warning
 		}
-		b.WriteString(cursor + ns.Render(pad(truncStr(f, 34), 34)) + statusStyle.Render(status) + "\n")
+		rows[i] = cursor + ns.Render(pad(truncStr(f, 34), 34)) + statusStyle.Render(status)
 	}
-	return b.String()
+	return header + "\n" + a.windowBody(rows, a.mainCursor(), h-1)
 }
 
-func (a *App) renderBackups(w int) string {
+func (a *App) renderBackups(w, h int) string {
 	keys := a.backupsNewestFirst()
-	var b strings.Builder
-	b.WriteString(a.style.section.Render("  "+pad("BACKUP", 20)+"PATH") + "\n")
+	header := a.style.section.Render("  " + pad("BACKUP", 20) + "PATH")
 	if len(keys) == 0 {
-		b.WriteString(a.style.muted.Render("no backups — n to create one"))
-		return b.String()
+		return header + "\n" + a.style.muted.Render("no backups — n to create one")
 	}
+	rows := make([]string, len(keys))
 	for i, k := range keys {
-		selected := a.focus == paneMain && i == a.mainCursor()
-		cursor, ns := "  ", a.style.subtle
-		if selected {
-			cursor, ns = a.style.keyCap.Render("▸ "), a.style.title
-		}
-		b.WriteString(cursor + ns.Render(pad(k, 20)) + a.style.muted.Render(".menv/backups/"+k) + "\n")
+		cursor, ns := a.rowCursor(i)
+		rows[i] = cursor + ns.Render(pad(k, 20)) + a.style.muted.Render(".menv/backups/"+k)
 	}
-	return b.String()
+	return header + "\n" + a.windowBody(rows, a.mainCursor(), h-1)
+}
+
+// rowCursor returns the marker column and name style for a list row at index i,
+// marked when the main pane (not the sidebar) holds the cursor on that row.
+func (a *App) rowCursor(i int) (string, lipgloss.Style) {
+	if a.focus != paneSidebar && i == a.mainCursor() {
+		return a.style.keyCap.Render("▸ "), a.style.title
+	}
+	return "  ", a.style.subtle
 }
 
 // ── inspector ───────────────────────────────────────────────────────────────
@@ -447,7 +565,7 @@ func (a *App) renderInspector(w int) string {
 	}
 	switch a.tab {
 	case tabVariables:
-		return a.inspectVariable()
+		return a.inspectVariable(w)
 	case tabGlobals:
 		return a.inspectGlobal()
 	case tabGroups:
@@ -538,7 +656,7 @@ func (a *App) inspectConsumer(name string) string {
 	return b.String()
 }
 
-func (a *App) inspectVariable() string {
+func (a *App) inspectVariable(w int) string {
 	name := a.selectedVariable()
 	if name == "" {
 		return a.style.muted.Render("no variable selected")
@@ -565,19 +683,21 @@ func (a *App) inspectVariable() string {
 		b.WriteString(a.style.muted.Render("unwired — press w to wire it"))
 		return b.String()
 	}
+	// Two lines per wiring: a label line (glyph + vault/consumer + shared) and
+	// an indented value line. Keeps long values readable in the narrow pane.
 	for i, r := range rows {
 		cursor := "  "
 		if a.focus == paneInspector && i == a.inspectorIndex {
 			cursor = a.style.keyCap.Render("▸ ")
 		}
 		gl, st := a.wiringGlyph(name, r)
-		val := a.wiringValue(def, r)
 		shared := ""
 		if r.shared {
-			shared = a.style.shared.Render(" ⧉")
+			shared = a.style.shared.Render(" ⧉ shared")
 		}
 		b.WriteString(cursor + st.Render(gl) + " " +
-			a.style.subtle.Render(r.vault+"/"+r.consumer) + shared + " " + val + "\n")
+			a.style.subtle.Render(r.vault+"/"+r.consumer) + shared + "\n")
+		b.WriteString("    " + a.wiringValue(def, r, w) + "\n")
 	}
 	return b.String()
 }
@@ -598,7 +718,7 @@ func (a *App) wiringGlyph(name string, r wiringRow) (string, lipgloss.Style) {
 	return glyphNoValue, a.style.noValue
 }
 
-func (a *App) wiringValue(def registry.VariableDef, r wiringRow) string {
+func (a *App) wiringValue(def registry.VariableDef, r wiringRow, w int) string {
 	if !a.vaultUnlocked(r.vault) {
 		return a.style.muted.Render("locked (u)")
 	}
@@ -609,7 +729,9 @@ func (a *App) wiringValue(def registry.VariableDef, r wiringRow) string {
 	if def.Secret && !a.revealSecrets {
 		return a.style.secret.Render(glyphMaskedVal)
 	}
-	return a.style.hasValue.Render(truncStr(v, 24))
+	// Value sits on its own indented line ("    "), so it can use almost the
+	// whole pane width; clipBlock guards the residual.
+	return a.style.hasValue.Render(truncStr(v, max(8, w-5)))
 }
 
 func (a *App) inspectGlobal() string {
@@ -705,14 +827,6 @@ func pad(s string, n int) string {
 		w++
 	}
 	return s
-}
-
-func short(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return string(r)
-	}
-	return string(r[:n])
 }
 
 func truncStr(s string, n int) string {

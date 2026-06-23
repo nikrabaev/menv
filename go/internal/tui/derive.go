@@ -60,7 +60,7 @@ func (a *App) sidebarItems() []sidebarItem {
 	for _, name := range keysOf(a.reg.Vaults) {
 		label := name
 		if !a.vaultUnlocked(name) {
-			label += " " + glyphLockBadge
+			label += " " + glyphLocked
 		}
 		if a.reg.Defaults.Vault == name {
 			label += " " + glyphDefault
@@ -376,6 +376,47 @@ func (a *App) variableWiring(name string) []wiringRow {
 }
 
 // ── cursor management ───────────────────────────────────────────────────────
+
+// scrollWindow returns the [start,end) slice of n lines to show in a viewport of
+// `rows` lines so the line at `sel` stays visible, plus whether top/bottom "more"
+// indicators are needed. Each shown indicator costs one viewport row; the loop
+// re-solves until the indicator set stops changing so the window never overflows.
+func scrollWindow(n, sel, rows int) (start, end int, top, bottom bool) {
+	if rows < 1 {
+		rows = 1
+	}
+	if n <= rows {
+		return 0, n, false, false
+	}
+	sel = clamp(sel, n)
+	for i := 0; i < 4; i++ {
+		view := rows
+		if top {
+			view--
+		}
+		if bottom {
+			view--
+		}
+		if view < 1 {
+			view = 1
+		}
+		start = sel - view/2
+		if start < 0 {
+			start = 0
+		}
+		end = start + view
+		if end > n {
+			end = n
+			start = max(0, end-view)
+		}
+		nt, nb := start > 0, end < n
+		if nt == top && nb == bottom {
+			break
+		}
+		top, bottom = nt, nb
+	}
+	return start, end, top, bottom
+}
 
 func clamp(i, n int) int {
 	if n <= 0 {

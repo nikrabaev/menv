@@ -16,6 +16,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = m.Width, m.Height
 		a.help.SetWidth(m.Width)
+		a.normalizeFocus()
 	case spinner.TickMsg:
 		if a.spinnerActive() {
 			var c tea.Cmd
@@ -197,6 +198,7 @@ func (a *App) handleKey(k tea.KeyPressMsg) tea.Cmd {
 	case "H":
 		a.humanMode = !a.humanMode
 		a.humanRowFocus = false
+		a.normalizeFocus()
 		return nil
 	case "i":
 		return a.importFlow()
@@ -223,7 +225,9 @@ func (a *App) handleKey(k tea.KeyPressMsg) tea.Cmd {
 		a.focus = paneMain
 		return nil
 	case "3":
-		a.focus = paneInspector
+		if a.inspectorVisible() {
+			a.focus = paneInspector
+		}
 		return nil
 	}
 
@@ -273,9 +277,23 @@ func (a *App) cyclePane() {
 	case paneSidebar:
 		a.focus = paneMain
 	case paneMain:
-		a.focus = paneInspector
+		// Skip the inspector when it isn't on screen (narrow / human mode),
+		// otherwise focus would land on a pane that isn't rendered.
+		if a.inspectorVisible() {
+			a.focus = paneInspector
+		} else {
+			a.focus = paneSidebar
+		}
 	default:
 		a.focus = paneSidebar
+	}
+}
+
+// normalizeFocus pulls focus off the inspector whenever it isn't visible — the
+// guard for resize / human-mode toggles that hide the pane out from under it.
+func (a *App) normalizeFocus() {
+	if a.focus == paneInspector && !a.inspectorVisible() {
+		a.focus = paneMain
 	}
 }
 
@@ -391,6 +409,11 @@ func (a *App) handleVariablesKey(s string) tea.Cmd {
 			a.humanRowFocus = true
 			a.humanRowIndex = 0
 			return nil
+		}
+		// When the inspector pane is off screen (narrow terminal), show its
+		// detail in a modal instead of focusing a pane that isn't rendered.
+		if !a.inspectorVisible() {
+			return a.pushModal(newDetailModal(a))
 		}
 		a.focus = paneInspector
 		a.inspectorIndex = 0

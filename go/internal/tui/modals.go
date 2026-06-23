@@ -173,7 +173,7 @@ func (m *revealModal) View(a *App) string {
 // ── orphan prompt ───────────────────────────────────────────────────────────
 
 type orphanPromptModal struct {
-	keys    []string
+	keys     []string
 	onChoose func(a *App, remove bool) tea.Cmd
 }
 
@@ -241,6 +241,36 @@ func (m *findingsModal) Update(a *App, msg tea.Msg) tea.Cmd {
 func (m *findingsModal) View(a *App) string {
 	body := m.vp.View() + "\n" + a.style.keyDesc.Render("↑/↓ scroll · esc close")
 	return a.frameModal("menv check", body, false)
+}
+
+// ── detail (narrow-mode inspector) ──────────────────────────────────────────
+
+// detailModal shows the inspector body in a modal — the escape hatch for when
+// the inspector pane is hidden (narrow terminal). Read-only, like the pane it
+// mirrors; j/k scroll, esc/enter/q close.
+type detailModal struct {
+	vp viewport.Model
+}
+
+func newDetailModal(a *App) *detailModal {
+	w, h := a.modalInnerSize()
+	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
+	vp.SetContent(a.renderInspector(w))
+	return &detailModal{vp: vp}
+}
+func (m *detailModal) Init() tea.Cmd { return nil }
+func (m *detailModal) Update(a *App, msg tea.Msg) tea.Cmd {
+	if isKey(msg, "esc") || isKey(msg, "enter") || isKey(msg, "q") {
+		a.popModal()
+		return nil
+	}
+	var cmd tea.Cmd
+	m.vp, cmd = m.vp.Update(msg)
+	return cmd
+}
+func (m *detailModal) View(a *App) string {
+	body := m.vp.View() + "\n" + a.style.keyDesc.Render("↑/↓ scroll · esc close")
+	return a.frameModal("Inspector", body, false)
 }
 
 // ── help ────────────────────────────────────────────────────────────────────
@@ -464,4 +494,3 @@ func (m *consumerPickModal) Update(a *App, msg tea.Msg) tea.Cmd {
 func (m *consumerPickModal) View(a *App) string {
 	return a.frameModal("Pick a consumer", m.form.View(), false)
 }
-
