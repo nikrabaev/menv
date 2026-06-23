@@ -42,10 +42,3 @@ on commits that touch `go/**`:
    regenerates `go/CHANGELOG.md`.
 3. Merge the release PR. release-please tags `vX.Y.Z` and creates the GitHub
    Release; GoReleaser then attaches the prebuilt binaries and checksums.
-
-### First release (0.1.0)
-
-`.release-please-manifest.json` starts at `0.0.0`, so the first `feat(go):`
-commit reaching `main` produces `0.1.0`. If the Go branch is **squash-merged**
-into `main`, make sure the squash commit message is a `feat(go):` (or include a
-`Release-As: 0.1.0` footer) so release-please opens the first release PR.
