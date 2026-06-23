@@ -8,15 +8,15 @@ import (
 // these so there is one source of truth for "what key does what".
 type keymap struct {
 	// movement / panes
-	up, down, enter, esc key.Binding
+	up, down, enter, esc  key.Binding
 	tab, prevTab, nextTab key.Binding
 	pane1, pane2, pane3   key.Binding
 	// global
 	help, quit, reveal, check, generate, reload, human, importDotenv, filter key.Binding
 	// entity actions
 	add, edit, remove, define, wire, unwire, setVal, getReveal, toggle key.Binding
-	setDefault, unlock                                                   key.Binding
-	newItem, restore                                                     key.Binding
+	setDefault, unlock                                                 key.Binding
+	newItem, restore                                                   key.Binding
 }
 
 func newKeymap() keymap {

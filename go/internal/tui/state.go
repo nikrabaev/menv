@@ -76,26 +76,26 @@ type App struct {
 	style styles
 	keys  keymap
 
-	loaded bool          // whether a menv.json was found
-	wizard *initWizard   // shown when !loaded
+	loaded bool        // whether a menv.json was found
+	wizard *initWizard // shown when !loaded
 	reg    registry.Registry
 
 	// Selection / view state.
-	activeVault    string
-	consumerFilter string // "" = no filter
-	focus          pane
-	tab            mainTab
-	humanMode      bool
-	humanRowFocus  bool
-	humanRowIndex  int
-	revealSecrets  bool
+	activeVault     string
+	consumerFilter  string // "" = no filter
+	focus           pane
+	tab             mainTab
+	humanMode       bool
+	humanRowFocus   bool
+	humanRowIndex   int
+	revealSecrets   bool
 	revealConfirmed bool
 
 	sidebarIndex   int
 	mainIndex      map[mainTab]int
 	inspectorIndex int
 
-	filters      map[mainTab]string
+	filters       map[mainTab]string
 	filterEditing bool
 	filterInput   textinput.Model
 
@@ -127,21 +127,21 @@ func NewAppModel(ctx *TuiContext, reg registry.Registry, loaded bool) *App {
 	ti.Placeholder = "filter…"
 
 	a := &App{
-		ctx:       ctx,
-		style:     newStyles(),
-		keys:      newKeymap(),
-		loaded:    loaded,
-		reg:       reg,
-		focus:     paneMain,
-		tab:       tabVariables,
-		mainIndex: map[mainTab]int{},
-		filters:   map[mainTab]string{},
-		vaults:    map[string]*vaultRuntime{},
-		spinner:   sp,
-		help:      help.New(),
+		ctx:         ctx,
+		style:       newStyles(),
+		keys:        newKeymap(),
+		loaded:      loaded,
+		reg:         reg,
+		focus:       paneMain,
+		tab:         tabVariables,
+		mainIndex:   map[mainTab]int{},
+		filters:     map[mainTab]string{},
+		vaults:      map[string]*vaultRuntime{},
+		spinner:     sp,
+		help:        help.New(),
 		filterInput: ti,
-		width:     80,
-		height:    24,
+		width:       80,
+		height:      24,
 	}
 	if loaded {
 		a.activeVault = reg.Defaults.Vault

@@ -52,7 +52,7 @@ func (a *App) formModalCmd(title string, danger bool, groups []*huh.Group, onSub
 func (a *App) newUnlockModal(vault string, cont func(a *App) tea.Cmd) *unlockModal {
 	secret := ""
 	form := huh.NewForm(huh.NewGroup(
-		huh.NewInput().Key("secret").Title("Passphrase for "+vault).
+		huh.NewInput().Key("secret").Title("Passphrase for " + vault).
 			EchoMode(huh.EchoModePassword).Value(&secret),
 	)).WithShowHelp(false).WithWidth(a.modalFormWidth())
 	return &unlockModal{vault: vault, secret: &secret, form: form, onUnlocked: cont}
